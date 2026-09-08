@@ -1386,6 +1386,33 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
+  <!-- STAFF LOGIN MODAL (WP7 — fixed 8888 prefix + 4-digit PIN) -->
+  <div class="modal" id="staff-modal">
+    <div class="modal-title" id="staff-modal-title">Add staff</div>
+    <div class="modal-field">
+      <label class="modal-label" for="staff-name">Display name</label>
+      <input type="text" class="modal-input" id="staff-name" placeholder="They sign in with this name">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label" for="staff-role">Role</label>
+      <select class="modal-select" id="staff-role"></select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label" for="staff-pin">4-digit PIN</label>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="modal-input" id="staff-pin-prefix" style="flex:0 0 auto;opacity:.55;letter-spacing:.12em;">8888</span>
+        <input type="text" class="modal-input" id="staff-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+               autocomplete="off" placeholder="0000" style="flex:1 1 auto;letter-spacing:.12em;">
+      </div>
+      <div class="section-sub" id="staff-pin-hint"></div>
+    </div>
+    <div class="auth-error" id="staff-modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn-void-sm" onclick="closeStaffModal()">Cancel</button>
+      <button class="btn-add" id="staff-modal-save" onclick="submitStaffModal()">Save</button>
+    </div>
+  </div>
+
   <!-- ADD EXPENSE MODAL -->
   <div class="modal-overlay" id="modal-overlay" onclick="closeModal()"></div>
   <div class="modal" id="expense-modal">
@@ -1943,21 +1970,63 @@ async function loadStaff() {
     grid.innerHTML = '<div class="auth-error visible">Could not load staff: ' + escStaff(e.message) + '</div>';
   }
 }
+// WP7 — Supabase Auth enforces an 8-character minimum password project-wide.
+// Instead of lowering that policy to fit a 4-digit PIN, every staff password is
+// this fixed prefix + their 4 digits. Lloyd types only the 4 digits here; the
+// cleaner PWA prepends the same prefix at sign-in. Staff never see it.
+const STAFF_PIN_PREFIX = '8888';
+const STAFF_PIN_RE = /^\d{4}$/;
+let editingStaff = null;
+
 function openStaffModal(existing) {
+  editingStaff = existing || null;
   const isEdit = !!existing;
-  const name = prompt(isEdit ? 'Display name' : 'New staff name (they will sign in with this)', existing ? existing.name : '');
-  if (name === null) return;
-  const role = prompt('Role: cleaner, inspector, maintenance, finance' + (currentRole === 'owner' ? ', admin' : ''), existing ? existing.role : 'cleaner');
-  if (role === null) return;
-  const password = prompt(isEdit ? 'New password (leave blank to keep)' : 'Password (at least 8 characters). Hand it to them in person.', '');
-  if (password === null) return;
+  const roles = ['cleaner', 'inspector', 'maintenance', 'finance'].concat(currentRole === 'owner' ? ['admin'] : []);
+  document.getElementById('staff-modal-title').textContent = isEdit ? 'Edit staff login' : 'Add staff';
+  document.getElementById('staff-name').value = isEdit ? existing.name : '';
+  document.getElementById('staff-role').innerHTML =
+    roles.map(r => '<option value="' + r + '">' + escStaff(STAFF_ROLE_LABEL[r] || r) + '</option>').join('');
+  document.getElementById('staff-role').value = isEdit && roles.includes(existing.role) ? existing.role : 'cleaner';
+  document.getElementById('staff-pin').value = '';
+  document.getElementById('staff-pin-hint').textContent = isEdit
+    ? 'Leave blank to keep their current PIN. The 8888 prefix is added automatically — they never need to know it.'
+    : 'This is what they type on their phone. The 8888 is added automatically so the password meets the 8-character minimum — they never need to know it.';
+  staffModalError('');
+  openModalOverlay();
+  document.getElementById('staff-modal').style.display = 'flex';
+  document.getElementById('staff-name').focus();
+}
+function closeStaffModal() {
+  document.getElementById('staff-modal').style.display = 'none';
+  document.getElementById('modal-overlay').style.display = 'none';
+  editingStaff = null;
+}
+function staffModalError(msg) {
+  const box = document.getElementById('staff-modal-error');
+  box.textContent = msg || '';
+  box.classList.toggle('visible', !!msg);
+}
+function submitStaffModal() {
+  const isEdit = !!editingStaff;
+  const name = document.getElementById('staff-name').value.trim();
+  const role = document.getElementById('staff-role').value;
+  const pin  = document.getElementById('staff-pin').value.trim();
+  if (!name) { staffModalError('Enter a display name.'); return; }
+  if (!isEdit && !pin) { staffModalError('Enter a 4-digit PIN.'); return; }
+  // Validate before submit so a malformed PIN never reaches Supabase as a
+  // broken 8-character string.
+  if (pin && !STAFF_PIN_RE.test(pin)) { staffModalError('The PIN must be exactly 4 digits.'); return; }
+  const password = pin ? STAFF_PIN_PREFIX + pin : '';
   const payload = isEdit
-    ? { action: 'update', userId: existing.user_id, name: name.trim(), role: role.trim(), password }
-    : { action: 'create', name: name.trim(), role: role.trim(), password, propertyId: STAFF_PROPERTY_ID };
+    ? { action: 'update', userId: editingStaff.user_id, name, role, password }
+    : { action: 'create', name, role, password, propertyId: STAFF_PROPERTY_ID };
+  const saveBtn = document.getElementById('staff-modal-save');
+  saveBtn.disabled = true;
   staffCall(payload).then(r => {
+    closeStaffModal();
     alert(isEdit ? 'Updated.' : 'Created. They sign in with the name: ' + r.sign_in_name);
     loadStaff();
-  }).catch(e => alert('Failed: ' + e.message));
+  }).catch(e => staffModalError('Failed: ' + e.message)).finally(() => { saveBtn.disabled = false; });
 }
 function staffToggle(userId, disable) {
   if (!confirm(disable ? 'Disable this login? Their phone is signed out immediately.' : 'Enable this login again?')) return;
@@ -2346,6 +2415,8 @@ function setAddTxnType(type, el) {
 function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
   document.getElementById('expense-modal').style.display = 'none';
+  var sm = document.getElementById('staff-modal');
+  if (sm) sm.style.display = 'none';
   var im = document.getElementById('item-modal');
   if (im) im.style.display = 'none';
   if (typeof editingItemId !== 'undefined') editingItemId = null;
@@ -4213,7 +4284,7 @@ function closeAllMenus() {
 
 function closeAllModals() {
   ['modal-overlay','expense-modal','item-modal','edit-txn-modal','scan-modal','notice-modal',
-   'kpi-modal','cleaning-modal','employee-modal','add-booking-modal'].forEach(function(id) {
+   'kpi-modal','cleaning-modal','employee-modal','add-booking-modal','staff-modal'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) { el.style.display = ''; }
   });
