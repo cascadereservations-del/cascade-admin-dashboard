@@ -788,9 +788,9 @@
       <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="btn-primary" id="login-btn" onclick="handleLogin()">Sign In</button>
-    <button class="btn-primary" id="login-code-btn" onclick="handleSendCode()" style="margin-top:8px;opacity:.85">Email me a login code instead</button>
+    <button class="btn-primary" id="login-code-btn" onclick="handleSendCode()" style="margin-top:8px;opacity:.85">Email me a sign-in link instead</button>
     <div class="form-group" id="login-code-wrap" style="width:100%;display:none;margin-top:8px;">
-      <label class="form-label" for="login-code">Code from the e-mail</label>
+      <label class="form-label" for="login-code">If the e-mail shows a code, enter it here (a link signs you in directly)</label>
       <input type="text" id="login-code" class="form-input" inputmode="numeric" autocomplete="one-time-code" placeholder="8-digit code">
       <button class="btn-primary" id="login-code-verify" onclick="handleVerifyCode()" style="margin-top:8px">Verify code</button>
     </div>
@@ -1863,8 +1863,8 @@ async function handleSendCode() {
   errEl.classList.remove('visible');
   if (!email) { errEl.textContent = 'Enter the e-mail first.'; errEl.classList.add('visible'); return; }
   btn.disabled = true; btn.textContent = 'Sending…';
-  const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-  btn.disabled = false; btn.textContent = 'Email me a login code instead';
+  const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
+  btn.disabled = false; btn.textContent = 'Email me a sign-in link instead';
   if (error) { errEl.textContent = error.message || 'Could not send the code.'; errEl.classList.add('visible'); return; }
   document.getElementById('login-code-wrap').style.display = '';
   document.getElementById('login-code').focus();
