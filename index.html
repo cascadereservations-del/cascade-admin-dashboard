@@ -1964,12 +1964,86 @@ async function loadStaff() {
       return '<div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:10px;' + (s.disabled ? 'opacity:.55' : '') + '">' +
         '<div><div style="font-weight:600">' + escStaff(s.name) + ' <span class="section-sub" style="display:inline">\u00b7 ' + escStaff(STAFF_ROLE_LABEL[s.role] || s.role) + (s.disabled ? ' \u00b7 disabled' : '') + '</span></div>' +
         '<div class="section-sub">' + (s.sign_in_name ? 'Signs in as <b>' + escStaff(s.sign_in_name) + '</b>' : 'Mailbox login') + (s.last_sign_in_at ? ' \u00b7 last sign-in ' + new Date(s.last_sign_in_at).toLocaleDateString('en-PH') : ' \u00b7 never signed in') + '</div></div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + actions + '</div></div>';
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center">' +
+          (s.sign_in_name ? '<span id="staff-test-' + s.user_id + '" style="display:flex;gap:6px;align-items:center">' +
+            '<button class="btn-add" onclick="staffTestOpen(\'' + s.user_id + '\',\'' + escStaff(s.sign_in_name) + '\')">Test sign-in</button></span>' : '') +
+          actions + '</div></div>';
     }).join('');
   } catch (e) {
     grid.innerHTML = '<div class="auth-error visible">Could not load staff: ' + escStaff(e.message) + '</div>';
   }
 }
+/* Test sign-in.
+ *
+ * A staff PIN is bcrypt-hashed by Auth, so it can never be read back. That left
+ * no way to answer "can Honey actually get in?" without being Honey — and on
+ * 2026-09-08 a PIN was changed 1h42m after her last sign-in, locking her out
+ * silently. Nothing surfaced it, and a turnover went unlogged for two days.
+ *
+ * This reproduces the cleaner PWA's sign-in exactly — same slug rule, same
+ * prefix — so a mismatch in either is caught here rather than on her phone.
+ *
+ * It runs on an isolated client with persistSession false, so it never touches
+ * the session you are signed in with, and it signs the probe out immediately.
+ */
+const STAFF_DOMAIN = 'staff.cascade.invalid';
+function staffLoginEmail(raw) {
+  const v = String(raw || '').trim();
+  if (v.includes('@')) return v.toLowerCase();
+  const slug = v.normalize('NFKD').replace(/[^ -~]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+  return slug + '@' + STAFF_DOMAIN;
+}
+
+function staffTestOpen(userId, signInName) {
+  const box = document.getElementById('staff-test-' + userId);
+  if (!box) return;
+  box.innerHTML =
+    '<input id="staff-test-pin-' + userId + '" class="modal-input" inputmode="numeric" pattern="\\d*" maxlength="4" ' +
+    'placeholder="PIN" style="width:5.5em;text-align:center;letter-spacing:.2em" ' +
+    'onkeydown="if(event.key===\'Enter\'){staffTestRun(\'' + userId + '\',\'' + escStaff(signInName) + '\')}">' +
+    '<button class="btn-add" onclick="staffTestRun(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Check</button>' +
+    '<button class="btn-add" onclick="staffTestReset(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Cancel</button>';
+  const input = document.getElementById('staff-test-pin-' + userId);
+  if (input) input.focus();
+}
+
+function staffTestReset(userId, signInName) {
+  const box = document.getElementById('staff-test-' + userId);
+  if (box) box.innerHTML = '<button class="btn-add" onclick="staffTestOpen(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Test sign-in</button>';
+}
+
+async function staffTestRun(userId, signInName) {
+  const box = document.getElementById('staff-test-' + userId);
+  const input = document.getElementById('staff-test-pin-' + userId);
+  if (!box || !input) return;
+  const pin = String(input.value || '').trim();
+  if (!STAFF_PIN_RE.test(pin)) {
+    box.innerHTML = '<span style="color:#b0741b">Enter 4 digits.</span>';
+    setTimeout(() => staffTestReset(userId, signInName), 1600);
+    return;
+  }
+
+  box.innerHTML = '<span class="section-sub">Checking…</span>';
+  // Isolated client: persistSession false means nothing is written to storage,
+  // so the session you are signed in with is untouched no matter what happens.
+  const probe = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  try {
+    const email = staffLoginEmail(signInName);
+    const { data, error } = await probe.auth.signInWithPassword({ email, password: STAFF_PIN_PREFIX + pin });
+    if (error || !data || !data.session) {
+      box.innerHTML = '<span style="color:#c0392b;font-weight:600">✖ That PIN does not work</span>';
+    } else {
+      box.innerHTML = '<span style="color:#3e7d57;font-weight:600">✔ Works — they can sign in</span>';
+      await probe.auth.signOut();
+    }
+  } catch (e) {
+    box.innerHTML = '<span style="color:#c0392b">Check failed: ' + escStaff(e.message) + '</span>';
+  }
+  setTimeout(() => staffTestReset(userId, signInName), 6000);
+}
+
 // WP7 — Supabase Auth enforces an 8-character minimum password project-wide.
 // Instead of lowering that policy to fit a 4-digit PIN, every staff password is
 // this fixed prefix + their 4 digits. Lloyd types only the 4 digits here; the
