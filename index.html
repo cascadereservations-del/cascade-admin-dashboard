@@ -1406,6 +1406,12 @@
       </div>
       <div class="section-sub" id="staff-pin-hint"></div>
     </div>
+    <div class="modal-field">
+      <label class="modal-label" for="staff-note">Note <span style="opacity:.55;font-weight:400">(optional)</span></label>
+      <input type="text" class="modal-input" id="staff-note" maxlength="200"
+             placeholder="e.g. uses her daughter's phone">
+      <div class="section-sub">Anything useful about this person &mdash; shift habits, which phone they use, language. <b>Never put a PIN here.</b> The PIN is one-way encrypted and cannot be shown; this box is not protected to that standard.</div>
+    </div>
     <div class="auth-error" id="staff-modal-error"></div>
     <div class="modal-actions">
       <button class="btn-void-sm" onclick="closeStaffModal()">Cancel</button>
@@ -1958,12 +1964,13 @@ async function loadStaff() {
     if (!staff.length) { grid.innerHTML = '<div class="section-sub">No staff logins yet.</div>'; return; }
     grid.innerHTML = staff.map(s => {
       const actions = s.role === 'owner' ? '' :
-        '<button class="btn-add" onclick="openStaffModal(' + escStaff(JSON.stringify({ user_id: s.user_id, name: s.name, role: s.role })) + ')">Edit</button>' +
+        '<button class="btn-add" onclick="openStaffModal(' + escStaff(JSON.stringify({ user_id: s.user_id, name: s.name, role: s.role, note: s.note || '' })) + ')">Edit</button>' +
         '<button class="btn-add" onclick="staffToggle(\'' + s.user_id + '\', ' + (s.disabled ? 'false' : 'true') + ')">' + (s.disabled ? 'Enable' : 'Disable') + '</button>' +
         '<button class="btn-add" onclick="staffDelete(\'' + s.user_id + '\', \'' + escStaff(s.name) + '\')">Delete</button>';
       return '<div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:10px;' + (s.disabled ? 'opacity:.55' : '') + '">' +
         '<div><div style="font-weight:600">' + escStaff(s.name) + ' <span class="section-sub" style="display:inline">\u00b7 ' + escStaff(STAFF_ROLE_LABEL[s.role] || s.role) + (s.disabled ? ' \u00b7 disabled' : '') + '</span></div>' +
-        '<div class="section-sub">' + (s.sign_in_name ? 'Signs in as <b>' + escStaff(s.sign_in_name) + '</b>' : 'Mailbox login') + (s.last_sign_in_at ? ' \u00b7 last sign-in ' + new Date(s.last_sign_in_at).toLocaleDateString('en-PH') : ' \u00b7 never signed in') + '</div></div>' +
+        '<div class="section-sub">' + (s.sign_in_name ? 'Signs in as <b>' + escStaff(s.sign_in_name) + '</b>' : 'Mailbox login') + (s.last_sign_in_at ? ' \u00b7 last sign-in ' + new Date(s.last_sign_in_at).toLocaleDateString('en-PH') : ' \u00b7 never signed in') + '</div>' +
+        (s.note ? '<div class="section-sub" style="margin-top:2px;font-style:italic;opacity:.85">' + escStaff(s.note) + '</div>' : '') + '</div>' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center">' +
           (s.sign_in_name ? '<span id="staff-test-' + s.user_id + '" style="display:flex;gap:6px;align-items:center">' +
             '<button class="btn-add" onclick="staffTestOpen(\'' + s.user_id + '\',\'' + escStaff(s.sign_in_name) + '\')">Test sign-in</button></span>' : '') +
@@ -2058,6 +2065,7 @@ function openStaffModal(existing) {
   const roles = ['cleaner', 'inspector', 'maintenance', 'finance'].concat(currentRole === 'owner' ? ['admin'] : []);
   document.getElementById('staff-modal-title').textContent = isEdit ? 'Edit staff login' : 'Add staff';
   document.getElementById('staff-name').value = isEdit ? existing.name : '';
+  document.getElementById('staff-note').value = (isEdit && existing.note) ? existing.note : '';
   document.getElementById('staff-role').innerHTML =
     roles.map(r => '<option value="' + r + '">' + escStaff(STAFF_ROLE_LABEL[r] || r) + '</option>').join('');
   document.getElementById('staff-role').value = isEdit && roles.includes(existing.role) ? existing.role : 'cleaner';
@@ -2091,8 +2099,9 @@ function submitStaffModal() {
   // broken 8-character string.
   if (pin && !STAFF_PIN_RE.test(pin)) { staffModalError('The PIN must be exactly 4 digits.'); return; }
   const password = pin ? STAFF_PIN_PREFIX + pin : '';
+  const note = document.getElementById('staff-note').value.trim();
   const payload = isEdit
-    ? { action: 'update', userId: editingStaff.user_id, name, role, password }
+    ? { action: 'update', userId: editingStaff.user_id, name, role, password, note }
     : { action: 'create', name, role, password, propertyId: STAFF_PROPERTY_ID };
   const saveBtn = document.getElementById('staff-modal-save');
   saveBtn.disabled = true;
