@@ -1336,7 +1336,7 @@
             <div class="app-card-body"><div class="app-card-title">Guest Guide</div><div class="app-card-sub">PWA · v7.7.3</div></div>
             <svg class="app-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
-          <a class="app-card" href="https://cascadereservations-del.github.io/Welcome-To-Cascades-/" target="_blank">
+          <a class="app-card" href="https://cascadereservations-del.github.io/Stay_At_CascadeGSC/" target="_blank">
             <div class="app-card-icon" style="background:var(--color-amber-bg);">📅</div>
             <div class="app-card-body"><div class="app-card-title">Direct Booking Site</div><div class="app-card-sub">Stay_At_CascadeGSC · v36</div></div>
             <svg class="app-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -1408,7 +1408,7 @@
     </div>
     <div class="modal-field">
       <label class="modal-label" for="staff-note">Note <span style="opacity:.55;font-weight:400">(optional)</span></label>
-      <input type="text" class="modal-input" id="staff-note" maxlength="200"
+      <input type="text" class="modal-input" id="staff-note" maxlength="500"
              placeholder="e.g. uses her daughter's phone">
       <div class="section-sub">Anything useful about this person &mdash; shift habits, which phone they use, language. <b>Never put a PIN here.</b> The PIN is one-way encrypted and cannot be shown; this box is not protected to that standard.</div>
     </div>
@@ -1944,6 +1944,7 @@ function applyRoleVisibility(role) {
 /* Staff logins (Module A): talks to the staff-users Edge Function */
 const STAFF_PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // Cascade Bria
 const STAFF_ROLE_LABEL = { owner:'Owner', admin:'Admin', finance:'Finance', inspector:'Inspector', cleaner:'Cleaner', maintenance:'Maintenance' };
+let staffById = new Map();
 async function staffCall(payload) {
   const { data: { session } } = await db.auth.getSession();
   if (!session) throw new Error('Not signed in');
@@ -1961,25 +1962,43 @@ async function loadStaff() {
   const grid = document.getElementById('staff-grid');
   try {
     const { staff } = await staffCall({ action: 'list' });
+    staffById = new Map(staff.map(s => [String(s.user_id), s]));
     if (!staff.length) { grid.innerHTML = '<div class="section-sub">No staff logins yet.</div>'; return; }
     grid.innerHTML = staff.map(s => {
+      const staffId = escStaff(String(s.user_id));
       const actions = s.role === 'owner' ? '' :
-        '<button class="btn-add" onclick="openStaffModal(' + escStaff(JSON.stringify({ user_id: s.user_id, name: s.name, role: s.role, note: s.note || '' })) + ')">Edit</button>' +
-        '<button class="btn-add" onclick="staffToggle(\'' + s.user_id + '\', ' + (s.disabled ? 'false' : 'true') + ')">' + (s.disabled ? 'Enable' : 'Disable') + '</button>' +
-        '<button class="btn-add" onclick="staffDelete(\'' + s.user_id + '\', \'' + escStaff(s.name) + '\')">Delete</button>';
+        '<button class="btn-add" data-staff-action="edit" data-staff-id="' + staffId + '">Edit</button>' +
+        '<button class="btn-add" data-staff-action="toggle" data-staff-id="' + staffId + '">' + (s.disabled ? 'Enable' : 'Disable') + '</button>' +
+        '<button class="btn-add" data-staff-action="delete" data-staff-id="' + staffId + '">Delete</button>';
       return '<div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:10px;' + (s.disabled ? 'opacity:.55' : '') + '">' +
         '<div><div style="font-weight:600">' + escStaff(s.name) + ' <span class="section-sub" style="display:inline">\u00b7 ' + escStaff(STAFF_ROLE_LABEL[s.role] || s.role) + (s.disabled ? ' \u00b7 disabled' : '') + '</span></div>' +
         '<div class="section-sub">' + (s.sign_in_name ? 'Signs in as <b>' + escStaff(s.sign_in_name) + '</b>' : 'Mailbox login') + (s.last_sign_in_at ? ' \u00b7 last sign-in ' + new Date(s.last_sign_in_at).toLocaleDateString('en-PH') : ' \u00b7 never signed in') + '</div>' +
         (s.note ? '<div class="section-sub" style="margin-top:2px;font-style:italic;opacity:.85">' + escStaff(s.note) + '</div>' : '') + '</div>' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center">' +
-          (s.sign_in_name ? '<span id="staff-test-' + s.user_id + '" style="display:flex;gap:6px;align-items:center">' +
-            '<button class="btn-add" onclick="staffTestOpen(\'' + s.user_id + '\',\'' + escStaff(s.sign_in_name) + '\')">Test sign-in</button></span>' : '') +
+          (s.sign_in_name ? '<span id="staff-test-' + staffId + '" style="display:flex;gap:6px;align-items:center">' +
+            '<button class="btn-add" data-staff-action="test" data-staff-id="' + staffId + '">Test sign-in</button></span>' : '') +
           actions + '</div></div>';
     }).join('');
   } catch (e) {
     grid.innerHTML = '<div class="auth-error visible">Could not load staff: ' + escStaff(e.message) + '</div>';
   }
 }
+function handleStaffGridAction(event) {
+  const button = event.target.closest('button[data-staff-action]');
+  if (!button || !event.currentTarget.contains(button)) return;
+  const staff = staffById.get(button.dataset.staffId || '');
+  if (!staff) return;
+  if (button.dataset.staffAction === 'edit') {
+    openStaffModal({ user_id: staff.user_id, name: staff.name, role: staff.role, note: staff.note || '' });
+  } else if (button.dataset.staffAction === 'toggle') {
+    staffToggle(staff.user_id, !staff.disabled);
+  } else if (button.dataset.staffAction === 'delete') {
+    staffDelete(staff.user_id, staff.name);
+  } else if (button.dataset.staffAction === 'test') {
+    staffTestOpen(staff.user_id, staff.sign_in_name);
+  }
+}
+document.getElementById('staff-grid').addEventListener('click', handleStaffGridAction);
 /* Test sign-in.
  *
  * A staff PIN is bcrypt-hashed by Auth, so it can never be read back. That left
@@ -2006,17 +2025,28 @@ function staffTestOpen(userId, signInName) {
   if (!box) return;
   box.innerHTML =
     '<input id="staff-test-pin-' + userId + '" class="modal-input" inputmode="numeric" pattern="\\d*" maxlength="4" ' +
-    'placeholder="PIN" style="width:5.5em;text-align:center;letter-spacing:.2em" ' +
-    'onkeydown="if(event.key===\'Enter\'){staffTestRun(\'' + userId + '\',\'' + escStaff(signInName) + '\')}">' +
-    '<button class="btn-add" onclick="staffTestRun(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Check</button>' +
-    '<button class="btn-add" onclick="staffTestReset(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Cancel</button>';
+    'placeholder="PIN" style="width:5.5em;text-align:center;letter-spacing:.2em">' +
+    '<button class="btn-add" data-staff-test-action="check">Check</button>' +
+    '<button class="btn-add" data-staff-test-action="cancel">Cancel</button>';
   const input = document.getElementById('staff-test-pin-' + userId);
-  if (input) input.focus();
+  if (input) {
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') staffTestRun(userId, signInName);
+    });
+    input.focus();
+  }
+  box.addEventListener('click', event => {
+    const action = event.target.closest('button[data-staff-test-action]')?.dataset.staffTestAction;
+    if (action === 'check') staffTestRun(userId, signInName);
+    if (action === 'cancel') staffTestReset(userId, signInName);
+  });
 }
 
 function staffTestReset(userId, signInName) {
   const box = document.getElementById('staff-test-' + userId);
-  if (box) box.innerHTML = '<button class="btn-add" onclick="staffTestOpen(\'' + userId + '\',\'' + escStaff(signInName) + '\')">Test sign-in</button>';
+  if (!box) return;
+  box.innerHTML = '<button class="btn-add" data-staff-test-action="open">Test sign-in</button>';
+  box.querySelector('[data-staff-test-action="open"]').addEventListener('click', () => staffTestOpen(userId, signInName));
 }
 
 async function staffTestRun(userId, signInName) {
