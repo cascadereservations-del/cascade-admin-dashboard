@@ -17,7 +17,7 @@ test('Direct Booking Site card opens the booking site', () => {
 });
 
 test('staff row actions use delegated data attributes instead of inline server values', () => {
-  const loadStaff = html.match(/async function loadStaff\(\) \{([\s\S]*?)\n\}\nfunction handleStaffGridAction/)?.[1] ?? '';
+  const loadStaff = html.match(/async function loadStaff\(\) \{([\s\S]*?)\r?\n\}\r?\nfunction handleStaffGridAction/)?.[1] ?? '';
 
   assert.match(loadStaff, /data-staff-action="edit"/);
   assert.match(loadStaff, /data-staff-action="delete"/);
