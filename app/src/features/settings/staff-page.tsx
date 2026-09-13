@@ -18,8 +18,8 @@ export default function StaffPage() {
   const staff = useQuery({ queryKey: ['staff'], queryFn: listStaff });
   const [note, setNote] = useState<Record<string, string>>({});
   const act = useMutation({
-    mutationFn: (p: { action: 'disable' | 'enable' | 'revoke_sessions' | 'set_note'; userId: string; extra?: Record<string, unknown> }) => staffAction(p.action, p.userId, p.extra),
-    onSuccess: (_r, p) => { toast.success(`Staff ${p.action.replace('_', ' ')} applied`, { description: formatDateTime(new Date().toISOString()) }); void qc.invalidateQueries({ queryKey: ['staff'] }); },
+    mutationFn: (p: { action: 'disable' | 'enable' | 'update'; userId: string; extra?: Record<string, unknown> }) => staffAction(p.action, p.userId, p.extra),
+    onSuccess: (_r, p) => { toast.success(`Staff ${p.action === 'update' ? 'note saved' : p.action + 'd'}`, { description: formatDateTime(new Date().toISOString()) }); void qc.invalidateQueries({ queryKey: ['staff'] }); },
     onError: (e) => toast.error(toAppError(e).message),
   });
   return (
@@ -31,16 +31,16 @@ export default function StaffPage() {
             {rows.map((u) => (
               <li key={u.user_id} className="space-y-2 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{u.name ?? u.email ?? u.user_id}</span>
+                  <span className="font-medium">{u.name}</span>
+                  {u.sign_in_name && <span className="text-xs text-muted-foreground">signs in as {u.sign_in_name}</span>}
                   <StatusBadge tone="info">{u.role}</StatusBadge>
-                  <StatusBadge tone={u.disabled_at ? 'bad' : 'good'}>{u.disabled_at ? 'disabled' : 'active'}</StatusBadge>
-                  {u.sessions_revoked_after && <span className="text-xs text-muted-foreground">sessions revoked {formatDateTime(u.sessions_revoked_after)}</span>}
+                  <StatusBadge tone={u.disabled ? 'bad' : 'good'}>{u.disabled ? 'disabled' : 'active'}</StatusBadge>
+                  {u.last_sign_in_at && <span className="text-xs text-muted-foreground">last sign-in {formatDateTime(u.last_sign_in_at)}</span>}
                   <div className="ml-auto flex gap-1">
-                    {u.disabled_at ? <Button size="sm" variant="outline" onClick={() => act.mutate({ action: 'enable', userId: u.user_id })}>Enable</Button> : <Button size="sm" variant="outline" onClick={() => act.mutate({ action: 'disable', userId: u.user_id })}>Disable</Button>}
-                    <Button size="sm" variant="outline" onClick={() => act.mutate({ action: 'revoke_sessions', userId: u.user_id })}>Sign out everywhere</Button>
+                    {u.role === 'owner' ? <span className="text-xs text-muted-foreground">owner, protected</span> : u.disabled ? <Button size="sm" variant="outline" onClick={() => act.mutate({ action: 'enable', userId: u.user_id })}>Enable</Button> : <Button size="sm" variant="outline" onClick={() => act.mutate({ action: 'disable', userId: u.user_id })}>Disable (signs out everywhere)</Button>}
                   </div>
                 </div>
-                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); act.mutate({ action: 'set_note', userId: u.user_id, extra: { note: note[u.user_id] ?? '' } }); }}>
+                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); act.mutate({ action: 'update', userId: u.user_id, extra: { note: note[u.user_id] ?? '' } }); }}>
                   <Input aria-label="Operational note" placeholder={u.note ?? 'Operational note (no credentials)'} className="h-8 text-sm" value={note[u.user_id] ?? ''} onChange={(e) => setNote({ ...note, [u.user_id]: e.target.value })} />
                   <Button size="sm" type="submit" variant="ghost" disabled={!note[u.user_id]}>Save note</Button>
                 </form>

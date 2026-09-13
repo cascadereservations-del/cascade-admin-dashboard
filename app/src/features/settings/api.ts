@@ -6,21 +6,23 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 // Edge Function contract (owner/admin only, MFA on the server). Health reads
 // job heartbeats and sync logs; audit reads staff_access_audit.
 
-export type StaffUser = { user_id: string; name?: string; email?: string; role: string; disabled_at: string | null; sessions_revoked_after: string | null; note: string | null; property_ids?: string[]; last_sign_in_at?: string | null };
+// Shape returned by the deployed staff-users `list` action (same contract the legacy admin reads).
+export type StaffUser = { user_id: string; name: string; role: string; disabled: boolean; sign_in_name: string | null; is_mailbox_login: boolean; note: string | null; last_sign_in_at: string | null; created_at: string };
 
 async function staffCall(payload: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw { code: '42501', message: 'Not signed in' };
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/staff-users`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(payload) });
-  const body = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string; users?: StaffUser[] } & Record<string, unknown>;
+  const body = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string; staff?: StaffUser[] } & Record<string, unknown>;
   if (!resp.ok || body.ok === false) throw { code: resp.status === 403 ? '42501' : String(resp.status), message: body.error ?? `HTTP ${resp.status}`, status: resp.status };
   return body;
 }
 export async function listStaff() {
   const r = await staffCall({ action: 'list' });
-  return (r.users ?? []) as StaffUser[];
+  return (r.staff ?? []) as StaffUser[];
 }
-export function staffAction(action: 'disable' | 'enable' | 'revoke_sessions' | 'set_note' | 'set_role', userId: string, extra: Record<string, unknown> = {}) {
+// Actions the deployed function knows: disable, enable, update (name/role/password/note), delete.
+export function staffAction(action: 'disable' | 'enable' | 'update', userId: string, extra: Record<string, unknown> = {}) {
   return staffCall({ action, userId, ...extra });
 }
 
