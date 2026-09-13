@@ -1,11 +1,190 @@
-import { PageHeader } from '@/components/data/page-header';
-import { EmptyState } from '@/components/data/query-state';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { ArrowLeft } from 'lucide-react';
+import { useSession } from '@/auth/session';
+import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
+import { formatPHP } from '@/lib/money';
+import { toAppError } from '@/lib/errors';
+import { PageHeader, Section } from '@/components/data/page-header';
+import { EmptyState, QueryState } from '@/components/data/query-state';
+import { Field } from '@/components/data/detail-sheet';
+import { StatusBadge } from '@/components/data/status-badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { fetchCleaningDetail, reviewEvidence, reviewReadiness } from './api';
 
-export default function CleaningPage() {
+// CLN02-CLN05. Evidence is linked by submission identity; advisory findings
+// are shown as advisory; readiness needs a human decision with a reason for
+// overrides. An unreadable meter photo is uncertainty, not misconduct.
+
+function ChecklistView({ details }: { details: unknown }) {
+  if (!details || typeof details !== 'object') return <p className="text-sm text-muted-foreground">No checklist detail stored.</p>;
+  const entries: Array<[string, unknown]> = Array.isArray(details)
+    ? details.map((e, i) => {
+        const o = e as { id?: string; label?: string; done?: unknown; value?: unknown };
+        return [String(o.label ?? o.id ?? i), o.done ?? o.value];
+      })
+    : Object.entries(details as Record<string, unknown>);
+  return (
+    <ul className="grid gap-1 text-sm sm:grid-cols-2">
+      {entries.slice(0, 200).map(([k, v], i) => {
+        const ok = v === true || v === 'done' || v === 'yes';
+        return (
+          <li key={i} className="flex items-start gap-2">
+            <span aria-hidden className="mt-0.5 text-xs">{ok ? '✓' : v === false ? '✕' : '○'}</span>
+            <span className="min-w-0 break-words">{k}{typeof v === 'string' && !ok ? `: ${v}` : ''}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export default function CleaningDetailPage() {
+  const { id = '' } = useParams();
+  const s = useSession();
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const canFees = s.caps.can('read_finance');
+  const canInspect = s.caps.can('inspect_cleaning');
+  const canOverride = s.caps.can('manage_operations');
+  const query = useQuery({ queryKey: ['cleaning', s.propertyId, id, canFees], queryFn: () => fetchCleaningDetail(s.propertyId, id, canFees) });
+  const [outcome, setOutcome] = useState<'ready' | 'not_ready' | 'override_ready'>('ready');
+  const [reason, setReason] = useState('');
+  const [evReason, setEvReason] = useState('');
+
+  const readiness = useMutation({
+    mutationFn: (forCheckin: string) => reviewReadiness(s.propertyId, forCheckin, outcome, reason, id),
+    onSuccess: (r) => {
+      toast.success(`Readiness recorded: ${r.outcome.replace('_', ' ')}`, { description: `${formatDateTime(new Date().toISOString())} · ${r.openBlockers} blocking work orders open` });
+      setReason('');
+      void qc.invalidateQueries({ queryKey: ['cleaning'] });
+      void qc.invalidateQueries({ queryKey: ['overview'] });
+    },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  const evidence = useMutation({
+    mutationFn: (p: { id: string; outcome: 'reviewed' | 'follow_up_required' | 'resolved' }) => reviewEvidence(p.id, p.outcome, evReason),
+    onSuccess: () => {
+      toast.success('Evidence review recorded');
+      setEvReason('');
+      void qc.invalidateQueries({ queryKey: ['cleaning'] });
+    },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+
   return (
     <div>
-      <PageHeader title="Cleaning" />
-      <EmptyState title="Not built yet" hint="This module is scheduled in the implementation tracker." />
+      <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => nav(-1)}><ArrowLeft className="size-4" aria-hidden /> Back</Button>
+      <QueryState query={query}>
+        {(d) => {
+          const c = d.session;
+          const nextCheckin = c.checkout_date ?? todayManila();
+          const followUp = d.evidence.some((e) => e.reviews.some((r) => r.outcome === 'follow_up_required'));
+          const anyReviewed = d.evidence.some((e) => e.reviews.length > 0);
+          return (
+            <div className="space-y-6">
+              <PageHeader title={`${c.last_guest_name ?? 'Cleaning'} · ${formatDateTime(c.cleaned_at)}`} description={`Submission ${c.submission_id} by ${c.cleaner_name}${c.cleaning_type ? ` · ${c.cleaning_type}` : ''}`} />
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="py-4 gap-3">
+                  <CardHeader><CardTitle>States</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    <Field label="Submission"><StatusBadge tone={c.is_complete ? 'good' : c.is_complete === false ? 'warn' : 'neutral'}>{c.is_complete === null ? 'unknown' : c.is_complete ? 'complete' : 'incomplete'}</StatusBadge></Field>
+                    <Field label="Checklist">{c.completion_pct !== null ? `${Number(c.completion_pct).toFixed(0)}%` : 'not recorded'}</Field>
+                    <Field label="Evidence">{d.evidence.length === 0 ? 'no verification evidence' : `${d.evidence.length} items, ${d.evidence.filter((e) => e.reviews.length > 0).length} reviewed`}</Field>
+                    <Field label="Inspector review">{followUp ? 'follow-up required' : anyReviewed ? 'reviewed' : 'pending'}</Field>
+                    <Field label="Readiness">{d.readiness[0] ? `${d.readiness[0].outcome.replace('_', ' ')} · ${formatDateTime(d.readiness[0].reviewed_at)}` : 'not reviewed'}</Field>
+                    <Field label="Cleaner fee">{canFees ? (c.fee_amount ? `${formatPHP(c.fee_amount)} · ${c.fee_paid_at ? `paid ${formatDateTime(c.fee_paid_at)}` : 'accrued, unpaid'}` : 'no fee recorded') : 'restricted'}</Field>
+                    {c.incomplete_reasons?.length ? <Field label="Incomplete"><ul className="list-disc pl-4">{c.incomplete_reasons.map((r) => <li key={r}>{r}</li>)}</ul></Field> : null}
+                    {c.notes && <Field label="Notes">{c.notes}</Field>}
+                  </CardContent>
+                </Card>
+                <Card className="py-4 gap-3">
+                  <CardHeader><CardTitle>Meters</CardTitle></CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {d.meters.length === 0 ? <p className="text-muted-foreground">No meter readings on this submission.</p> : d.meters.map((m) => (
+                      <div key={m.id} className="space-y-1">
+                        <p className="tabular">Electric {m.electric_prev ?? '—'} → {m.electric_curr ?? '—'} (Δ {m.electric_delta ?? '—'} kWh, {m.kwh_per_night ?? '—'}/night)</p>
+                        <p className="tabular">Water {m.water_prev ?? '—'} → {m.water_curr ?? '—'} (Δ {m.water_delta ?? '—'} m³, {m.m3_per_night ?? '—'}/night)</p>
+                        {m.meter_flag && <StatusBadge tone="warn">advisory: {m.meter_flag}</StatusBadge>}
+                        {m.meter_override_note && <p className="text-muted-foreground">Note: {m.meter_override_note}</p>}
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">Arithmetic and vision checks are advisory. They never block a submission.</p>
+                  </CardContent>
+                </Card>
+                <Card className="py-4 gap-3">
+                  <CardHeader><CardTitle>Photos</CardTitle></CardHeader>
+                  <CardContent className="text-sm">
+                    <p className="text-muted-foreground">Counts from the submission: {c.preclean_photo_count ?? 0} before · {c.afterclean_photo_count ?? 0} after · {c.meter_photo_count ?? 0} meter · {c.other_photo_count ?? 0} other.</p>
+                    {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No objects under submission folder {c.submission_id}.</p> : (
+                      <ul className="mt-2 max-h-48 overflow-auto text-xs">{d.photos.map((p) => <li key={p.name} className="truncate">{p.name}</li>)}</ul>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Section title="Checklist">
+                <ChecklistView details={c.checklist_details} />
+              </Section>
+
+              <Section title="Verification evidence (advisory)">
+                {d.evidence.length === 0 ? <EmptyState title="No verification evidence recorded" hint="Evidence rows are written by the meter photo sweep; their absence means no check ran, not that everything is fine." /> : (
+                  <ul className="divide-y rounded-lg border text-sm">
+                    {d.evidence.map((e) => (
+                      <li key={e.id} className="space-y-2 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{e.evidence_kind}</span>
+                          <StatusBadge tone={e.advisory_result === 'ok' ? 'good' : e.advisory_result === 'unreadable' ? 'neutral' : 'warn'}>{e.advisory_result ?? 'no result'}</StatusBadge>
+                          <span className="text-xs text-muted-foreground">{formatDateTime(e.created_at)} {e.advisory_reason_codes?.length ? `· ${e.advisory_reason_codes.join(', ')}` : ''}</span>
+                        </div>
+                        {e.reviews.map((r) => <p key={r.id} className="text-xs text-muted-foreground">Review: {r.outcome.replaceAll('_', ' ')} · {formatDateTime(r.reviewed_at)}{r.reason ? ` · ${r.reason}` : ''}</p>)}
+                        {canInspect && e.reviews.length === 0 && (
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="min-w-60 flex-1"><Label htmlFor={`ev-${e.id}`} className="text-xs">Reason</Label><Textarea id={`ev-${e.id}`} rows={1} value={evReason} onChange={(ev) => setEvReason(ev.target.value)} className="text-base sm:text-sm" /></div>
+                            <Button size="sm" variant="outline" disabled={evReason.trim().length < 3 || evidence.isPending} onClick={() => evidence.mutate({ id: e.id, outcome: 'reviewed' })}>Mark reviewed</Button>
+                            <Button size="sm" variant="outline" disabled={evReason.trim().length < 3 || evidence.isPending} onClick={() => evidence.mutate({ id: e.id, outcome: 'follow_up_required' })}>Needs follow-up</Button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+
+              <Section title="Readiness decision">
+                {d.readiness.length > 0 && (
+                  <ul className="mb-2 text-sm">{d.readiness.map((r) => <li key={r.id}>{formatDateTime(r.reviewed_at)} · <strong>{r.outcome.replace('_', ' ')}</strong> for {formatDate(r.for_checkin_date, 'long')}{r.reason ? ` · ${r.reason}` : ''}</li>)}</ul>
+                )}
+                {canInspect ? (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <Label className="text-xs">Outcome</Label>
+                      <Select value={outcome} onValueChange={(v) => setOutcome(v as typeof outcome)}>
+                        <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ready">Ready for arrival</SelectItem>
+                          <SelectItem value="not_ready">Not ready</SelectItem>
+                          {canOverride && <SelectItem value="override_ready">Override: ready despite blockers</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-60 flex-1"><Label htmlFor="rd-reason" className="text-xs">Reason {outcome === 'override_ready' ? '(required)' : '(optional)'}</Label><Textarea id="rd-reason" rows={1} value={reason} onChange={(e) => setReason(e.target.value)} className="text-base sm:text-sm" /></div>
+                    <Button className="min-h-10" disabled={readiness.isPending || (outcome === 'override_ready' && reason.trim().length < 3)} onClick={() => readiness.mutate(nextCheckin)}>Record for {formatDate(nextCheckin)}</Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Readiness decisions need the inspector, admin or owner role.</p>
+                )}
+              </Section>
+            </div>
+          );
+        }}
+      </QueryState>
     </div>
   );
 }
