@@ -10,7 +10,7 @@ import { toCentavos } from '@/lib/money';
 // balances, close. All amounts are decimal strings.
 
 export type Txn = { id: string; transaction_date: string; txn_type: string; category: string; status: string; source: string; gross_amount: string; payee_name: string | null; or_number: string | null; external_ref: string | null; booking_id: string | null; income_stage: string | null; notes: string | null; receipt_image_path: string | null; ocr_confidence: string | null; created_at: string };
-export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string };
+export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string; mirror?: string };
 
 export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
@@ -18,6 +18,7 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   if (f.type) q = q.eq('txn_type', f.type);
   if (f.status) q = q.eq('status', f.status);
   if (f.source) q = q.eq('source', f.source);
+  else if (f.mirror !== 'show') q = q.not('source', 'in', NOT_MIRROR); // estimates and CSV mirrors are archived by default; the payout is the record
   if (f.from) q = q.gte('transaction_date', f.from);
   if (f.to) q = q.lt('transaction_date', f.to);
   const page = Number(f.page) || 1;
@@ -25,11 +26,17 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   return { ...unwrapList<Txn>(res), page };
 }
 
+// Money that counts: the same rule as get_admin_overview_v1. Airbnb CSV rows
+// (source airbnb, income_stage reconciliation) and booking-email estimates
+// (airbnb_email) mirror the payout emails and would double count them.
+export const MIRROR_SOURCES = ['airbnb', 'airbnb_email'] as const;
+const NOT_MIRROR = `(${MIRROR_SOURCES.map((s) => `"${s}"`).join(',')})`;
+
 // Account book (D-095): every row in date order, oldest first, with a running
 // balance computed in integer centavos from already-authoritative rows.
 export type BookRow = Txn & { inCents: number; outCents: number; balanceCents: number };
 export async function fetchLedgerBook(propertyId: string, f: { from?: string; to?: string; includePending?: boolean }): Promise<{ rows: BookRow[]; total: number; truncated: boolean }> {
-  let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).neq('status', 'void').order('transaction_date', { ascending: true }).order('created_at', { ascending: true });
+  let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).neq('status', 'void').not('source', 'in', NOT_MIRROR).order('transaction_date', { ascending: true }).order('created_at', { ascending: true });
   if (!f.includePending) q = q.eq('status', 'confirmed');
   if (f.from) q = q.gte('transaction_date', f.from);
   if (f.to) q = q.lt('transaction_date', f.to);
@@ -49,7 +56,7 @@ export async function fetchLedgerBook(propertyId: string, f: { from?: string; to
 export type MonthTotal = { month: string; incomeCents: number; expenseCents: number };
 export async function fetchMonthlyTotals(propertyId: string, fromMonth: string): Promise<MonthTotal[]> {
   const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'gross_amount'>>(
-    await supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').gte('transaction_date', fromMonth).order('transaction_date', { ascending: true }).range(0, 4999),
+    await supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').not('source', 'in', NOT_MIRROR).gte('transaction_date', fromMonth).order('transaction_date', { ascending: true }).range(0, 4999),
   );
   const byMonth = new Map<string, MonthTotal>();
   for (const r of res.rows) {

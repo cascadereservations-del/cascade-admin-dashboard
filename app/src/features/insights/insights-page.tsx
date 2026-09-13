@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { addIsoDays, comparablePeriod, formatDate, periodPreset, todayManila } from '@/lib/dates';
@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { MetricResult } from '@/types/contracts';
-import { fetchDrilldown, fetchMetrics } from './api';
+import { fetchDrilldown, fetchMetrics, fetchUtilityMonths } from './api';
 
 // INS01/INS03/INS05: server-calculated hospitality metrics with an
 // equivalent-elapsed comparison period and deterministic plain-language
@@ -108,6 +108,122 @@ function FinancialAnalytics() {
   );
 }
 
+// Last twelve calendar months, oldest first, as metric periods.
+function lastMonths(n: number): Array<{ start: string; endExclusive: string; label: string }> {
+  const today = todayManila();
+  const y0 = Number(today.slice(0, 4));
+  const m0 = Number(today.slice(5, 7));
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const idx = y0 * 12 + (m0 - 1) - i;
+    const y = Math.floor(idx / 12);
+    const m = (idx % 12) + 1;
+    const start = `${y}-${String(m).padStart(2, '0')}-01`;
+    const ny = m === 12 ? y + 1 : y;
+    const nm = m === 12 ? 1 : m + 1;
+    out.push({ start, endExclusive: `${ny}-${String(nm).padStart(2, '0')}-01`, label: formatDate(start, 'short').replace(/^\d+ /, '') });
+  }
+  return out;
+}
+
+const tooltipStyle = { borderRadius: 8, borderColor: 'var(--border)', background: 'var(--popover)', color: 'var(--popover-foreground)' };
+
+// Monthly hospitality trend: occupancy, ADR and RevPAR are the three numbers
+// every short-term-rental benchmark leads with (RevPAR = ADR × occupancy), so
+// they are charted side by side from the same server metric service, one call
+// per month, never recomputed on the client.
+function PerformanceTrend() {
+  const s = useSession();
+  const months = lastMonths(12);
+  const qs = useQueries({ queries: months.map((m) => ({ queryKey: ['metrics', s.propertyId, m.start, m.endExclusive], queryFn: () => fetchMetrics(s.propertyId, m.start, m.endExclusive), staleTime: 300_000 })) });
+  const pending = qs.some((q) => q.isPending);
+  const num = (r?: MetricResult) => (r?.value == null ? null : Number(r.value));
+  const data = months.map((m, i) => {
+    const mm = qs[i]?.data?.metrics ?? {};
+    return { label: m.label, occupancy: num(mm.occupancy), adr: num(mm.adr), revpar: num(mm.revpar), nights: num(mm.sold_nights), revenue: num(mm.accommodation_revenue) };
+  });
+  const financeVisible = qs.some((q) => q.data?.financeVisible);
+  return (
+    <Section title="Twelve-month performance">
+      {pending ? <CardSkeleton /> : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border bg-card p-3">
+            <p className="mb-2 text-xs text-muted-foreground">Occupancy and sold nights by month (through the last completed night)</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis yAxisId="n" tickLine={false} axisLine={false} fontSize={11} width={32} />
+                  <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} fontSize={11} width={36} tickFormatter={(v: number) => `${v}%`} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => (name === 'Occupancy' ? `${Number(v).toFixed(0)}%` : String(v))} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="n" dataKey="nights" name="Sold nights" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="p" type="monotone" dataKey="occupancy" name="Occupancy" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <p className="mb-2 text-xs text-muted-foreground">{financeVisible ? 'Accommodation revenue, ADR and RevPAR by month (stay basis, excludes cleaning and platform fees)' : 'Financial trend is hidden for this session'}</p>
+            {financeVisible && (
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis yAxisId="rev" tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                    <YAxis yAxisId="rate" orientation="right" tickLine={false} axisLine={false} fontSize={11} width={48} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar yAxisId="rev" dataKey="revenue" name="Accommodation revenue" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="rate" type="monotone" dataKey="adr" name="ADR" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                    <Line yAxisId="rate" type="monotone" dataKey="revpar" name="RevPAR" stroke="var(--chart-4)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// Electricity and water from the meter photos the cleaners submit, summed per
+// month. A spike is a misread meter first and a leak second.
+function UtilitiesChart() {
+  const s = useSession();
+  const from = addIsoDays(todayManila(), -365).slice(0, 7) + '-01';
+  const q = useQuery({ queryKey: ['utility-months', s.propertyId, from], queryFn: () => fetchUtilityMonths(s.propertyId, from), staleTime: 300_000 });
+  const data = (q.data ?? []).map((m) => ({ ...m, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), kwh: Math.round(m.kwh), m3: Math.round(m.m3 * 10) / 10 }));
+  return (
+    <Section title="Utilities" aside={<Link to="/operations/cleaning" className="text-xs text-primary hover:underline">Open the cleaning log</Link>}>
+      {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No meter readings in the last twelve months.</p>
+      ) : (
+        <div className="rounded-lg border bg-card p-3">
+          <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month, from the meter readings in the cleaning log. A spike usually means a misread meter.</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis yAxisId="e" tickLine={false} axisLine={false} fontSize={11} width={44} tickFormatter={(v: number) => `${v}`} />
+                <YAxis yAxisId="w" orientation="right" tickLine={false} axisLine={false} fontSize={11} width={40} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => (name === 'Water (m³)' ? `${v} m³` : `${v} kWh`)} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                <Bar yAxisId="e" dataKey="kwh" name="Electricity (kWh)" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="w" type="monotone" dataKey="m3" name="Water (m³)" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export default function InsightsPage() {
   const s = useSession();
   const { state, set } = useUrlState({ period: 'mtd', from: '', to: '' });
@@ -152,7 +268,9 @@ export default function InsightsPage() {
                 );
               })}
             </div>
+            <PerformanceTrend />
             <FinancialAnalytics />
+            <UtilitiesChart />
             <Section title="Definitions">
               <p className="text-sm text-muted-foreground">Definitions version {Object.values(d.metrics)[0]?.definitionVersion}. Nights use [check-in, checkout). Calendar blocks are never sold nights. Forecasts are not mixed into actuals. Full formulas are in docs/METRICS.md.</p>
             </Section>

@@ -18,7 +18,7 @@ import { fetchTransactions, type Txn } from './api';
 // Historical operational ledger (transactions table). Labelled as such: rows
 // before the accounting start are historical data, not posted journals.
 
-const DEFAULTS = { q: '', type: '', status: '', source: '', from: '', to: '', page: '1', density: 'comfortable' };
+const DEFAULTS = { q: '', type: '', status: '', source: '', from: '', to: '', page: '1', density: 'comfortable', mirror: '' };
 const SOURCES = ['airbnb', 'airbnb_email', 'airbnb_payout_email', 'direct_booking', 'manual', 'ocr', 'telegram', 'refund', 'cleaner_fee'];
 
 export default function TransactionsPage() {
@@ -48,6 +48,7 @@ export default function TransactionsPage() {
         <FilterSelect label="Type" value={state.type || undefined} onChange={(v) => set({ type: v ?? '' })} options={[{ value: 'income', label: 'Income' }, { value: 'expense', label: 'Expense' }]} />
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['confirmed', 'pending_review', 'void'].map((v) => ({ value: v, label: v.replace('_', ' ') }))} />
         <FilterSelect label="Source" value={state.source || undefined} onChange={(v) => set({ source: v ?? '' })} options={SOURCES.map((v) => ({ value: v, label: v }))} />
+        <FilterSelect label="Archived mirrors" value={state.mirror || undefined} onChange={(v) => set({ mirror: v ?? '' })} options={[{ value: 'show', label: 'Show estimates and CSV mirrors' }]} />
         <Input type="date" aria-label="From" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
         <Input type="date" aria-label="To (exclusive)" className="w-40 text-base sm:text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} />
       </FilterBar>
