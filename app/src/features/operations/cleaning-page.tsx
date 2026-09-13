@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { formatDate, formatDateTime } from '@/lib/dates';
@@ -42,7 +43,11 @@ export default function CleaningPage() {
     ];
     if (canFees) {
       cols.push({ id: 'fee', header: 'Fee', accessorFn: (r) => r.fee_amount ?? '', cell: ({ row }) => <span className="tabular">{formatPHP(row.original.fee_amount)}</span> });
-      cols.push({ id: 'paid', header: 'Payment', accessorFn: (r) => r.fee_paid_at ?? '', cell: ({ row }) => (row.original.fee_amount ? <StatusBadge tone={row.original.fee_paid_at ? 'good' : 'warn'}>{row.original.fee_paid_at ? `paid ${formatDate(row.original.fee_paid_at.slice(0, 10))}` : 'unpaid'}</StatusBadge> : <span className="text-xs text-muted-foreground">no fee</span>) });
+      cols.push({ id: 'paid', header: 'Paid', accessorFn: (r) => r.fee_paid_at ?? '', cell: ({ row }) => (row.original.fee_amount ? (
+        row.original.fee_paid_at
+          ? <span className="inline-flex items-center gap-1 text-sm text-chart-4"><CheckCircle2 className="size-4" aria-hidden /> Paid <span className="text-xs text-muted-foreground">{formatDate(row.original.fee_paid_at.slice(0, 10))}</span></span>
+          : <span className="inline-flex items-center gap-1 text-sm"><Circle className="size-4 text-champagne" aria-hidden /> Unpaid</span>
+      ) : <span className="text-xs text-muted-foreground">no fee</span>) });
     }
     return cols;
   }, [canFees]);

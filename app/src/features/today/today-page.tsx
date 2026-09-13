@@ -2,8 +2,10 @@ import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, CheckCircle2, HelpCircle } from 'lucide-react';
 import { useSession } from '@/auth/session';
-import { formatDate, formatDateTime, relativeDay, todayManila } from '@/lib/dates';
+import { formatDate, formatDateTime, periodPreset, relativeDay, todayManila } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
+import { formatMetricValue } from '@/components/data/kpi-card';
+import { fetchMetrics } from '@/features/insights/api';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { CardSkeleton, EmptyState, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
@@ -41,6 +43,48 @@ function ReadinessCard({ r }: { r: Overview['readiness'] }) {
   );
 }
 
+// Month-to-date KPIs (D-095): the same server metrics as KPIs & Analytics,
+// shown as a strip so the numbers that matter are on the first screen.
+const STRIP: Array<{ key: string; title: string; finance: boolean }> = [
+  { key: 'occupancy', title: 'Occupancy MTD', finance: false },
+  { key: 'sold_nights', title: 'Sold nights MTD', finance: false },
+  { key: 'future_booked_nights', title: 'Booked nights ahead', finance: false },
+  { key: 'accommodation_revenue', title: 'Revenue MTD', finance: true },
+  { key: 'adr', title: 'ADR MTD', finance: true },
+  { key: 'cash_received', title: 'Cash received MTD', finance: true },
+];
+
+function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
+  const s = useSession();
+  const p = periodPreset('mtd');
+  const q = useQuery({ queryKey: ['metrics', s.propertyId, p.start, p.endExclusive], queryFn: () => fetchMetrics(s.propertyId, p.start, p.endExclusive), staleTime: 300_000 });
+  const items = STRIP.filter((k) => financeVisible || !k.finance);
+  return (
+    <section aria-label="Key figures, month to date">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold">Key figures</h2>
+        <Link to="/insights" className="text-xs text-primary hover:underline">All KPIs and analytics</Link>
+      </div>
+      {q.isError ? (
+        <p className="text-sm text-muted-foreground">Key figures are not available right now ({(q.error as Error).message}).</p>
+      ) : (
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+          {items.map((k) => {
+            const m = q.data?.metrics[k.key];
+            return (
+              <div key={k.key} className="rounded-lg border bg-card px-3 py-2.5">
+                <p className="truncate text-xs text-muted-foreground">{k.title}</p>
+                <p className={`tabular text-lg font-semibold ${!m || m.value === null ? 'text-muted-foreground' : ''}`}>{m ? formatMetricValue(m) : q.isPending ? '…' : 'Not available'}</p>
+                {m && m.coverage !== 'complete' && <p className="text-[11px] text-muted-foreground capitalize">{m.coverage} coverage</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function TodayPage() {
   const s = useSession();
   const query = useQuery({ queryKey: ['overview', s.propertyId, s.caps.role, s.caps.aal], queryFn: () => fetchOverview(s.propertyId), refetchInterval: 120_000 });
@@ -50,6 +94,7 @@ export default function TodayPage() {
       <QueryState query={query} skeleton={<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></div>}>
         {(o) => (
           <div className="space-y-6">
+            <KpiStrip financeVisible={o.finance !== null} />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Card className="py-4 gap-3">
                 <CardHeader><CardTitle>Current stay</CardTitle></CardHeader>
@@ -78,7 +123,7 @@ export default function TodayPage() {
                 <CardHeader><CardTitle>Finance review</CardTitle></CardHeader>
                 <CardContent className="text-sm">
                   {o.finance === null ? (
-                    <p className="text-muted-foreground">Not available for your role or without a two-factor session.</p>
+                    <p className="text-muted-foreground">Not available for your role.</p>
                   ) : (
                     <ul className="space-y-1">
                       <li><Link to="/finance" className="hover:underline">{o.finance.pendingReviewCount} transactions awaiting review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { assertMutationEnabled } from '@/lib/rollout';
+import { toCentavos } from '@/lib/money';
 
 // Finance adapter (P21-P26, P28). Reads: transactions ledger (RLS), payment
 // review queue (deployed RPC), journals and statements (v1 RPCs). Writes:
@@ -22,6 +23,44 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   const page = Number(f.page) || 1;
   const res = await q.range((page - 1) * 25, page * 25 - 1);
   return { ...unwrapList<Txn>(res), page };
+}
+
+// Account book (D-095): every row in date order, oldest first, with a running
+// balance computed in integer centavos from already-authoritative rows.
+export type BookRow = Txn & { inCents: number; outCents: number; balanceCents: number };
+export async function fetchLedgerBook(propertyId: string, f: { from?: string; to?: string; includePending?: boolean }): Promise<{ rows: BookRow[]; total: number; truncated: boolean }> {
+  let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).neq('status', 'void').order('transaction_date', { ascending: true }).order('created_at', { ascending: true });
+  if (!f.includePending) q = q.eq('status', 'confirmed');
+  if (f.from) q = q.gte('transaction_date', f.from);
+  if (f.to) q = q.lt('transaction_date', f.to);
+  const res = unwrapList<Txn>(await q.range(0, 4999));
+  let bal = 0;
+  const rows = res.rows.map((r) => {
+    const c = toCentavos(r.gross_amount) ?? 0;
+    const inCents = r.txn_type === 'income' ? c : 0;
+    const outCents = r.txn_type === 'expense' ? c : 0;
+    bal += inCents - outCents;
+    return { ...r, inCents, outCents, balanceCents: bal };
+  });
+  return { rows, total: res.total, truncated: res.total > rows.length };
+}
+
+// Monthly income and expense totals (confirmed rows only) for the analytics chart.
+export type MonthTotal = { month: string; incomeCents: number; expenseCents: number };
+export async function fetchMonthlyTotals(propertyId: string, fromMonth: string): Promise<MonthTotal[]> {
+  const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'gross_amount'>>(
+    await supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').gte('transaction_date', fromMonth).order('transaction_date', { ascending: true }).range(0, 4999),
+  );
+  const byMonth = new Map<string, MonthTotal>();
+  for (const r of res.rows) {
+    const month = r.transaction_date.slice(0, 7);
+    const t = byMonth.get(month) ?? { month, incomeCents: 0, expenseCents: 0 };
+    const c = toCentavos(r.gross_amount) ?? 0;
+    if (r.txn_type === 'income') t.incomeCents += c;
+    else if (r.txn_type === 'expense') t.expenseCents += c;
+    byMonth.set(month, t);
+  }
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
 // Existing review contract: the legacy admin flips status on the transactions table.

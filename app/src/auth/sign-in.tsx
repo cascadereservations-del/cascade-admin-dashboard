@@ -8,11 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Staff sign in with a name (slug@staff.cascade.invalid, never mailed) or an
-// e-mail. Matches the live Module A flow. TOTP is offered when the account has
-// an enrolled factor so finance actions can reach aal2.
+// Staff sign in with their name and the 4-digit PIN they already use in the
+// cleaner and inventory apps. The Auth password is the fixed prefix + PIN
+// (D-059); the prefix is added here and never shown as something to remember.
+// A full-password form stays available for the owner mailbox login.
+// No two-factor step since D-094: a password session is enough for everything.
 
 const STAFF_DOMAIN = 'staff.cascade.invalid';
+const STAFF_PIN_PREFIX = '8888';
+const PIN_RE = /^\d{4}$/;
 
 export function slugify(name: string): string {
   return name
@@ -28,59 +32,36 @@ export function toLoginEmail(identity: string): string {
   return v.includes('@') ? v : `${slugify(v)}@${STAFF_DOMAIN}`;
 }
 
+/** What is sent to Auth: a 4-digit PIN becomes prefix+PIN, anything else is used as typed. */
+export function toAuthPassword(secret: string): string {
+  const v = secret.trim();
+  return PIN_RE.test(v) ? STAFF_PIN_PREFIX + v : v;
+}
+
+type Mode = 'pin' | 'password' | 'otp';
+
 export function SignInPage() {
   const s = useSession();
   const loc = useLocation();
   const [identity, setIdentity] = useState('');
-  const [password, setPassword] = useState('');
-  const [totp, setTotp] = useState('');
-  const [factorId, setFactorId] = useState<string | null>(null);
+  const [secret, setSecret] = useState('');
+  const [mode, setMode] = useState<Mode>('pin');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [skipMfa, setSkipMfa] = useState(false);
 
-  const mfaStep = !!factorId && !skipMfa && s.caps.aal !== 'aal2';
-
-  if (s.status === 'ready' && !mfaStep) {
+  if (s.status === 'ready') {
     const from = (loc.state as { from?: string } | null)?.from;
     return <Navigate to={from && from !== '/sign-in' ? from : defaultRoute(s.caps.role)} replace />;
   }
 
-  async function afterPassword() {
-    // Offer TOTP when a verified factor exists so finance screens can be reached.
-    const { data } = await supabase.auth.mfa.listFactors();
-    const verified = data?.totp?.find((f) => f.status === 'verified');
-    if (verified) setFactorId(verified.id);
-  }
-
-  async function onPassword(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email: toLoginEmail(identity), password });
+    const { error: err } = await supabase.auth.signInWithPassword({ email: toLoginEmail(identity), password: toAuthPassword(secret) });
     setBusy(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    await afterPassword();
-  }
-
-  async function onTotp(e: FormEvent) {
-    e.preventDefault();
-    if (!factorId) return;
-    setBusy(true);
-    setError(null);
-    const { error: err } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: totp.trim() });
-    setBusy(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    await s.refresh();
-    setSkipMfa(true);
+    if (err) setError(mode === 'pin' ? 'That name and PIN did not match. Check both and try again.' : err.message);
   }
 
   async function sendOtp() {
@@ -92,7 +73,7 @@ export function SignInPage() {
     });
     setBusy(false);
     if (err) setError(err.message);
-    else setOtpSent(true);
+    else setMode('otp');
   }
 
   async function verifyOtp(e: FormEvent) {
@@ -102,58 +83,61 @@ export function SignInPage() {
     const { error: err } = await supabase.auth.verifyOtp({ email: toLoginEmail(identity), token: otpCode.trim(), type: 'email' });
     setBusy(false);
     if (err) setError(err.message);
-    else await afterPassword();
   }
 
+  const pinMode = mode === 'pin';
+
   return (
-    <main className="flex min-h-svh items-center justify-center bg-mahogany p-4">
-      <Card className="w-full max-w-sm">
+    <main className="flex min-h-svh items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm shadow-lg">
         <CardHeader>
-          <CardTitle className="text-xl">Cascade Hideaway Admin</CardTitle>
-          <CardDescription>Hotel Comfort. Home Warmth.</CardDescription>
+          <CardTitle className="text-xl">Cascade Hideaway</CardTitle>
+          <CardDescription>Staff admin · Hotel Comfort. Home Warmth.</CardDescription>
         </CardHeader>
         <CardContent>
-          {mfaStep ? (
-            <form onSubmit={onTotp} className="space-y-4" aria-label="Two-factor code">
-              <p className="text-sm text-muted-foreground">
-                Enter the 6-digit code from your authenticator to unlock finance and staff settings. You can skip this for operations-only work.
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="totp">Authenticator code</Label>
-                <Input id="totp" inputMode="numeric" autoComplete="one-time-code" value={totp} onChange={(e) => setTotp(e.target.value)} className="text-base" />
-              </div>
-              {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-              <div className="flex gap-2">
-                <Button type="submit" disabled={busy || totp.length < 6} className="min-h-11 flex-1">Verify</Button>
-                <Button type="button" variant="outline" className="min-h-11" onClick={() => setSkipMfa(true)}>Skip</Button>
-              </div>
-            </form>
-          ) : otpSent ? (
+          {mode === 'otp' ? (
             <form onSubmit={verifyOtp} className="space-y-4" aria-label="E-mail code">
               <div className="space-y-2">
                 <Label htmlFor="otp">Code from the e-mail</Label>
-                <Input id="otp" inputMode="numeric" autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="text-base" />
+                <Input id="otp" inputMode="numeric" autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="text-base" autoFocus />
               </div>
               {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
               <Button type="submit" disabled={busy} className="min-h-11 w-full">Sign in</Button>
+              <Button type="button" variant="link" className="w-full" onClick={() => setMode('pin')}>Back</Button>
             </form>
           ) : (
-            <form onSubmit={onPassword} className="space-y-4" aria-label="Sign in">
+            <form onSubmit={onSubmit} className="space-y-4" aria-label="Sign in">
               <div className="space-y-2">
-                <Label htmlFor="identity">Name or e-mail</Label>
-                <Input id="identity" autoComplete="username" value={identity} onChange={(e) => setIdentity(e.target.value)} className="text-base" required />
+                <Label htmlFor="identity">{pinMode ? 'Your name' : 'Name or e-mail'}</Label>
+                <Input id="identity" autoComplete="username" placeholder={pinMode ? 'e.g. Honey' : ''} value={identity} onChange={(e) => setIdentity(e.target.value)} className="text-base" required autoFocus />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="text-base" required />
+                <Label htmlFor="secret">{pinMode ? '4-digit PIN' : 'Password'}</Label>
+                <Input
+                  id="secret"
+                  type="password"
+                  autoComplete="current-password"
+                  inputMode={pinMode ? 'numeric' : undefined}
+                  pattern={pinMode ? '\\d{4}' : undefined}
+                  maxLength={pinMode ? 4 : undefined}
+                  value={secret}
+                  onChange={(e) => setSecret(pinMode ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
+                  className={pinMode ? 'text-center text-2xl tracking-[0.5em]' : 'text-base'}
+                  required
+                />
               </div>
               {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-              <Button type="submit" disabled={busy} className="min-h-11 w-full">
+              <Button type="submit" disabled={busy || (pinMode && secret.length < 4)} className="min-h-11 w-full">
                 {busy ? 'Signing in…' : 'Sign in'}
               </Button>
-              <Button type="button" variant="link" className="w-full" disabled={busy || !identity} onClick={() => void sendOtp()}>
-                E-mail me a sign-in code instead
-              </Button>
+              <div className="flex flex-col gap-1 text-center text-sm">
+                <Button type="button" variant="link" className="h-auto p-0" onClick={() => { setMode(pinMode ? 'password' : 'pin'); setSecret(''); setError(null); }}>
+                  {pinMode ? 'Use a full password instead' : 'Use my 4-digit PIN instead'}
+                </Button>
+                <Button type="button" variant="link" className="h-auto p-0" disabled={busy || !identity} onClick={() => void sendOtp()}>
+                  E-mail me a sign-in code
+                </Button>
+              </div>
             </form>
           )}
         </CardContent>

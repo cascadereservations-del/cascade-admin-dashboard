@@ -64,6 +64,7 @@ export const NAV: NavItem[] = [
     action: 'read_finance',
     children: [
       { to: '/finance', label: 'Review queue' },
+      { to: '/finance/book', label: 'Account book' },
       { to: '/finance/transactions', label: 'Transactions' },
       { to: '/finance/reconciliation', label: 'Reconciliation' },
       { to: '/finance/journals', label: 'Journals' },
@@ -71,7 +72,7 @@ export const NAV: NavItem[] = [
       { to: '/finance/setup', label: 'Accounting setup' },
     ],
   },
-  { to: '/insights', label: 'Insights', icon: BarChart3, action: 'read_finance' },
+  { to: '/insights', label: 'KPIs & Analytics', icon: BarChart3, action: 'read_finance' },
   {
     to: '/settings',
     label: 'Settings',

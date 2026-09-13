@@ -3,76 +3,86 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Cascade brand tokens (PRD section 4). Neutral working surfaces; mahogany
-   for strong brand surfaces; champagne as a restrained accent; cream for
-   selected backgrounds. Gold is never the default small-text colour. */
+/* Cascade admin palette (D-095, 2026-09-13): "dawn over the bay".
+   Cool ink and lagoon teal for structure and action, warm sand for selection
+   and gentle emphasis, coral only for danger. The old mahogany/champagne
+   world is retired in the admin; the guest-facing brand keeps it.
+   Rules: teal is the single action colour; amber is a highlight, never text
+   under 18px; status colours always travel with a glyph and a label. */
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.985 0.002 80);
-  --foreground: oklch(0.2 0.01 60);
+  --radius: 0.625rem;
+  --background: oklch(0.982 0.006 210);
+  --foreground: oklch(0.24 0.03 245);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 60);
+  --card-foreground: oklch(0.24 0.03 245);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 60);
-  --primary: oklch(0.22 0.04 55);
-  --primary-foreground: oklch(0.97 0.01 85);
-  --secondary: oklch(0.96 0.012 85);
-  --secondary-foreground: oklch(0.25 0.03 55);
-  --muted: oklch(0.955 0.004 80);
-  --muted-foreground: oklch(0.48 0.01 60);
-  --accent: oklch(0.96 0.012 85);
-  --accent-foreground: oklch(0.25 0.03 55);
-  --destructive: oklch(0.55 0.2 27);
-  --border: oklch(0.905 0.006 80);
-  --input: oklch(0.905 0.006 80);
-  --ring: oklch(0.7 0.12 75);
-  --champagne: #C9963A;
-  --mahogany: #1C1006;
-  --cream: #F7F2E8;
-  --chart-1: oklch(0.7 0.12 75);
-  --chart-2: oklch(0.45 0.06 55);
-  --chart-3: oklch(0.6 0.08 200);
-  --chart-4: oklch(0.65 0.12 145);
-  --chart-5: oklch(0.55 0.15 27);
-  --sidebar: oklch(0.18 0.03 55);
-  --sidebar-foreground: oklch(0.92 0.01 85);
-  --sidebar-primary: oklch(0.7 0.12 75);
-  --sidebar-primary-foreground: oklch(0.15 0.02 55);
-  --sidebar-accent: oklch(0.26 0.03 55);
-  --sidebar-accent-foreground: oklch(0.97 0.01 85);
-  --sidebar-border: oklch(0.3 0.03 55);
-  --sidebar-ring: oklch(0.7 0.12 75);
+  --popover-foreground: oklch(0.24 0.03 245);
+  --primary: oklch(0.46 0.09 205);
+  --primary-foreground: oklch(0.985 0.01 200);
+  --secondary: oklch(0.945 0.02 205);
+  --secondary-foreground: oklch(0.3 0.05 215);
+  --muted: oklch(0.955 0.008 220);
+  --muted-foreground: oklch(0.5 0.025 240);
+  --accent: oklch(0.955 0.03 85);
+  --accent-foreground: oklch(0.32 0.06 60);
+  --destructive: oklch(0.58 0.2 25);
+  --border: oklch(0.905 0.012 220);
+  --input: oklch(0.905 0.012 220);
+  --ring: oklch(0.6 0.11 200);
+  /* Legacy brand aliases kept for the few components that name them. */
+  --champagne: oklch(0.72 0.14 70);
+  --mahogany: oklch(0.24 0.03 245);
+  --cream: oklch(0.955 0.03 85);
+  --chart-1: oklch(0.6 0.12 200);
+  --chart-2: oklch(0.72 0.14 70);
+  --chart-3: oklch(0.55 0.13 265);
+  --chart-4: oklch(0.62 0.14 150);
+  --chart-5: oklch(0.62 0.19 25);
+  --sidebar: oklch(0.23 0.045 235);
+  --sidebar-foreground: oklch(0.9 0.015 215);
+  --sidebar-primary: oklch(0.78 0.11 190);
+  --sidebar-primary-foreground: oklch(0.18 0.04 235);
+  --sidebar-accent: oklch(0.3 0.05 232);
+  --sidebar-accent-foreground: oklch(0.985 0.01 200);
+  --sidebar-border: oklch(0.34 0.05 232);
+  --sidebar-ring: oklch(0.78 0.11 190);
 }
 
 .dark {
-  --background: oklch(0.16 0.01 60);
-  --foreground: oklch(0.95 0.005 85);
-  --card: oklch(0.2 0.01 60);
-  --card-foreground: oklch(0.95 0.005 85);
-  --popover: oklch(0.2 0.01 60);
-  --popover-foreground: oklch(0.95 0.005 85);
-  --primary: oklch(0.85 0.06 80);
-  --primary-foreground: oklch(0.18 0.02 55);
-  --secondary: oklch(0.26 0.02 60);
-  --secondary-foreground: oklch(0.95 0.005 85);
-  --muted: oklch(0.25 0.01 60);
-  --muted-foreground: oklch(0.7 0.01 70);
-  --accent: oklch(0.26 0.02 60);
-  --accent-foreground: oklch(0.95 0.005 85);
-  --destructive: oklch(0.65 0.18 25);
+  --background: oklch(0.17 0.025 240);
+  --foreground: oklch(0.94 0.01 210);
+  --card: oklch(0.21 0.03 238);
+  --card-foreground: oklch(0.94 0.01 210);
+  --popover: oklch(0.21 0.03 238);
+  --popover-foreground: oklch(0.94 0.01 210);
+  --primary: oklch(0.8 0.11 190);
+  --primary-foreground: oklch(0.18 0.04 235);
+  --secondary: oklch(0.28 0.04 232);
+  --secondary-foreground: oklch(0.94 0.01 210);
+  --muted: oklch(0.26 0.03 235);
+  --muted-foreground: oklch(0.72 0.02 220);
+  --accent: oklch(0.32 0.05 75);
+  --accent-foreground: oklch(0.95 0.03 85);
+  --destructive: oklch(0.68 0.18 25);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.7 0.12 75);
-  --champagne: #D4A853;
-  --cream: oklch(0.26 0.02 60);
-  --sidebar: oklch(0.14 0.02 55);
-  --sidebar-foreground: oklch(0.92 0.01 85);
-  --sidebar-primary: oklch(0.7 0.12 75);
-  --sidebar-primary-foreground: oklch(0.15 0.02 55);
-  --sidebar-accent: oklch(0.22 0.02 55);
-  --sidebar-accent-foreground: oklch(0.97 0.01 85);
+  --ring: oklch(0.7 0.11 195);
+  --champagne: oklch(0.8 0.13 75);
+  --mahogany: oklch(0.94 0.01 210);
+  --cream: oklch(0.32 0.05 75);
+  --chart-1: oklch(0.72 0.12 195);
+  --chart-2: oklch(0.8 0.13 75);
+  --chart-3: oklch(0.7 0.12 265);
+  --chart-4: oklch(0.72 0.14 150);
+  --chart-5: oklch(0.7 0.18 25);
+  --sidebar: oklch(0.14 0.03 240);
+  --sidebar-foreground: oklch(0.9 0.015 215);
+  --sidebar-primary: oklch(0.8 0.11 190);
+  --sidebar-primary-foreground: oklch(0.18 0.04 235);
+  --sidebar-accent: oklch(0.24 0.04 235);
+  --sidebar-accent-foreground: oklch(0.985 0.01 200);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.7 0.12 75);
+  --sidebar-ring: oklch(0.8 0.11 190);
 }
 
 @theme inline {
@@ -123,12 +133,38 @@
   }
   html {
     font-size: 15px;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
   }
   body {
     @apply bg-background text-foreground antialiased;
+    caret-color: var(--primary);
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+    color: var(--foreground);
+  }
+  a {
+    text-underline-offset: 0.18em;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+    letter-spacing: -0.01em;
   }
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {

@@ -9,10 +9,10 @@ export function ForbiddenState({ action, mfa }: { action?: Action; mfa?: boolean
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-16 text-center" role="alert">
       <ShieldAlert className="size-8 text-muted-foreground" aria-hidden />
-      <h2 className="text-lg font-semibold">{mfa ? 'Two-factor sign-in required' : 'Not available for your role'}</h2>
+      <h2 className="text-lg font-semibold">{mfa ? 'Sign in again' : 'Not available for your role'}</h2>
       <p className="text-sm text-muted-foreground">
         {mfa
-          ? 'This area needs a two-factor verified session. Sign out and sign in again with your authenticator code.'
+          ? 'Your session is from before the sign-in change. Sign out and sign in again with your name and PIN.'
           : `Your staff profile does not include ${action ? action.replace('_', ' ') : 'this area'}. Ask the owner if you need it.`}
       </p>
     </div>

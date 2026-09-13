@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { allowed, buildCapabilities, defaultRoute, needsMfa } from './capabilities';
 
 describe('capabilities mirror staff_access_allowed', () => {
-  it('finance requires aal2 even for owner', () => {
-    expect(allowed('owner', 'read_finance', false, 'aal1')).toBe(false);
-    expect(allowed('owner', 'read_finance', false, 'aal2')).toBe(true);
-    expect(needsMfa('owner', 'read_finance', 'aal1')).toBe(true);
+  it('finance works on a password session (D-094: no two-factor gate)', () => {
+    expect(allowed('owner', 'read_finance', false, 'aal1')).toBe(true);
+    expect(allowed('owner', 'read_finance', false, null)).toBe(true);
+    expect(allowed('admin', 'manage_staff', false, 'aal1')).toBe(true);
+    expect(needsMfa('owner', 'read_finance', 'aal1')).toBe(false);
   });
   it('cleaner never reads finance or manages staff', () => {
     expect(allowed('cleaner', 'read_finance', false, 'aal2')).toBe(false);

@@ -25,6 +25,7 @@ const PurchasesPage = lazy(() => import('@/features/inventory/purchases-page'));
 const CountsPage = lazy(() => import('@/features/inventory/counts-page'));
 const FinanceQueuePage = lazy(() => import('@/features/finance/queue-page'));
 const TransactionsPage = lazy(() => import('@/features/finance/transactions-page'));
+const AccountBookPage = lazy(() => import('@/features/finance/book-page'));
 const ReconciliationPage = lazy(() => import('@/features/finance/reconciliation-page'));
 const JournalsPage = lazy(() => import('@/features/finance/journals-page'));
 const StatementsPage = lazy(() => import('@/features/finance/statements-page'));
@@ -69,6 +70,7 @@ export const router = createHashRouter([
       { path: 'inventory/counts', element: guard('manage_inventory', <CountsPage />) },
       { path: 'finance', element: guard('read_finance', <FinanceQueuePage />) },
       { path: 'finance/transactions', element: guard('read_finance', <TransactionsPage />) },
+      { path: 'finance/book', element: guard('read_finance', <AccountBookPage />) },
       { path: 'finance/reconciliation', element: guard('read_finance', <ReconciliationPage />) },
       { path: 'finance/journals', element: guard('read_finance', <JournalsPage />) },
       { path: 'finance/statements', element: guard('read_finance', <StatementsPage />) },

@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
-import { comparablePeriod, formatDate, periodPreset } from '@/lib/dates';
+import { addIsoDays, comparablePeriod, formatDate, periodPreset, todayManila } from '@/lib/dates';
+import { fetchMonthlyTotals } from '@/features/finance/api';
 import { formatPHP } from '@/lib/money';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { CardSkeleton, PartialBanner, QueryState } from '@/components/data/query-state';
@@ -49,6 +52,62 @@ function explain(m: Record<string, MetricResult>, blocked: number): string[] {
   return out;
 }
 
+// Financial analytics (D-095): twelve months of confirmed money in and out
+// from the operational ledger, so the owner sees the trend, not only the KPIs.
+function FinancialAnalytics() {
+  const s = useSession();
+  const from = addIsoDays(todayManila(), -365).slice(0, 7) + '-01';
+  const q = useQuery({ queryKey: ['monthly-totals', s.propertyId, from], queryFn: () => fetchMonthlyTotals(s.propertyId, from), staleTime: 300_000 });
+  const data = (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: m.expenseCents / 100, net: (m.incomeCents - m.expenseCents) / 100 }));
+  const totals = data.reduce((a, m) => ({ income: a.income + m.income, expense: a.expense + m.expense }), { income: 0, expense: 0 });
+  return (
+    <Section title="Financial analytics" aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
+      {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No confirmed transactions in the last twelve months.</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+          <div className="rounded-lg border bg-card p-3">
+            <p className="mb-2 text-xs text-muted-foreground">Money in and out by month, confirmed rows, last twelve months (cash basis)</p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                  <Tooltip formatter={(v) => formatPHP(Number(v))} contentStyle={{ borderRadius: 8, borderColor: 'var(--border)', background: 'var(--popover)', color: 'var(--popover-foreground)' }} cursor={{ fill: 'var(--muted)' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="income" name="Money in" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" name="Money out" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Money in, twelve months</p>
+              <p className="tabular text-xl font-semibold">{formatPHP(totals.income)}</p>
+            </div>
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Money out, twelve months</p>
+              <p className="tabular text-xl font-semibold">{formatPHP(totals.expense)}</p>
+            </div>
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Net, twelve months</p>
+              <p className={`tabular text-xl font-semibold ${totals.income - totals.expense < 0 ? 'text-destructive' : ''}`}>{formatPHP(totals.income - totals.expense)}</p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border bg-card">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-muted-foreground"><th className="px-3 py-1.5">Month</th><th className="px-3 py-1.5 text-right">Net</th></tr></thead>
+                <tbody>{data.slice(-6).reverse().map((m) => <tr key={m.month} className="border-t"><td className="px-3 py-1.5">{m.label}</td><td className={`tabular px-3 py-1.5 text-right ${m.net < 0 ? 'text-destructive' : ''}`}>{formatPHP(m.net)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export default function InsightsPage() {
   const s = useSession();
   const { state, set } = useUrlState({ period: 'mtd', from: '', to: '' });
@@ -63,8 +122,8 @@ export default function InsightsPage() {
   return (
     <div>
       <PageHeader
-        title="Insights"
-        description="Hospitality performance through the last completed night. Every figure is computed on the server with its definition and coverage."
+        title="KPIs & Analytics"
+        description="Hospitality performance through the last completed night, plus money in and out. Every KPI is computed on the server with its definition and coverage."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Tabs value={state.period} onValueChange={(v) => set({ period: v })}><TabsList>{['mtd', 'ytd', 'last30', 'last90', 'prev-month', 'custom'].map((p) => <TabsTrigger key={p} value={p}>{p === 'prev-month' ? 'Prev month' : p.toUpperCase()}</TabsTrigger>)}</TabsList></Tabs>
@@ -93,6 +152,7 @@ export default function InsightsPage() {
                 );
               })}
             </div>
+            <FinancialAnalytics />
             <Section title="Definitions">
               <p className="text-sm text-muted-foreground">Definitions version {Object.values(d.metrics)[0]?.definitionVersion}. Nights use [check-in, checkout). Calendar blocks are never sold nights. Forecasts are not mixed into actuals. Full formulas are in docs/METRICS.md.</p>
             </Section>

@@ -16,7 +16,10 @@ export type Action =
   | 'manage_inventory'
   | 'manage_maintenance';
 
-const MFA_ACTIONS: Action[] = ['manage_staff', 'approve_payment', 'read_finance'];
+// D-094 (2026-09-13): no action needs a two-factor session any more. The server
+// ignores aal in staff_access_allowed; this list stays so the gate can be
+// reinstated by adding actions back, and so the tests document the decision.
+const MFA_ACTIONS: Action[] = [];
 
 const ROLE_ACTIONS: Record<StaffRole, Action[]> = {
   owner: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance'],
