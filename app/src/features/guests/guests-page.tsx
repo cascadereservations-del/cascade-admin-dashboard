@@ -1,11 +1,77 @@
-import { PageHeader } from '@/components/data/page-header';
-import { EmptyState } from '@/components/data/query-state';
+import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
+import { useSession } from '@/auth/session';
+import { useUrlState } from '@/lib/url-state';
+import { formatDate, formatDateTime } from '@/lib/dates';
+import { PageHeader, Section } from '@/components/data/page-header';
+import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
+import { DataTable } from '@/components/data/data-table';
+import { EmptyState, QueryState } from '@/components/data/query-state';
+import { StatusBadge } from '@/components/data/status-badge';
+import { CopyButton } from '@/components/data/copy-button';
+import { Button } from '@/components/ui/button';
+import { fetchFollowUps, fetchGuests, fetchHandoffs, type GuestRow } from './api';
+
+// CRM list: canonical guests joined by guest_id everywhere else. Same-name
+// guests stay separate rows here; merging is a reviewed action on the detail.
+
+const DEFAULTS = { q: '', tier: '', page: '1', density: 'comfortable', handoffs: '', task: '' };
 
 export default function GuestsPage() {
+  const s = useSession();
+  const nav = useNavigate();
+  const { state, set, reset, activeFilterCount } = useUrlState(DEFAULTS);
+  const query = useQuery({ queryKey: ['guests', s.propertyId, state.q, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, state) });
+  const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId) });
+  const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs });
+  const density = state.density === 'compact' ? 'compact' : 'comfortable';
+  const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
+    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${row.original.tier}` : ''}</div></div> },
+    { id: 'contact', header: 'Contact', accessorFn: (r) => r.phone ?? r.email ?? '', cell: ({ row }) => <span className="inline-flex items-center gap-1 text-xs">{row.original.phone ?? row.original.email ?? '—'}{(row.original.phone ?? row.original.email) && <CopyButton value={row.original.phone ?? row.original.email ?? ''} />}</span> },
+    { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
+    { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
+    { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{row.original.tier}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
+  ], []);
   return (
     <div>
-      <PageHeader title="Guests" />
-      <EmptyState title="Not built yet" hint="This module is scheduled in the implementation tracker." />
+      <PageHeader title="Guests" description="Canonical guest records. Timelines, follow-ups and Messenger handoffs link here by guest id." />
+      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Name, phone or e-mail" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+        <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
+      </FilterBar>
+      <QueryState query={query}>
+        {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
+          <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
+        )}
+      </QueryState>
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Section title="Open follow-ups">
+          <QueryState query={tasks}>
+            {(d) => {
+              const open = d.rows.filter((t) => t.status === 'open' || t.status === 'in_progress');
+              return open.length === 0 ? <p className="text-sm text-muted-foreground">No open follow-ups.</p> : (
+                <ul className="divide-y rounded-lg border text-sm">{open.map((t) => <li key={t.id} className="px-3 py-2"><Link to={`/guests/${t.guest_id ?? ''}?task=${t.id}`} className="font-medium hover:underline">{t.title}</Link><div className="text-xs text-muted-foreground">{t.purpose.replaceAll('_', ' ')} · {t.priority}{t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ''}</div></li>)}</ul>
+              );
+            }}
+          </QueryState>
+        </Section>
+        <Section title="Messenger handoffs">
+          <QueryState query={handoffs}>
+            {(d) => d.rows.length === 0 ? <p className="text-sm text-muted-foreground">No concierge handoffs recorded.</p> : (
+              <ul className="divide-y rounded-lg border text-sm">
+                {d.rows.slice(0, 20).map((h) => (
+                  <li key={h.id} className="px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{h.guest_name ?? 'Guest'}</span><StatusBadge tone={h.status === 'pending' ? 'warn' : 'good'}>{h.status}</StatusBadge>{h.risk && <span className="text-xs text-muted-foreground">risk {h.risk}</span>}<span className="ml-auto text-xs text-muted-foreground">{formatDateTime(h.created_at)}</span></div>
+                    {h.guest_text && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{h.guest_text}</p>}
+                    <p className="mt-1 inline-flex items-center gap-1 text-xs">Reply in Messenger (Page inbox). PSID <code>{h.psid}</code><CopyButton value={h.psid} label="Copy PSID" /></p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </QueryState>
+        </Section>
+      </div>
     </div>
   );
 }
