@@ -1,9 +1,12 @@
 import { supabase } from './supabase';
 import { toAppError } from './errors';
+import { assertRpcEnabled } from './rollout';
 
 // Every adapter call goes through here so PostgREST errors become structured
 // AppErrors and a missing RPC surfaces as "unavailable", never as empty data.
+// Mutating RPCs are also subject to the module-by-module rollout gate.
 export async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  assertRpcEnabled(fn);
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw toAppError(error);
   return data as T;

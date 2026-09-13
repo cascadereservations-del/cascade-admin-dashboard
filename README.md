@@ -24,7 +24,7 @@ Runs typecheck, vitest unit tests, the four legacy tests and a production build.
 
 ## Backend
 
-New RPCs and tables live in `../stay-site/supabase/migrations/20260913*.sql` with pgTAP suites and a release contract. They are **not applied** yet; screens that depend on them show an explicit "backend interface not deployed" state. See `docs/RELEASE.md`.
+New RPCs and tables live in `../stay-site/supabase/migrations/20260913*.sql` with pgTAP suites and a release contract. Applied to production on 2026-09-13 after a rehearsal on Alfred. The new admin is published read-only under `next/` (built `dist/` plus `next/legacy/`); writes are enabled module by module in `app/src/lib/rollout.ts`. See `docs/RELEASE.md`.
 
 ## Documentation
 

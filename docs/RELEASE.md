@@ -1,6 +1,8 @@
 # RELEASE — deployment order, compatibility and rollback
 
-Status 2026-09-13: **nothing deployed, nothing applied, nothing pushed.** All work is in local commits on `admin-dashboard` (main) and `stay-site` (main).
+Status 2026-09-13 (later session): **steps 1-4 done.** Rehearsal passed on Alfred (3 migrations, 9/9 forward checks, pgTAP 56/56); backend release `admin_modernisation_backend_20260913` **applied to production** (ledger `20260913100000/110000/120000`, restore point `cascade-supabase-20260913T061633Z`); the new admin is published read-only at `next/` (`https://cascadereservations-del.github.io/cascade-admin-dashboard/next/`) with the legacy admin still the default. Mutations are gated by `app/src/lib/rollout.ts` (`ENABLED_MUTATION_MODULES`, currently empty).
+
+To enable a module (step 5): add it to `ENABLED_MUTATION_MODULES` in order `bookings` → `operations` → `readiness` → `inventory` → `follow_ups` → `finance`, run `npm run check`, copy `dist/` to `next/` (keep `next/legacy/`), commit, push.
 
 ## What must happen, in order (PRD section 11 rollout)
 

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { assertMutationEnabled } from '@/lib/rollout';
 
 // Operations adapter (P13-P15). Cleaning reads use the RLS-protected
 // cleaning_sessions / meter_readings / cleaning_verification_evidence tables;
@@ -119,6 +120,7 @@ export async function fetchNotices(propertyId: string) {
 
 // Notices keep the existing table contract (used by Telegram flows and the guest guide).
 export async function saveNotice(propertyId: string, n: Partial<Notice>) {
+  assertMutationEnabled('operations');
   const { id, created_at: _c, ...rest } = n;
   void _c;
   const payload = { ...rest, property_id: propertyId };

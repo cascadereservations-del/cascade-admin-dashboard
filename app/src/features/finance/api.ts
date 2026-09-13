@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { assertMutationEnabled } from '@/lib/rollout';
 
 // Finance adapter (P21-P26, P28). Reads: transactions ledger (RLS), payment
 // review queue (deployed RPC), journals and statements (v1 RPCs). Writes:
@@ -25,6 +26,7 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
 
 // Existing review contract: the legacy admin flips status on the transactions table.
 export async function reviewTransaction(id: string, status: 'confirmed' | 'void', note?: string) {
+  assertMutationEnabled('finance');
   const { data, error } = await supabase.from('transactions').update({ status, ...(note ? { notes: note } : {}) }).eq('id', id).select('id, status').single();
   if (error) throw error;
   return data;

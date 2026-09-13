@@ -26,6 +26,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useSession } from '@/auth/session';
 import { useTheme } from '@/hooks/use-theme';
 import { APP_VERSION, EXTERNAL_APPS } from '@/lib/env';
+import { ENABLED_MUTATION_MODULES } from '@/lib/rollout';
 import { NAV } from './nav';
 import { CommandPalette } from './command-palette';
 
@@ -105,6 +106,7 @@ export function AppShell() {
         </SidebarContent>
         <SidebarFooter className="text-xs text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
           v{APP_VERSION} · Asia/Manila · PHP
+          <div>{ENABLED_MUTATION_MODULES.length === 0 ? 'Read-only rollout · writes via legacy admin' : `Writes enabled: ${ENABLED_MUTATION_MODULES.join(', ')}`}</div>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
