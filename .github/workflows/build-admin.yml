@@ -1,0 +1,26 @@
+# Builds the new admin and uploads ONLY the build output plus the legacy entry
+# points (PRD section 8). Publishing to Pages is a deliberate later step
+# (rollout step 7); until then the legacy index.html at the root stays served.
+name: Build admin (dist only)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: mkdir -p dist/legacy && cp index.html dist/legacy/index.html && cp index2.html dist/legacy/index2.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-dist
+          path: dist

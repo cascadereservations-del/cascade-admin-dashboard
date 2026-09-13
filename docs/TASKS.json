@@ -1,0 +1,317 @@
+{
+  "updated": "2026-09-13",
+  "legend": {
+    "done": "implemented and verified locally",
+    "done_local": "implemented; typecheck/build pass; runtime needs a signed-in session against the applied backend",
+    "written_untested": "code written; depends on the un-applied backend release or an unrun pgTAP suite",
+    "partial": "part of scope delivered",
+    "blocked": "cannot proceed without an external step"
+  },
+  "packets": [
+    {
+      "id": "P01",
+      "title": "Current-state and migration evidence manifest",
+      "dependsOn": [],
+      "status": "done",
+      "evidence": "Every reused object classified as deployed, local-only or missing (docs/evidence/P01.md)."
+    },
+    {
+      "id": "P02",
+      "title": "Baseline analytics audit fixtures",
+      "dependsOn": [
+        "P01"
+      ],
+      "status": "done",
+      "evidence": "A01-A06 reproduced with documented read-only queries; values re-verified 2026-09-13 (evidence/P02.md)."
+    },
+    {
+      "id": "P03",
+      "title": "Metric definitions and typed contracts",
+      "dependsOn": [
+        "P02"
+      ],
+      "status": "done",
+      "evidence": "docs/METRICS.md + app/src/types/contracts.ts + get_hospitality_metrics_v1 with boundary/coverage fixtures in pgTAP."
+    },
+    {
+      "id": "P04",
+      "title": "React/Vite build and test foundation",
+      "dependsOn": [
+        "P01"
+      ],
+      "status": "done",
+      "evidence": "npm run typecheck, vitest (13 tests), vite build, legacy tests (4) all pass."
+    },
+    {
+      "id": "P05",
+      "title": "Authentication and capability adapter",
+      "dependsOn": [
+        "P04"
+      ],
+      "status": "done",
+      "evidence": "current_staff_access() + aal mirror; capability tests pass. Role/MFA/disabled/revoked states render."
+    },
+    {
+      "id": "P06",
+      "title": "Cascade shell, navigation and responsive layout",
+      "dependsOn": [
+        "P05"
+      ],
+      "status": "done",
+      "evidence": "Sidebar/off-canvas shell, command palette, apps menu, theme. Verified in browser at 640px and 1280px (signed-out)."
+    },
+    {
+      "id": "P07",
+      "title": "Shared tables, forms, filters and errors",
+      "dependsOn": [
+        "P06"
+      ],
+      "status": "done",
+      "evidence": "DataTable, FilterBar, URL state, QueryState (loading/empty/error/forbidden/unavailable/retry)."
+    },
+    {
+      "id": "P08",
+      "title": "Canonical booking/calendar read model",
+      "dependsOn": [
+        "P03",
+        "P05"
+      ],
+      "status": "done",
+      "evidence": "mergeStays() with 7 unit tests; admin_stays_v1 SQL read model."
+    },
+    {
+      "id": "P09",
+      "title": "Hospitality metric service",
+      "dependsOn": [
+        "P08"
+      ],
+      "status": "written_untested",
+      "evidence": "get_hospitality_metrics_v1 + pgTAP fixtures written; NOT executed (no local Postgres). Needs rehearsal DB run."
+    },
+    {
+      "id": "P10",
+      "title": "Today overview and action queue",
+      "dependsOn": [
+        "P07",
+        "P08",
+        "P09"
+      ],
+      "status": "written_untested",
+      "evidence": "get_admin_overview_v1 + Today page; renders once migration applied. Unavailable state verified by design."
+    },
+    {
+      "id": "P11",
+      "title": "Booking list/calendar/detail",
+      "dependsOn": [
+        "P08",
+        "P07"
+      ],
+      "status": "done_local",
+      "evidence": "List, calendar, inquiries, detail pages typecheck and build; cross-channel journey needs signed-in browser test."
+    },
+    {
+      "id": "P12",
+      "title": "Booking decision/change adapter",
+      "dependsOn": [
+        "P11"
+      ],
+      "status": "done_local",
+      "evidence": "decide_direct_booking + record_booking_lifecycle_action wired with idempotency keys; concurrency guaranteed by the deployed RPC advisory lock."
+    },
+    {
+      "id": "P13",
+      "title": "Cleaning register and evidence detail",
+      "dependsOn": [
+        "P07",
+        "P08"
+      ],
+      "status": "done_local",
+      "evidence": "Register with fee columns gated by read_finance; photos listed by submission_id folder."
+    },
+    {
+      "id": "P14",
+      "title": "Cleaning review and readiness",
+      "dependsOn": [
+        "P13"
+      ],
+      "status": "written_untested",
+      "evidence": "review_property_readiness_v1 refuses ready with open blockers; override needs reason + manage_operations."
+    },
+    {
+      "id": "P15",
+      "title": "Work orders and notices",
+      "dependsOn": [
+        "P14"
+      ],
+      "status": "written_untested",
+      "evidence": "work_orders + save_work_order_v1; ops_notices audience/expiry; expiry excluded in overview."
+    },
+    {
+      "id": "P16",
+      "title": "Inventory baseline and movement compatibility",
+      "dependsOn": [
+        "P01",
+        "P05"
+      ],
+      "status": "written_untested",
+      "evidence": "reconcile_inventory_baseline_v1, record_inventory_usage v2, pgTAP 10+5-3=12 replay fixture written."
+    },
+    {
+      "id": "P17",
+      "title": "Inventory catalogue, counts and usage",
+      "dependsOn": [
+        "P07",
+        "P16"
+      ],
+      "status": "done_local",
+      "evidence": "Catalogue via get_inventory_catalogue_v1, counts sheet with variance preview."
+    },
+    {
+      "id": "P18",
+      "title": "Purchasing and shopping list",
+      "dependsOn": [
+        "P17"
+      ],
+      "status": "written_untested",
+      "evidence": "inventory_shopping_list proposed -> approved -> received via record_inventory_receipt_v1."
+    },
+    {
+      "id": "P19",
+      "title": "Guest profile and identity review",
+      "dependsOn": [
+        "P07",
+        "P08"
+      ],
+      "status": "written_untested",
+      "evidence": "guest_profile_details + save_guest_profile_v1 (version check) + preview/merge with shared-contact rule."
+    },
+    {
+      "id": "P20",
+      "title": "Guest timeline and follow-ups",
+      "dependsOn": [
+        "P19"
+      ],
+      "status": "written_untested",
+      "evidence": "get_guest_timeline_v1 (finance-filtered), follow_up_tasks, Messenger PSID surfaced with copy."
+    },
+    {
+      "id": "P21",
+      "title": "Finance source reconciliation workbench",
+      "dependsOn": [
+        "P02",
+        "P07"
+      ],
+      "status": "done_local",
+      "evidence": "Reconciliation page lists A01/A02/A06 exceptions row by row beside the server cash_received metric."
+    },
+    {
+      "id": "P22",
+      "title": "Accounts, journals and posting engine",
+      "dependsOn": [
+        "P05",
+        "P21"
+      ],
+      "status": "written_untested",
+      "evidence": "post_journal_v1/reverse_journal_v1 with balance, idempotency, one-event, immutability trigger; pgTAP fixtures written."
+    },
+    {
+      "id": "P23",
+      "title": "Opening-balance setup",
+      "dependsOn": [
+        "P22"
+      ],
+      "status": "written_untested",
+      "evidence": "save/approve_opening_balances_v1 refuse unbalanced batches with the difference."
+    },
+    {
+      "id": "P24",
+      "title": "Simple finance forms and source mappings",
+      "dependsOn": [
+        "P22",
+        "P23"
+      ],
+      "status": "written_untested",
+      "evidence": "prepare_simple_entry_v1 (13 kinds) + SimpleEntryForm; PRD fixtures encoded in pgTAP."
+    },
+    {
+      "id": "P25",
+      "title": "Stock valuation and fixed assets",
+      "dependsOn": [
+        "P18",
+        "P24"
+      ],
+      "status": "written_untested",
+      "evidence": "acct_fixed_assets, run_depreciation_v1 (skips assets missing inputs), WA stock cost + post_consumable_usage_v1."
+    },
+    {
+      "id": "P26",
+      "title": "Statements and monthly close",
+      "dependsOn": [
+        "P24",
+        "P25"
+      ],
+      "status": "written_untested",
+      "evidence": "get_financial_statement_v1 (9 statements), close with identity checks and immutable snapshot, owner reopen."
+    },
+    {
+      "id": "P27",
+      "title": "Insights, budgets and explanations",
+      "dependsOn": [
+        "P09",
+        "P26"
+      ],
+      "status": "done_local",
+      "evidence": "Insights page with equivalent-period comparison, deterministic explanations, drill-down; budgets via budget:<code> targets."
+    },
+    {
+      "id": "P28",
+      "title": "Owner exports and print layouts",
+      "dependsOn": [
+        "P26",
+        "P27"
+      ],
+      "status": "partial",
+      "evidence": "CSV (Papa, formula-escaped, header block) and print for statements/transactions. XLSX and PDF not built."
+    },
+    {
+      "id": "P29",
+      "title": "Staff settings, integration health and audit UI",
+      "dependsOn": [
+        "P05",
+        "P15",
+        "P20",
+        "P26"
+      ],
+      "status": "done_local",
+      "evidence": "Staff via staff-users function, health from heartbeats/sync/e-mail/integrity, audit from staff_access_audit."
+    },
+    {
+      "id": "P30",
+      "title": "Cross-app acceptance and rollout package",
+      "dependsOn": [
+        "P10",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29"
+      ],
+      "status": "blocked",
+      "evidence": "Needs: migration applied to a rehearsal DB, pgTAP run, signed-in browser journeys, Playwright suite, accessibility pass. See docs/RELEASE.md."
+    }
+  ]
+}
