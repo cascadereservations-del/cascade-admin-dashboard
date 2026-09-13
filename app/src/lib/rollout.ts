@@ -7,7 +7,7 @@ import { AppError } from './errors';
 
 export type MutationModule = 'bookings' | 'operations' | 'readiness' | 'inventory' | 'follow_ups' | 'finance';
 
-export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings', 'operations', 'readiness', 'inventory']; // enabled in order 2026-09-13 on Lloyd's word
+export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings', 'operations', 'readiness', 'inventory', 'follow_ups', 'finance']; // all six enabled in order 2026-09-13 on Lloyd's word (rollout step 5 complete)
 
 const LABEL: Record<MutationModule, string> = {
   bookings: 'booking decisions and cancellations',
