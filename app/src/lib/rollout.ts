@@ -7,7 +7,7 @@ import { AppError } from './errors';
 
 export type MutationModule = 'bookings' | 'operations' | 'readiness' | 'inventory' | 'follow_ups' | 'finance';
 
-export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings']; // enabled 2026-09-13 (Lloyd: "enable bookings")
+export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings', 'operations']; // bookings, operations enabled 2026-09-13 on Lloyd's word
 
 const LABEL: Record<MutationModule, string> = {
   bookings: 'booking decisions and cancellations',
