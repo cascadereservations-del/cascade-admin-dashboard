@@ -203,7 +203,7 @@ function UtilitiesChart() {
         <p className="text-sm text-muted-foreground">No meter readings in the last twelve months.</p>
       ) : (
         <div className="rounded-lg border bg-card p-3">
-          <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month, from the meter readings in the cleaning log. A spike usually means a misread meter.</p>
+          <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month, from the meter readings in the cleaning log. First readings (previous value 0), negative re-entries and flagged rows are left out of the sums{(() => { const n = data.reduce((a, m) => a + m.excluded, 0); return n ? ` (${n} such reading${n === 1 ? '' : 's'} in this period, see the cleaning log)` : ''; })()}.</p>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
