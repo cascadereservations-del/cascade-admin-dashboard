@@ -21,15 +21,16 @@ export type UtilityMonth = { month: string; kwh: number; m3: number; readings: n
 export function isConsumptionReading(r: { electric_prev: string | number | null; water_prev: string | number | null; electric_delta: string | number | null; water_delta: string | number | null; meter_flag: string | null }): boolean {
   return Number(r.electric_prev ?? 0) > 0 && Number(r.water_prev ?? 0) > 0 && Number(r.electric_delta ?? 0) >= 0 && Number(r.water_delta ?? 0) >= 0 && !r.meter_flag;
 }
-export async function fetchUtilityMonths(propertyId: string, from: string): Promise<UtilityMonth[]> {
-  const res = unwrapList<{ recorded_at: string; electric_prev: string | null; water_prev: string | null; electric_delta: string | null; water_delta: string | null; meter_flag: string | null }>(
-    await supabase.from('meter_readings').select('recorded_at, electric_prev, water_prev, electric_delta, water_delta, meter_flag').eq('property_id', propertyId).gte('recorded_at', from).order('recorded_at', { ascending: true }).range(0, 999),
-  );
+type ReadingRow = { recorded_at: string; electric_prev: string | null; water_prev: string | null; electric_delta: string | null; water_delta: string | null; meter_flag: string | null };
+export async function fetchUtilityMonths(propertyId: string, from: string, toExclusive?: string, include: (r: ReadingRow) => boolean = isConsumptionReading): Promise<UtilityMonth[]> {
+  let q = supabase.from('meter_readings').select('recorded_at, electric_prev, water_prev, electric_delta, water_delta, meter_flag').eq('property_id', propertyId).gte('recorded_at', from).order('recorded_at', { ascending: true });
+  if (toExclusive) q = q.lt('recorded_at', toExclusive);
+  const res = unwrapList<ReadingRow>(await q.range(0, 999));
   const byMonth = new Map<string, UtilityMonth>();
   for (const r of res.rows) {
     const month = r.recorded_at.slice(0, 7);
     const t = byMonth.get(month) ?? { month, kwh: 0, m3: 0, readings: 0, excluded: 0 };
-    if (isConsumptionReading(r)) {
+    if (include(r)) {
       t.kwh += Number(r.electric_delta ?? 0);
       t.m3 += Number(r.water_delta ?? 0);
       t.readings += 1;

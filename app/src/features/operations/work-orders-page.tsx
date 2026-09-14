@@ -6,6 +6,7 @@ import { useUrlState } from '@/lib/url-state';
 import { formatDateTime } from '@/lib/dates';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { softDelete, useUndoToast } from '@/lib/undo';
 import { PageHeader } from '@/components/data/page-header';
 import { FilterSelect, FilterBar } from '@/components/data/filter-bar';
 import { EmptyState, QueryState } from '@/components/data/query-state';
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchWorkOrders, saveWorkOrder, type WorkOrder } from './api';
+import { fetchWorkOrders, latestAuditId, saveWorkOrder, type WorkOrder } from './api';
 
 // OPS01 work orders: open → in progress → awaiting external → resolved.
 // Blocking work feeds readiness. Resolution requires a note.
@@ -37,20 +38,34 @@ export default function WorkOrdersPage() {
   const query = useQuery({ queryKey: ['work-orders', s.propertyId, state.status], queryFn: () => fetchWorkOrders(s.propertyId, state.status) });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [key, setKey] = useState(() => newIdempotencyKey('wo'));
+  const [deleteReason, setDeleteReason] = useState('');
+  const undoToast = useUndoToast();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['work-orders'] });
+    void qc.invalidateQueries({ queryKey: ['overview'] });
+    void qc.invalidateQueries({ queryKey: ['audit-feed'] });
+  };
 
   const save = useMutation({
-    mutationFn: (d: Draft) => saveWorkOrder(s.propertyId, { ...d, due_at: d.due_at ? new Date(d.due_at).toISOString() : null }, key),
+    mutationFn: async (d: Draft) => {
+      const r = await saveWorkOrder(s.propertyId, { ...d, due_at: d.due_at ? new Date(d.due_at).toISOString() : null }, key);
+      return { ...r, auditId: await latestAuditId('work_orders', r.id) };
+    },
     onSuccess: (r) => {
-      toast.success(`Work order ${r.status.replaceAll('_', ' ')}`, { description: `Saved ${formatDateTime(new Date().toISOString())} · version ${r.version}` });
+      undoToast(`Work order ${r.status.replaceAll('_', ' ')}`, r.auditId, `Saved ${formatDateTime(new Date().toISOString())} · version ${r.version}`);
       setDraft(null);
       setKey(newIdempotencyKey('wo'));
-      void qc.invalidateQueries({ queryKey: ['work-orders'] });
-      void qc.invalidateQueries({ queryKey: ['overview'] });
+      invalidate();
     },
     onError: (e) => {
       const err = toAppError(e);
       toast.error(err.kind === 'conflict' ? 'Someone else changed this work order. Reload and try again.' : err.message);
     },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => softDelete('work_orders', id, deleteReason),
+    onSuccess: (r) => { undoToast('Work order cancelled', r.auditId); setDraft(null); setDeleteReason(''); invalidate(); },
+    onError: (e) => toast.error(toAppError(e).message),
   });
 
   const open = (w?: WorkOrder) => {
@@ -97,6 +112,13 @@ export default function WorkOrdersPage() {
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={draft.blocks_arrival} onCheckedChange={(v) => setDraft({ ...draft, blocks_arrival: v === true })} /> Blocks the next arrival</label>
             {draft.status === 'resolved' && <div><Label htmlFor="wo-res">Resolution (required)</Label><Textarea id="wo-res" required minLength={3} value={draft.resolution} onChange={(e) => setDraft({ ...draft, resolution: e.target.value })} className="text-base" /></div>}
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button></div>
+            {draft.id && draft.status !== 'cancelled' && (
+              <div className="mt-4 space-y-2 rounded-lg border border-destructive/40 p-3">
+                <p className="text-sm font-medium">Delete (cancel) this work order</p>
+                <Input aria-label="Delete reason" placeholder="Reason (required)" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} className="text-base" />
+                <Button type="button" variant="destructive" size="sm" disabled={deleteReason.trim().length < 3 || remove.isPending} onClick={() => remove.mutate(draft.id!)}>Delete</Button>
+              </div>
+            )}
           </form>
         )}
       </DetailSheet>

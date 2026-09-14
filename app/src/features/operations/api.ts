@@ -92,6 +92,13 @@ export function reviewEvidence(evidenceId: string, outcome: 'reviewed' | 'follow
   return rpc('review_cleaning_verification', { p_evidence_id: evidenceId, p_outcome: outcome, p_reason: reason, p_idempotency_key: key });
 }
 
+// Meter review (session 12): a flag with a reason on the reading, never an edit
+// of the numbers. The utilities chart leaves flagged rows out of its sums.
+export const METER_FLAGS = ['first_reading', 're_entry', 'misread', 'duplicate', 'under_review'] as const;
+export function reviewMeterReading(readingId: string, flag: string | null, reason: string) {
+  return rpc<{ ok: boolean; id: string; flag: string | null; auditId: string | null }>('review_meter_reading_v1', { p_reading_id: readingId, p_flag: flag, p_reason: reason });
+}
+
 // CLN05: readiness decision through the v1 RPC (advisory findings never decide).
 export function reviewReadiness(propertyId: string, forCheckin: string, outcome: 'ready' | 'not_ready' | 'override_ready', reason: string, sessionId: string | null, key = newIdempotencyKey('readiness')) {
   return rpc<{ ok: boolean; id: string; outcome: string; openBlockers: number }>('review_property_readiness_v1', { p_property_id: propertyId, p_for_checkin: forCheckin, p_outcome: outcome, p_reason: reason || null, p_cleaning_session_id: sessionId, p_idempotency_key: key });
@@ -118,7 +125,8 @@ export async function fetchNotices(propertyId: string) {
   return unwrapList<Notice>(await supabase.from('ops_notices').select('*').eq('property_id', propertyId).order('effective_date', { ascending: false }).limit(200));
 }
 
-// Notices keep the existing table contract (used by Telegram flows and the guest guide).
+// Notices keep the existing table contract (used by Telegram flows and the guest
+// guide); the row-audit trigger records the write and returns its audit id.
 export async function saveNotice(propertyId: string, n: Partial<Notice>) {
   assertMutationEnabled('operations');
   const { id, created_at: _c, ...rest } = n;
@@ -126,5 +134,12 @@ export async function saveNotice(propertyId: string, n: Partial<Notice>) {
   const payload = { ...rest, property_id: propertyId };
   const res = id ? await supabase.from('ops_notices').update(payload).eq('id', id).select().single() : await supabase.from('ops_notices').insert(payload).select().single();
   if (res.error) throw res.error;
-  return res.data as Notice;
+  const saved = res.data as Notice;
+  return { ...saved, auditId: await latestAuditId('ops_notices', saved.id) };
+}
+
+// The trigger writes admin_audit_log; direct-table writes read their audit id back.
+export async function latestAuditId(table: string, id: string): Promise<string | null> {
+  const { data } = await supabase.from('admin_audit_log').select('id').eq('entity_table', table).eq('entity_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
 }

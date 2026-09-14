@@ -56,7 +56,15 @@ export default function InventoryPage() {
   const doAdjust = useMutation({
     mutationFn: () => recordAdjustment(selected!.id, adjust.delta, adjust.reason, aKey),
     onSuccess: () => {
-      toast.success('Adjustment recorded');
+      // Movements are append-only: undo posts the opposite adjustment so both
+      // rows stay in the item's history and in Settings → Audit history.
+      const itemId = selected!.id;
+      const delta = adjust.delta;
+      const reverse = String(-Number(delta));
+      toast.success('Adjustment recorded', {
+        duration: 8000,
+        action: { label: 'Undo', onClick: () => recordAdjustment(itemId, reverse, `undo of adjustment ${delta}`, newIdempotencyKey('adjust')).then(() => { toast.success('Adjustment reversed'); void qc.invalidateQueries(); }).catch((e) => toast.error(toAppError(e).message)) },
+      });
       setAdjust({ delta: '', reason: '' });
       setAKey(newIdempotencyKey('adjust'));
       void qc.invalidateQueries({ queryKey: ['catalogue'] });

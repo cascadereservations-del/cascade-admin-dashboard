@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
 import { toAppError } from '@/lib/errors';
+import { softDelete, useUndoToast } from '@/lib/undo';
 import { PageHeader } from '@/components/data/page-header';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
@@ -27,14 +28,25 @@ export default function NoticesPage() {
   const query = useQuery({ queryKey: ['notices', s.propertyId], queryFn: () => fetchNotices(s.propertyId) });
   const [draft, setDraft] = useState<Draft | null>(null);
   const canManage = s.caps.can('manage_operations');
+  const undoToast = useUndoToast();
+  const [deleteReason, setDeleteReason] = useState('');
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['notices'] });
+    void qc.invalidateQueries({ queryKey: ['overview'] });
+    void qc.invalidateQueries({ queryKey: ['audit-feed'] });
+  };
   const save = useMutation({
     mutationFn: (d: Draft) => saveNotice(s.propertyId, { ...d, posted_by_name: s.displayName, expires_at: d.expires_at ? new Date(d.expires_at).toISOString() : null }),
     onSuccess: (n) => {
-      toast.success(`Notice saved: ${n.title}`, { description: formatDateTime(new Date().toISOString()) });
+      undoToast(`Notice saved: ${n.title}`, n.auditId, formatDateTime(new Date().toISOString()));
       setDraft(null);
-      void qc.invalidateQueries({ queryKey: ['notices'] });
-      void qc.invalidateQueries({ queryKey: ['overview'] });
+      invalidate();
     },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => softDelete('ops_notices', id, deleteReason),
+    onSuccess: (r) => { undoToast('Notice removed', r.auditId); setDraft(null); setDeleteReason(''); invalidate(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
   const now = new Date().toISOString();
@@ -74,6 +86,13 @@ export default function NoticesPage() {
             </div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.is_active ?? true} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} /> Active</label>
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={save.isPending}>Save</Button></div>
+            {draft.id && draft.is_active !== false && (
+              <div className="mt-4 space-y-2 rounded-lg border border-destructive/40 p-3">
+                <p className="text-sm font-medium">Delete (deactivate) this notice</p>
+                <Input aria-label="Delete reason" placeholder="Reason (required)" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} className="text-base" />
+                <Button type="button" variant="destructive" size="sm" disabled={deleteReason.trim().length < 3 || remove.isPending} onClick={() => remove.mutate(draft.id!)}>Delete</Button>
+              </div>
+            )}
           </form>
         )}
       </DetailSheet>

@@ -16,7 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchCleaningDetail, reviewEvidence, reviewReadiness } from './api';
+import { useUndoToast } from '@/lib/undo';
+import { Input } from '@/components/ui/input';
+import { METER_FLAGS, fetchCleaningDetail, reviewEvidence, reviewMeterReading, reviewReadiness } from './api';
 
 // CLN02-CLN05. Evidence is linked by submission identity; advisory findings
 // are shown as advisory; readiness needs a human decision with a reason for
@@ -57,6 +59,19 @@ export default function CleaningDetailPage() {
   const [outcome, setOutcome] = useState<'ready' | 'not_ready' | 'override_ready'>('ready');
   const [reason, setReason] = useState('');
   const [evReason, setEvReason] = useState('');
+  const [meterFlag, setMeterFlag] = useState<Record<string, string>>({});
+  const [meterReason, setMeterReason] = useState<Record<string, string>>({});
+  const undoToast = useUndoToast();
+  const meterReview = useMutation({
+    mutationFn: (p: { id: string; flag: string | null; reason: string }) => reviewMeterReading(p.id, p.flag, p.reason),
+    onSuccess: (r) => {
+      undoToast(r.flag ? `Reading flagged: ${r.flag.replaceAll('_', ' ')}` : 'Reading flag cleared', r.auditId, 'Flagged rows are left out of the utilities chart.');
+      void qc.invalidateQueries({ queryKey: ['cleaning'] });
+      void qc.invalidateQueries({ queryKey: ['utility-months'] });
+      void qc.invalidateQueries({ queryKey: ['audit-feed'] });
+    },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
 
   const readiness = useMutation({
     mutationFn: (forCheckin: string) => reviewReadiness(s.propertyId, forCheckin, outcome, reason, id),
@@ -111,8 +126,18 @@ export default function CleaningDetailPage() {
                       <div key={m.id} className="space-y-1">
                         <p className="tabular">Electric {m.electric_prev ?? '—'} → {m.electric_curr ?? '—'} (Δ {m.electric_delta ?? '—'} kWh, {m.kwh_per_night ?? '—'}/night)</p>
                         <p className="tabular">Water {m.water_prev ?? '—'} → {m.water_curr ?? '—'} (Δ {m.water_delta ?? '—'} m³, {m.m3_per_night ?? '—'}/night)</p>
-                        {m.meter_flag && <StatusBadge tone="warn">advisory: {m.meter_flag}</StatusBadge>}
+                        {m.meter_flag && <StatusBadge tone="warn">flag: {m.meter_flag.replaceAll('_', ' ')}</StatusBadge>}
                         {m.meter_override_note && <p className="text-muted-foreground">Note: {m.meter_override_note}</p>}
+                        {canInspect && (
+                          <div className="flex flex-wrap items-end gap-1.5">
+                            <Select value={meterFlag[m.id] ?? m.meter_flag ?? 'none'} onValueChange={(v) => setMeterFlag({ ...meterFlag, [m.id]: v })}>
+                              <SelectTrigger className="h-8 w-40 text-xs" aria-label="Meter flag"><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value="none">no flag</SelectItem>{METER_FLAGS.map((f) => <SelectItem key={f} value={f}>{f.replaceAll('_', ' ')}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <Input aria-label="Meter review reason" placeholder="Reason" className="h-8 w-44 text-xs" value={meterReason[m.id] ?? ''} onChange={(e) => setMeterReason({ ...meterReason, [m.id]: e.target.value })} />
+                            <Button size="sm" variant="outline" className="h-8" disabled={(meterReason[m.id] ?? '').trim().length < 3 || meterReview.isPending} onClick={() => meterReview.mutate({ id: m.id, flag: (meterFlag[m.id] ?? m.meter_flag ?? 'none') === 'none' ? null : (meterFlag[m.id] ?? m.meter_flag!), reason: meterReason[m.id] ?? '' })}>Review</Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                     <p className="text-xs text-muted-foreground">Arithmetic and vision checks are advisory. They never block a submission.</p>

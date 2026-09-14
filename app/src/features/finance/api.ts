@@ -9,11 +9,12 @@ import { toCentavos } from '@/lib/money';
 // transaction review (existing table contract), post/reverse journals, opening
 // balances, close. All amounts are decimal strings.
 
-export type Txn = { id: string; transaction_date: string; txn_type: string; category: string; status: string; source: string; gross_amount: string; payee_name: string | null; or_number: string | null; external_ref: string | null; booking_id: string | null; income_stage: string | null; notes: string | null; receipt_image_path: string | null; ocr_confidence: string | null; created_at: string };
+export type Txn = { id: string; transaction_date: string; txn_type: string; category: string; status: string; source: string; gross_amount: string; payee_name: string | null; or_number: string | null; external_ref: string | null; booking_id: string | null; reservation_id: string | null; income_stage: string | null; notes: string | null; receipt_image_path: string | null; ocr_confidence: string | null; created_at: string };
 export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string; mirror?: string };
+const TXN_COLS = 'id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, reservation_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at';
 
 export async function fetchTransactions(propertyId: string, f: TxnFilters) {
-  let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+  let q = supabase.from('transactions').select(TXN_COLS, { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
   if (f.q) q = q.or(`payee_name.ilike.%${f.q}%,external_ref.ilike.%${f.q}%,category.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
   if (f.type) q = q.eq('txn_type', f.type);
   if (f.status) q = q.eq('status', f.status);
@@ -34,9 +35,11 @@ const NOT_MIRROR = `(${MIRROR_SOURCES.map((s) => `"${s}"`).join(',')})`;
 
 // Account book (D-095): every row in date order, oldest first, with a running
 // balance computed in integer centavos from already-authoritative rows.
-export type BookRow = Txn & { inCents: number; outCents: number; balanceCents: number };
+// Drawings (owner transfers out) leave the balance like an expense but are
+// totalled on their own so income − expenses − drawings reads directly.
+export type BookRow = Txn & { inCents: number; outCents: number; drawCents: number; balanceCents: number };
 export async function fetchLedgerBook(propertyId: string, f: { from?: string; to?: string; includePending?: boolean }): Promise<{ rows: BookRow[]; total: number; truncated: boolean }> {
-  let q = supabase.from('transactions').select('id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at', { count: 'exact' }).eq('property_id', propertyId).neq('status', 'void').not('source', 'in', NOT_MIRROR).order('transaction_date', { ascending: true }).order('created_at', { ascending: true });
+  let q = supabase.from('transactions').select(TXN_COLS, { count: 'exact' }).eq('property_id', propertyId).neq('status', 'void').not('source', 'in', NOT_MIRROR).order('transaction_date', { ascending: true }).order('created_at', { ascending: true });
   if (!f.includePending) q = q.eq('status', 'confirmed');
   if (f.from) q = q.gte('transaction_date', f.from);
   if (f.to) q = q.lt('transaction_date', f.to);
@@ -46,25 +49,28 @@ export async function fetchLedgerBook(propertyId: string, f: { from?: string; to
     const c = toCentavos(r.gross_amount) ?? 0;
     const inCents = r.txn_type === 'income' ? c : 0;
     const outCents = r.txn_type === 'expense' ? c : 0;
-    bal += inCents - outCents;
-    return { ...r, inCents, outCents, balanceCents: bal };
+    const drawCents = r.txn_type === 'drawing' ? c : 0;
+    bal += inCents - outCents - drawCents;
+    return { ...r, inCents, outCents, drawCents, balanceCents: bal };
   });
   return { rows, total: res.total, truncated: res.total > rows.length };
 }
 
-// Monthly income and expense totals (confirmed rows only) for the analytics chart.
-export type MonthTotal = { month: string; incomeCents: number; expenseCents: number };
-export async function fetchMonthlyTotals(propertyId: string, fromMonth: string): Promise<MonthTotal[]> {
-  const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'gross_amount'>>(
-    await supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').not('source', 'in', NOT_MIRROR).gte('transaction_date', fromMonth).order('transaction_date', { ascending: true }).range(0, 4999),
-  );
+// Monthly income, expense and drawing totals (confirmed rows only).
+export type MonthTotal = { month: string; incomeCents: number; expenseCents: number; drawingCents: number; count: number };
+export async function fetchMonthlyTotals(propertyId: string, fromMonth: string, toMonthExclusive?: string): Promise<MonthTotal[]> {
+  let q = supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').not('source', 'in', NOT_MIRROR).gte('transaction_date', fromMonth).order('transaction_date', { ascending: true });
+  if (toMonthExclusive) q = q.lt('transaction_date', toMonthExclusive);
+  const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'gross_amount'>>(await q.range(0, 4999));
   const byMonth = new Map<string, MonthTotal>();
   for (const r of res.rows) {
     const month = r.transaction_date.slice(0, 7);
-    const t = byMonth.get(month) ?? { month, incomeCents: 0, expenseCents: 0 };
+    const t = byMonth.get(month) ?? { month, incomeCents: 0, expenseCents: 0, drawingCents: 0, count: 0 };
     const c = toCentavos(r.gross_amount) ?? 0;
     if (r.txn_type === 'income') t.incomeCents += c;
     else if (r.txn_type === 'expense') t.expenseCents += c;
+    else if (r.txn_type === 'drawing') t.drawingCents += c;
+    t.count += 1;
     byMonth.set(month, t);
   }
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
@@ -76,6 +82,13 @@ export async function reviewTransaction(id: string, status: 'confirmed' | 'void'
   const { data, error } = await supabase.from('transactions').update({ status, ...(note ? { notes: note } : {}) }).eq('id', id).select('id, status').single();
   if (error) throw error;
   return data;
+}
+
+// Manual ledger rows through the audited RPC (session 12). Create needs an
+// idempotency key; edit needs the row id and a reason; delete is a void.
+export type TxnDraft = { id?: string; txn_type: string; category: string; transaction_date: string; gross_amount: string; payee_name?: string; notes?: string; or_number?: string; reservation_id?: string | null; reason?: string };
+export function saveTransaction(propertyId: string, draft: TxnDraft, key = newIdempotencyKey('txn')) {
+  return rpc<{ ok: boolean; id: string; status: string; auditId: string | null; replayed?: boolean }>('admin_save_transaction_v1', { p_property_id: propertyId, p_txn: draft, p_idempotency_key: key });
 }
 
 export type PaymentQueueRow = Record<string, unknown>;

@@ -59,6 +59,23 @@ export function periodPreset(key: string, today: IsoDate = todayManila()): Perio
       const s = startOfMonth(addDays(startOfMonth(t), -1));
       return { key, start: format(s, 'yyyy-MM-dd'), endExclusive: format(startOfMonth(t), 'yyyy-MM-dd'), label: 'Previous month' };
     }
+    case 'qtd': {
+      const q = new TZDate(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1, BUSINESS_TIMEZONE);
+      return { key, start: format(q, 'yyyy-MM-dd'), endExclusive: today, label: 'Quarter to date' };
+    }
+    case 'prev-quarter': {
+      const qStart = Math.floor(t.getMonth() / 3) * 3;
+      const s = new TZDate(t.getFullYear(), qStart - 3, 1, BUSINESS_TIMEZONE);
+      const e = new TZDate(t.getFullYear(), qStart, 1, BUSINESS_TIMEZONE);
+      return { key, start: format(s, 'yyyy-MM-dd'), endExclusive: format(e, 'yyyy-MM-dd'), label: 'Previous quarter' };
+    }
+    case 'prev-year': {
+      return { key, start: `${t.getFullYear() - 1}-01-01`, endExclusive: `${t.getFullYear()}-01-01`, label: 'Previous year' };
+    }
+    case 'last12': {
+      const s = new TZDate(t.getFullYear(), t.getMonth() - 12, 1, BUSINESS_TIMEZONE);
+      return { key, start: format(s, 'yyyy-MM-dd'), endExclusive: format(startOfMonth(t), 'yyyy-MM-dd'), label: 'Last twelve full months' };
+    }
     default:
       return periodPreset('mtd', today);
   }

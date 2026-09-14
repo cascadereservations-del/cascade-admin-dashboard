@@ -43,7 +43,18 @@ export default function AccountBookPage() {
     if (!q) return all;
     return all.filter((r) => particulars(r).toLowerCase().includes(q) || (r.external_ref ?? '').toLowerCase().includes(q) || (r.or_number ?? '').toLowerCase().includes(q));
   }, [query.data, q]);
-  const totals = useMemo(() => rows.reduce((a, r) => ({ inC: a.inC + r.inCents, outC: a.outC + r.outCents }), { inC: 0, outC: 0 }), [rows]);
+  const totals = useMemo(() => rows.reduce((a, r) => ({ inC: a.inC + r.inCents, outC: a.outC + r.outCents, drawC: a.drawC + r.drawCents }), { inC: 0, outC: 0, drawC: 0 }), [rows]);
+  // Per month: income, expenses and drawings side by side, newest first.
+  const months = useMemo(() => {
+    const m = new Map<string, { month: string; inC: number; outC: number; drawC: number }>();
+    for (const r of rows) {
+      const k = r.transaction_date.slice(0, 7);
+      const t = m.get(k) ?? { month: k, inC: 0, outC: 0, drawC: 0 };
+      t.inC += r.inCents; t.outC += r.outCents; t.drawC += r.drawCents;
+      m.set(k, t);
+    }
+    return [...m.values()].sort((a, b) => b.month.localeCompare(a.month));
+  }, [rows]);
 
   const doExport = () => {
     exportCsv(`account-book-${state.from || 'start'}-${state.to || 'now'}.csv`, rows.map((r) => ({
@@ -70,19 +81,39 @@ export default function AccountBookPage() {
       <QueryState query={query}>
         {(d) => rows.length === 0 ? <EmptyState title="No entries in this period" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border bg-card px-4 py-3">
-                <p className="text-xs text-muted-foreground">Money in</p>
+                <p className="text-xs text-muted-foreground">Income</p>
                 <p className="tabular text-xl font-semibold text-chart-4">{formatPHP(fromCentavos(totals.inC))}</p>
               </div>
               <div className="rounded-lg border bg-card px-4 py-3">
-                <p className="text-xs text-muted-foreground">Money out</p>
+                <p className="text-xs text-muted-foreground">Expenses</p>
                 <p className="tabular text-xl font-semibold">{formatPHP(fromCentavos(totals.outC))}</p>
               </div>
               <div className="rounded-lg border bg-card px-4 py-3">
-                <p className="text-xs text-muted-foreground">Net for the period</p>
-                <p className={`tabular text-xl font-semibold ${totals.inC - totals.outC < 0 ? 'text-destructive' : ''}`}>{formatPHP(fromCentavos(totals.inC - totals.outC))}</p>
+                <p className="text-xs text-muted-foreground">Drawings (to owner)</p>
+                <p className="tabular text-xl font-semibold">{formatPHP(fromCentavos(totals.drawC))}</p>
               </div>
+              <div className="rounded-lg border bg-card px-4 py-3">
+                <p className="text-xs text-muted-foreground">Position (income − expenses − drawings)</p>
+                <p className={`tabular text-xl font-semibold ${totals.inC - totals.outC - totals.drawC < 0 ? 'text-destructive' : ''}`}>{formatPHP(fromCentavos(totals.inC - totals.outC - totals.drawC))}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border bg-card">
+              <Table>
+                <TableHeader><TableRow><TableHead>Month</TableHead><TableHead className="text-right">Income</TableHead><TableHead className="text-right">Expenses</TableHead><TableHead className="text-right">Drawings</TableHead><TableHead className="text-right">Net</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {months.map((m) => (
+                    <TableRow key={m.month} className="cursor-pointer" onClick={() => set({ from: `${m.month}-01`, to: `${m.month.slice(0, 4)}-${String(Number(m.month.slice(5, 7)) % 12 + 1).padStart(2, '0')}-01`.replace(/^(\d{4})-01-01$/, (_, y) => `${Number(y) + 1}-01-01`) })}>
+                      <TableCell className="tabular">{formatDate(`${m.month}-01`, 'long').replace(/^\d+ /, '')}</TableCell>
+                      <TableCell className="tabular text-right text-chart-4">{m.inC ? formatPHP(fromCentavos(m.inC)) : ''}</TableCell>
+                      <TableCell className="tabular text-right">{m.outC ? formatPHP(fromCentavos(m.outC)) : ''}</TableCell>
+                      <TableCell className="tabular text-right">{m.drawC ? formatPHP(fromCentavos(m.drawC)) : ''}</TableCell>
+                      <TableCell className={`tabular text-right font-medium ${m.inC - m.outC - m.drawC < 0 ? 'text-destructive' : ''}`}>{formatPHP(fromCentavos(m.inC - m.outC - m.drawC))}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
             {d.truncated && <p className="text-xs text-destructive">Only the first {d.rows.length} of {d.total} rows are shown; narrow the period for an exact balance.</p>}
             <div className="overflow-x-auto rounded-lg border bg-card">
@@ -105,12 +136,13 @@ export default function AccountBookPage() {
                         <span className="inline-flex items-center gap-1.5">
                           {r.inCents ? <ArrowDownLeft className="size-3.5 text-chart-4" aria-label="money in" /> : <ArrowUpRight className="size-3.5 text-muted-foreground" aria-label="money out" />}
                           <span>{particulars(r)}</span>
+                          {r.drawCents ? <StatusBadge tone="info">drawing</StatusBadge> : null}
                           {r.status !== 'confirmed' && <StatusBadge tone="warn">{r.status.replace('_', ' ')}</StatusBadge>}
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{r.external_ref ?? r.or_number ?? ''}</TableCell>
                       <TableCell className="tabular text-right">{r.inCents ? formatPHP(fromCentavos(r.inCents)) : ''}</TableCell>
-                      <TableCell className="tabular text-right">{r.outCents ? formatPHP(fromCentavos(r.outCents)) : ''}</TableCell>
+                      <TableCell className="tabular text-right">{r.outCents || r.drawCents ? formatPHP(fromCentavos(r.outCents || r.drawCents)) : ''}</TableCell>
                       <TableCell className={`tabular text-right font-medium ${r.balanceCents < 0 ? 'text-destructive' : ''}`}>{formatPHP(fromCentavos(r.balanceCents))}</TableCell>
                     </TableRow>
                   ))}

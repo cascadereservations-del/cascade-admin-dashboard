@@ -1,10 +1,51 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDateTime } from '@/lib/dates';
+import { toAppError } from '@/lib/errors';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
-import { fetchHealth } from './api';
+import { Button } from '@/components/ui/button';
+import { fetchHealth, fetchHealthRuns, runHealthChecks } from './api';
+
+// Cross-tab checks (session 12): ledger vs reservations vs payouts vs cleaning
+// log vs meters vs inventory. Each is a read-only query on the server; the
+// button runs them all and keeps the last result per check.
+function ChecksSection() {
+  const s = useSession();
+  const qc = useQueryClient();
+  const runs = useQuery({ queryKey: ['health-runs', s.propertyId], queryFn: () => fetchHealthRuns(s.propertyId) });
+  const run = useMutation({
+    mutationFn: () => runHealthChecks(s.propertyId),
+    onSuccess: (r) => { toast.success(`${r.checks.length} checks ran`, { description: formatDateTime(r.ranAt) }); void qc.invalidateQueries({ queryKey: ['health-runs'] }); },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  return (
+    <Section title="Verification checks" aside={<Button size="sm" onClick={() => run.mutate()} disabled={run.isPending}>{run.isPending ? 'Running…' : 'Run all checks'}</Button>}>
+      {runs.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : runs.isError ? <p className="text-sm text-destructive">{toAppError(runs.error).message}</p> : runs.data.rows.length === 0 ? <p className="text-sm text-muted-foreground">No check has run yet. Run all checks to compare the ledger, reservations, payouts, cleaning log, meters and inventory.</p> : (
+        <ul className="divide-y rounded-lg border text-sm">
+          {runs.data.rows.map((c) => {
+            const detail = c.detail as Record<string, unknown> | unknown[] | null;
+            const sample = Array.isArray(detail) ? detail : null;
+            return (
+              <li key={c.check_key} className="space-y-1 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={c.status === 'pass' ? 'good' : c.status === 'warn' ? 'warn' : 'bad'}>{c.status}</StatusBadge>
+                  <span className="font-medium">{c.label}</span>
+                  {c.count > 0 && <span className="tabular text-xs text-muted-foreground">{c.count} row{c.count === 1 ? '' : 's'}</span>}
+                  <span className="ml-auto text-xs text-muted-foreground">last run {formatDateTime(c.ran_at)}</span>
+                </div>
+                {sample && sample.length > 0 && <details className="text-xs text-muted-foreground"><summary>{sample.length} example{sample.length === 1 ? '' : 's'}</summary><pre className="max-h-48 overflow-auto">{JSON.stringify(sample, null, 1)}</pre></details>}
+                {!sample && detail && <p className="text-xs text-muted-foreground">{Object.entries(detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}</p>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Section>
+  );
+}
 
 // OPS04: "No records received" is distinct from "healthy"; a section that
 // cannot be read says so. No secret values are shown.
@@ -23,6 +64,7 @@ export default function HealthPage() {
       <QueryState query={q}>
         {(d) => (
           <div className="space-y-6">
+            <ChecksSection />
             <Section title="Job heartbeats">
               {'error' in d.heartbeats ? <p className="text-sm text-destructive">Cannot read heartbeats: {d.heartbeats.error}</p> : d.heartbeats.rows.length === 0 ? <p className="text-sm text-muted-foreground">No heartbeat rows exist. That means no job has reported, not that jobs are healthy.</p> : (
                 <ul className="divide-y rounded-lg border text-sm">{d.heartbeats.rows.map((h) => <li key={h.job_name} className="flex flex-wrap items-center gap-2 px-3 py-1.5"><span className="font-medium">{h.job_name}</span><StatusBadge tone={h.ops_risk || stale(h) ? 'bad' : h.consecutive_failures > 0 ? 'warn' : 'good'}>{h.ops_risk ? 'ops risk' : stale(h) ? 'stale' : h.consecutive_failures > 0 ? `${h.consecutive_failures} failures` : 'on time'}</StatusBadge><span className="ml-auto text-xs text-muted-foreground">last success {h.last_succeeded_at ? formatDateTime(h.last_succeeded_at) : 'never'} · every {Math.round(h.expected_interval_seconds / 60)} min{h.last_error_code ? ` · ${h.last_error_code}` : ''}</span></li>)}</ul>

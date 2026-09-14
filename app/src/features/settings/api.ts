@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { unwrapList } from '@/lib/rpc';
+import { rpc, unwrapList } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 
 // Settings adapter (P29). Staff management keeps the deployed staff-users
@@ -42,7 +42,18 @@ export async function fetchHealth(propertyId: string) {
   };
 }
 
-export type AuditRow = { id: string; actor_user_id: string | null; target_user_id: string | null; action: string; before_state: unknown; after_state: unknown; reason: string | null; created_at: string };
-export async function fetchAudit() {
-  return unwrapList<AuditRow>(await supabase.from('staff_access_audit').select('*').order('created_at', { ascending: false }).limit(200));
+// One feed (admin_audit_feed_v1): admin row writes with undo, staff changes,
+// booking lifecycle, inventory movements, journals, readiness and evidence
+// reviews, guest profile history. Finance and staff rows are server-filtered.
+export type AuditFeedRow = { id: string; at: string; src: string; entity_table: string; entity_id: string; action: string; actor: string | null; reason: string | null; before_state: unknown; after_state: unknown; undoable: boolean; undo_of: string | null };
+export function fetchAuditFeed(propertyId: string, limit = 300) {
+  return rpc<{ rows: AuditFeedRow[]; financeVisible: boolean; staffVisible: boolean }>('admin_audit_feed_v1', { p_property_id: propertyId, p_limit: limit });
+}
+
+export type HealthCheck = { check_key: string; label: string; status: 'pass' | 'warn' | 'fail'; count: number; detail: unknown; ran_at: string; ran_by: string | null };
+export async function fetchHealthRuns(propertyId: string) {
+  return unwrapList<HealthCheck>(await supabase.from('admin_health_check_runs').select('*').eq('property_id', propertyId).order('check_key'));
+}
+export function runHealthChecks(propertyId: string) {
+  return rpc<{ ranAt: string; checks: HealthCheck[] }>('run_health_checks_v1', { p_property_id: propertyId });
 }

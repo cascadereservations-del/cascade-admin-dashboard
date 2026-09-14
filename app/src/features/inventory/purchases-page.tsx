@@ -6,6 +6,8 @@ import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
 import { formatNumber, formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { useUndoToast } from '@/lib/undo';
+import { latestAuditId } from '@/features/operations/api';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge, type Tone } from '@/components/data/status-badge';
@@ -36,14 +38,21 @@ export default function PurchasesPage() {
     void qc.invalidateQueries({ queryKey: ['catalogue'] });
   };
 
+  const undoToast = useUndoToast();
   const propose = useMutation({
-    mutationFn: () => saveShoppingItem(s.propertyId, { item_id: proposal.item_id || null, item_name: proposal.item_name || catalogue.data?.items.find((i) => i.id === proposal.item_id)?.name, quantity: proposal.quantity, reason: proposal.reason }),
-    onSuccess: () => { toast.success('Added to the shopping list'); setProposal({ item_id: '', item_name: '', quantity: '', reason: '' }); invalidate(); },
+    mutationFn: async () => {
+      const r = await saveShoppingItem(s.propertyId, { item_id: proposal.item_id || null, item_name: proposal.item_name || catalogue.data?.items.find((i) => i.id === proposal.item_id)?.name, quantity: proposal.quantity, reason: proposal.reason });
+      return { ...r, auditId: await latestAuditId('inventory_shopping_list', r.id) };
+    },
+    onSuccess: (r) => { undoToast('Added to the shopping list', r.auditId); setProposal({ item_id: '', item_name: '', quantity: '', reason: '' }); invalidate(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
   const decide = useMutation({
-    mutationFn: (p: { id: string; status: 'approved' | 'rejected' | 'cancelled' }) => saveShoppingItem(s.propertyId, { id: p.id, status: p.status }, newIdempotencyKey('shopdec')),
-    onSuccess: (r) => { toast.success(`Shopping item ${r.status}`); invalidate(); },
+    mutationFn: async (p: { id: string; status: 'approved' | 'rejected' | 'cancelled' }) => {
+      const r = await saveShoppingItem(s.propertyId, { id: p.id, status: p.status }, newIdempotencyKey('shopdec'));
+      return { ...r, auditId: await latestAuditId('inventory_shopping_list', r.id) };
+    },
+    onSuccess: (r) => { undoToast(`Shopping item ${r.status}`, r.auditId); invalidate(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
   const doReceive = useMutation({
@@ -79,6 +88,7 @@ export default function PurchasesPage() {
                     <div className="min-w-0 flex-1"><span className="font-medium">{r.item_name}</span> · {formatNumber(r.quantity, 2)} {r.purchase_unit ?? ''}<div className="text-xs text-muted-foreground">{r.reason ?? 'no reason'} · proposed {formatDateTime(r.proposed_at)}{r.approved_at ? ` · decided ${formatDateTime(r.approved_at)}` : ''}{r.received_at ? ` · received ${formatNumber(r.received_quantity, 2)} on ${formatDate(r.received_at.slice(0, 10))}` : ''}</div></div>
                     <StatusBadge tone={tone(r.status)}>{r.status}</StatusBadge>
                     {canApprove && r.status === 'proposed' && <><Button size="sm" onClick={() => decide.mutate({ id: r.id, status: 'approved' })}>Approve</Button><Button size="sm" variant="outline" onClick={() => decide.mutate({ id: r.id, status: 'rejected' })}>Reject</Button></>}
+                    {canApprove && (r.status === 'proposed' || r.status === 'approved') && <Button size="sm" variant="ghost" onClick={() => decide.mutate({ id: r.id, status: 'cancelled' })}>Delete</Button>}
                     {canApprove && r.status === 'approved' && r.item_id && <Button size="sm" variant="outline" onClick={() => setReceive({ id: r.id, item_id: r.item_id!, packs: r.quantity, cost: '', supplier: '' })}>Receive</Button>}
                   </li>
                 ))}
