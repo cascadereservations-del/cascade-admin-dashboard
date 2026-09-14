@@ -54,6 +54,31 @@ export async function fetchInquiries(propertyId: string) {
   return unwrapList<Inquiry>(await supabase.from('booking_inquiries').select('id, guest_name, guest_phone, guest_email, checkin_date, checkout_date, nights, pax, total_amount, status, submitted_at, guest_id').eq('property_id', propertyId).order('submitted_at', { ascending: false }).limit(100));
 }
 
+// Companions (Lloyd, 2026-09-14): people on a stay besides the booker. ID
+// photo bytes are uploaded straight from the browser to the private
+// guest-id-photos bucket; only the resulting storage path is saved on the row.
+export type Companion = { id: string; guest_id: string; name: string; contact_number: string | null; id_type: string | null; id_number: string | null; id_photo_path: string | null; notes: string | null; created_at: string; updated_at: string; version: number };
+export async function listGuestCompanions(guestId: string) {
+  return rpc<Companion[]>('list_guest_companions_v1', { p_guest_id: guestId });
+}
+export function saveGuestCompanion(guestId: string, companionId: string | null, patch: Record<string, unknown>, expectedVersion: number | undefined, reason: string) {
+  return rpc<{ ok: boolean; id: string; version: number }>('save_guest_companion_v1', { p_guest_id: guestId, p_companion_id: companionId, p_patch: patch, p_expected_version: expectedVersion ?? null, p_reason: reason });
+}
+export function deleteGuestCompanion(companionId: string, reason: string) {
+  return rpc<{ ok: boolean; id: string }>('delete_guest_companion_v1', { p_companion_id: companionId, p_reason: reason });
+}
+export async function uploadCompanionIdPhoto(companionId: string, file: File) {
+  const path = `${companionId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const { error } = await supabase.storage.from('guest-id-photos').upload(path, file, { upsert: false });
+  if (error) throw error;
+  return path;
+}
+export async function companionIdPhotoUrl(path: string) {
+  const { data, error } = await supabase.storage.from('guest-id-photos').createSignedUrl(path, 300);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 export function previewMerge(surviving: string, merged: string) {
   return rpc<Record<string, unknown>>('preview_guest_merge_v1', { p_surviving: surviving, p_merged: merged });
 }

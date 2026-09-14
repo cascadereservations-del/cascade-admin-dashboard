@@ -20,11 +20,95 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FollowUpForm } from './follow-up-form';
-import { fetchFollowUps, fetchGuest, fetchTimeline, mergeGuests, previewMerge, saveProfile } from './api';
+import { companionIdPhotoUrl, deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
 
 // CRM01-CRM06. Profile fields are optional and carry provenance; the timeline
 // is server-filtered by permission; merge requires a server preview, a
 // verified shared contact and a reason.
+//
+// Companions (2026-09-14): people on a stay besides the booker. ID photo bytes
+// are uploaded straight from the browser to the private guest-id-photos
+// bucket -- the agent never fetches, views or stores the image itself.
+
+type CompanionDraft = { id?: string; name: string; contact_number: string; id_type: string; id_number: string; notes: string; version?: number };
+
+function CompanionsSection({ guestId }: { guestId: string }) {
+  const qc = useQueryClient();
+  const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
+  const [draft, setDraft] = useState<CompanionDraft | null>(null);
+  const [reason, setReason] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['companions', guestId] });
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!draft) throw new Error('nothing to save');
+      const r = await saveGuestCompanion(guestId, draft.id ?? null, { name: draft.name, contact_number: draft.contact_number, id_type: draft.id_type, id_number: draft.id_number, notes: draft.notes }, draft.version, reason || 'Companion details updated');
+      if (file) {
+        const path = await uploadCompanionIdPhoto(r.id, file);
+        await saveGuestCompanion(guestId, r.id, { id_photo_path: path }, r.version, 'ID photo uploaded');
+      }
+      return r;
+    },
+    onSuccess: () => { toast.success('Companion saved'); setDraft(null); setFile(null); setReason(''); refresh(); },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteGuestCompanion(id, reason || 'Removed'),
+    onSuccess: () => { toast.success('Companion removed'); setConfirmDelete(null); setReason(''); refresh(); },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  const openPhoto = async (path: string) => {
+    try { window.open(await companionIdPhotoUrl(path), '_blank', 'noopener'); }
+    catch (e) { toast.error(toAppError(e).message); }
+  };
+  const open = (c?: Companion) => { setFile(null); setReason(''); setDraft(c ? { id: c.id, name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', version: c.version } : { name: '', contact_number: '', id_type: '', id_number: '', notes: '' }); };
+
+  return (
+    <Section title="Companions" aside={<Button size="sm" variant="outline" onClick={() => open()}>Add companion</Button>}>
+      <p className="mb-2 text-xs text-muted-foreground">People staying besides the booking guest. ID number and photo are sensitive; photos are uploaded here directly, not sent anywhere else.</p>
+      <QueryState query={companions}>
+        {(rows) => rows.length === 0 ? <p className="text-sm text-muted-foreground">No companions recorded.</p> : (
+          <ul className="divide-y rounded-lg border text-sm">
+            {rows.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                <button type="button" className="text-left font-medium hover:underline" onClick={() => open(c)}>{c.name}</button>
+                {c.contact_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{c.contact_number}<CopyButton value={c.contact_number} /></span>}
+                {c.id_type && <StatusBadge tone="info">{c.id_type.replace('_', ' ')}</StatusBadge>}
+                {c.id_photo_path && <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={() => openPhoto(c.id_photo_path!)}>View ID photo</Button>}
+                <div className="ml-auto flex gap-1">
+                  <Button size="sm" variant="outline" onClick={() => open(c)}>Edit</Button>
+                  {confirmDelete === c.id ? <Button size="sm" variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate(c.id)}>Confirm</Button> : <Button size="sm" variant="outline" onClick={() => setConfirmDelete(c.id)}>Remove</Button>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryState>
+      <DetailSheet open={!!draft} onOpenChange={(o) => !o && setDraft(null)} title={draft?.id ? 'Edit companion' : 'Add companion'}>
+        {draft && (
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+            <div><Label htmlFor="cp-name">Name</Label><Input id="cp-name" required minLength={2} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="text-base" /></div>
+            <div><Label htmlFor="cp-contact">Contact number</Label><Input id="cp-contact" value={draft.contact_number} onChange={(e) => setDraft({ ...draft, contact_number: e.target.value })} className="text-base" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>ID type</Label><Select value={draft.id_type || 'unset'} onValueChange={(v) => setDraft({ ...draft, id_type: v === 'unset' ? '' : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unset">—</SelectItem><SelectItem value="passport">Passport</SelectItem><SelectItem value="drivers_license">Driver's license</SelectItem><SelectItem value="national_id">National ID</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div><Label htmlFor="cp-idnum">ID number</Label><Input id="cp-idnum" value={draft.id_number} onChange={(e) => setDraft({ ...draft, id_number: e.target.value })} className="text-base" /></div>
+            </div>
+            <div>
+              <Label htmlFor="cp-photo">ID photo</Label>
+              <Input id="cp-photo" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-base" />
+              <p className="mt-1 text-xs text-muted-foreground">Uploads directly to Cascade's private storage when you save.</p>
+            </div>
+            <div><Label htmlFor="cp-notes">Notes</Label><Textarea id="cp-notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} className="text-base" /></div>
+            <div><Label htmlFor="cp-reason">Reason (optional)</Label><Input id="cp-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button></div>
+          </form>
+        )}
+      </DetailSheet>
+    </Section>
+  );
+}
 
 export default function GuestDetailPage() {
   const { id = '' } = useParams();
@@ -115,6 +199,8 @@ export default function GuestDetailPage() {
                 {g.notes && <Field label="Notes">{g.notes}</Field>}
               </CardContent></Card>
             </div>
+
+            <CompanionsSection guestId={id} />
 
             <Section title="Follow-ups" aside={<Button size="sm" variant="outline" onClick={() => setNewTask(true)}>Add</Button>}>
               <QueryState query={tasks}>
