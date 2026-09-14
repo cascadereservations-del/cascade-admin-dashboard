@@ -1,0 +1,1 @@
+import{pt as e}from"./query-state-BJWGw9WW.js";import{i as t}from"./dates-v6xzZSkJ.js";var n=e();function r({sourceAsOf:e,label:r=`Source updated`}){return(0,n.jsxs)(`p`,{className:`text-xs text-muted-foreground`,children:[r,`: `,e?t(e):`unknown`]})}export{r as t};
