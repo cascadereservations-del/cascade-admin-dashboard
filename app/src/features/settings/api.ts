@@ -34,6 +34,21 @@ export function createStaff(propertyId: string, name: string, role: string, pin:
   return staffCall({ action: 'create', name, role, password: STAFF_PIN_PREFIX + pin, propertyId }) as Promise<{ ok?: boolean; sign_in_name?: string; user_id?: string }>;
 }
 
+// staff_details (session-13 step 3): contact, ID and fee-structure fields staff_access_profiles
+// lacks. Written only through save_staff_details_v1, audited via staff_details_history.
+export type StaffDetails = {
+  user_id: string; contact_number: string | null; alternate_contact: string | null; address: string | null;
+  id_type: string | null; id_number: string | null; id_drive_url: string | null;
+  emergency_contact_name: string | null; emergency_contact_number: string | null; start_date: string | null;
+  fee_turnover: string | null; fee_transport: string | null; fee_deep_clean: string | null; version: number;
+};
+export async function listStaffDetails() {
+  return rpc<StaffDetails[]>('list_staff_details_v1', {});
+}
+export function saveStaffDetails(userId: string, patch: Record<string, unknown>, expectedVersion: number | undefined, reason: string) {
+  return rpc<{ ok: boolean; userId: string; version: number }>('save_staff_details_v1', { p_user_id: userId, p_patch: patch, p_expected_version: expectedVersion ?? null, p_reason: reason });
+}
+
 export type Heartbeat = { job_name: string; expected_interval_seconds: number; last_started_at: string | null; last_succeeded_at: string | null; last_error_code: string | null; consecutive_failures: number; ops_risk: boolean; updated_at: string };
 export async function fetchHealth(propertyId: string) {
   const [hb, sync, email, integrity] = await Promise.all([
