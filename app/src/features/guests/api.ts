@@ -47,6 +47,13 @@ export async function fetchHandoffs() {
   return unwrapList<Handoff>(await supabase.from('concierge_handoffs').select('*').order('created_at', { ascending: false }).limit(50));
 }
 
+// Guests tab sub-tabs (session-13 step 4): Inquiries reads booking_inquiries directly rather than
+// duplicating the Bookings adapter; the Inquiries tab links out to Bookings for full management.
+export type Inquiry = { id: string; guest_name: string; guest_phone: string | null; guest_email: string | null; checkin_date: string; checkout_date: string; nights: number | null; pax: number | null; total_amount: string | null; status: string; submitted_at: string; guest_id: string | null };
+export async function fetchInquiries(propertyId: string) {
+  return unwrapList<Inquiry>(await supabase.from('booking_inquiries').select('id, guest_name, guest_phone, guest_email, checkin_date, checkout_date, nights, pax, total_amount, status, submitted_at, guest_id').eq('property_id', propertyId).order('submitted_at', { ascending: false }).limit(100));
+}
+
 export function previewMerge(surviving: string, merged: string) {
   return rpc<Record<string, unknown>>('preview_guest_merge_v1', { p_surviving: surviving, p_merged: merged });
 }

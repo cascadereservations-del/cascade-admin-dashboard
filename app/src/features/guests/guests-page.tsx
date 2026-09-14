@@ -1,31 +1,48 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { formatDate, formatDateTime } from '@/lib/dates';
-import { PageHeader, Section } from '@/components/data/page-header';
+import { formatPHP } from '@/lib/money';
+import { PageHeader } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { CopyButton } from '@/components/data/copy-button';
+import { DetailSheet } from '@/components/data/detail-sheet';
 import { Button } from '@/components/ui/button';
-import { fetchFollowUps, fetchGuests, fetchHandoffs, type GuestRow } from './api';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FollowUpForm } from './follow-up-form';
+import { fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
 // guests stay separate rows here; merging is a reviewed action on the detail.
+//
+// Session-13 step 4: the page is four sub-tabs (Guest CRM, Follow-ups,
+// Messenger handoffs, Inquiries) instead of one long scroll. Each query is
+// enabled only for its active tab.
 
-const DEFAULTS = { q: '', tier: '', page: '1', density: 'comfortable', handoffs: '', task: '' };
+const DEFAULTS = { q: '', tier: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
+const TABS = [
+  { value: 'crm', label: 'Guest CRM' },
+  { value: 'followups', label: 'Follow-ups' },
+  { value: 'handoffs', label: 'Messenger handoffs' },
+  { value: 'inquiries', label: 'Inquiries' },
+];
 
 export default function GuestsPage() {
   const s = useSession();
   const nav = useNavigate();
   const { state, set, reset, activeFilterCount } = useUrlState(DEFAULTS);
-  const query = useQuery({ queryKey: ['guests', s.propertyId, state.q, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, state) });
-  const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId) });
-  const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs });
+  const tab = state.tab || 'crm';
+  const query = useQuery({ queryKey: ['guests', s.propertyId, state.q, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, state), enabled: tab === 'crm' });
+  const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId), enabled: tab === 'followups' });
+  const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs, enabled: tab === 'handoffs' });
+  const inquiries = useQuery({ queryKey: ['inquiries', s.propertyId], queryFn: () => fetchInquiries(s.propertyId), enabled: tab === 'inquiries' });
+  const [taskSheet, setTaskSheet] = useState<{ open: boolean; existing: FollowUp | null }>({ open: false, existing: null });
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
     { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${row.original.tier}` : ''}</div></div> },
@@ -34,33 +51,58 @@ export default function GuestsPage() {
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
     { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{row.original.tier}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
   ], []);
+  const taskStatusFilter = state.taskStatus;
   return (
     <div>
-      <PageHeader title="Guests" description="Canonical guest records. Timelines, follow-ups and Messenger handoffs link here by guest id." />
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Name, phone or e-mail" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
-        <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
-      </FilterBar>
-      <QueryState query={query}>
-        {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
-          <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
-        )}
-      </QueryState>
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Section title="Open follow-ups">
+      <PageHeader title="Guests" description="Canonical guest records, open follow-ups, Messenger handoffs and direct-booking inquiries." />
+      <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'crm' ? '' : v })} className="mb-3">
+        <TabsList className="flex-wrap">
+          {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
+        </TabsList>
+
+        <TabsContent value="crm">
+          <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Name, phone or e-mail" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+            <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
+          </FilterBar>
+          <QueryState query={query}>
+            {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
+              <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
+            )}
+          </QueryState>
+        </TabsContent>
+
+        <TabsContent value="followups">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <FilterSelect label="Status" value={taskStatusFilter || undefined} onChange={(v) => set({ taskStatus: v ?? '' })} options={['open', 'in_progress', 'done', 'cancelled'].map((v) => ({ value: v, label: v.replace('_', ' ') }))} />
+            <Button size="sm" className="ml-auto" onClick={() => setTaskSheet({ open: true, existing: null })}>New follow-up</Button>
+          </div>
           <QueryState query={tasks}>
             {(d) => {
-              const open = d.rows.filter((t) => t.status === 'open' || t.status === 'in_progress');
-              return open.length === 0 ? <p className="text-sm text-muted-foreground">No open follow-ups.</p> : (
-                <ul className="divide-y rounded-lg border text-sm">{open.map((t) => <li key={t.id} className="px-3 py-2"><Link to={`/guests/${t.guest_id ?? ''}?task=${t.id}`} className="font-medium hover:underline">{t.title}</Link><div className="text-xs text-muted-foreground">{t.purpose.replaceAll('_', ' ')} · {t.priority}{t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ''}</div></li>)}</ul>
+              const rows = taskStatusFilter ? d.rows.filter((t) => t.status === taskStatusFilter) : d.rows;
+              return rows.length === 0 ? <p className="text-sm text-muted-foreground">No follow-ups match.</p> : (
+                <ul className="divide-y rounded-lg border text-sm">
+                  {rows.map((t) => (
+                    <li key={t.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                      <button type="button" className="text-left font-medium hover:underline" onClick={() => setTaskSheet({ open: true, existing: t })}>{t.title}</button>
+                      <StatusBadge tone={t.status === 'done' ? 'good' : t.status === 'cancelled' ? 'bad' : 'warn'}>{t.status.replace('_', ' ')}</StatusBadge>
+                      <span className="text-xs text-muted-foreground">{t.purpose.replaceAll('_', ' ')} · {t.priority}{t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ''}</span>
+                      {t.guest_id && <Link to={`/guests/${t.guest_id}`} className="ml-auto text-xs text-muted-foreground hover:underline" onClick={(e) => e.stopPropagation()}>Open guest</Link>}
+                    </li>
+                  ))}
+                </ul>
               );
             }}
           </QueryState>
-        </Section>
-        <Section title="Messenger handoffs">
+          <DetailSheet open={taskSheet.open} onOpenChange={(o) => !o && setTaskSheet({ open: false, existing: null })} title={taskSheet.existing ? 'Follow-up' : 'New follow-up'}>
+            <FollowUpForm guestId={taskSheet.existing?.guest_id ?? null} existing={taskSheet.existing} onDone={() => setTaskSheet({ open: false, existing: null })} />
+          </DetailSheet>
+        </TabsContent>
+
+        <TabsContent value="handoffs">
           <QueryState query={handoffs}>
             {(d) => d.rows.length === 0 ? <p className="text-sm text-muted-foreground">No concierge handoffs recorded.</p> : (
               <ul className="divide-y rounded-lg border text-sm">
-                {d.rows.slice(0, 20).map((h) => (
+                {d.rows.map((h) => (
                   <li key={h.id} className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{h.guest_name ?? 'Guest'}</span><StatusBadge tone={h.status === 'pending' ? 'warn' : 'good'}>{h.status}</StatusBadge>{h.risk && <span className="text-xs text-muted-foreground">risk {h.risk}</span>}<span className="ml-auto text-xs text-muted-foreground">{formatDateTime(h.created_at)}</span></div>
                     {h.guest_text && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{h.guest_text}</p>}
@@ -70,8 +112,27 @@ export default function GuestsPage() {
               </ul>
             )}
           </QueryState>
-        </Section>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="inquiries">
+          <p className="mb-3 text-sm text-muted-foreground">Direct-booking inquiries. Confirm, decline or authorise refunds on <Link to="/bookings?view=pending" className="underline">Bookings</Link>.</p>
+          <QueryState query={inquiries}>
+            {(d) => d.rows.length === 0 ? <p className="text-sm text-muted-foreground">No inquiries yet.</p> : (
+              <ul className="divide-y rounded-lg border text-sm">
+                {d.rows.map((i) => (
+                  <li key={i.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                    {i.guest_id ? <Link to={`/guests/${i.guest_id}`} className="font-medium hover:underline">{i.guest_name}</Link> : <span className="font-medium">{i.guest_name}</span>}
+                    <StatusBadge tone={i.status === 'pending' ? 'warn' : i.status === 'confirmed' ? 'good' : i.status === 'declined' ? 'bad' : 'info'}>{i.status}</StatusBadge>
+                    <span className="tabular text-xs text-muted-foreground">{formatDate(i.checkin_date, 'weekday')} → {formatDate(i.checkout_date, 'weekday')}{i.nights ? ` · ${i.nights}n` : ''}{i.pax ? ` · ${i.pax}pax` : ''}</span>
+                    {i.total_amount && <span className="tabular text-xs text-muted-foreground">{formatPHP(i.total_amount)}</span>}
+                    <span className="ml-auto text-xs text-muted-foreground">{formatDateTime(i.submitted_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </QueryState>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
