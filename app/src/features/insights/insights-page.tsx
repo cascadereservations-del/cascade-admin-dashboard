@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { addIsoDays, comparablePeriod, formatDate, periodPreset, type Period } from '@/lib/dates';
@@ -43,6 +43,21 @@ const DEFS: Record<string, [string, string]> = {
 const ORDER = ['occupancy', 'adr', 'revpar', 'accommodation_revenue', 'cash_received', 'expected_payout', 'sold_nights', 'future_booked_nights', 'average_length_of_stay', 'returning_guest_rate', 'cancellation_rate', 'booking_lead_time'];
 const PRESETS: Array<[string, string]> = [['mtd', 'Month'], ['qtd', 'Quarter'], ['ytd', 'Year'], ['prev-month', 'Prev month'], ['prev-quarter', 'Prev quarter'], ['prev-year', 'Prev year'], ['last30', 'Last 30'], ['last90', 'Last 90'], ['custom', 'Custom']];
 const tooltipStyle = { borderRadius: 8, borderColor: 'var(--border)', background: 'var(--popover)', color: 'var(--popover-foreground)' };
+
+// Plain HTML legend for a pair/trio of single-axis charts sharing one card
+// (Recharts' <Legend> only composes inside a single chart's own tree).
+function MiniLegend({ items }: { items: Array<{ label: string; color: string }> }) {
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {items.map((it) => (
+        <span key={it.label} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="size-2.5 rounded-full" style={{ background: it.color }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function explain(m: Record<string, MetricResult>, blocked: number): string[] {
   const out: string[] = [];
@@ -86,8 +101,10 @@ function FinancialAnalytics({ period, toggles }: { period: Period; toggles: Togg
   const s = useSession();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ['monthly-totals', s.propertyId, period.start, period.endExclusive], queryFn: () => fetchMonthlyTotals(s.propertyId, period.start.slice(0, 7) + '-01', period.endExclusive), staleTime: 300_000 });
-  const data = (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: m.expenseCents / 100, drawing: m.drawingCents / 100, net: (m.incomeCents - m.expenseCents - m.drawingCents) / 100, count: m.count }));
-  const totals = data.reduce((a, m) => ({ income: a.income + m.income, expense: a.expense + m.expense, drawing: a.drawing + m.drawing }), { income: 0, expense: 0, drawing: 0 });
+  const data = (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: (m.expenseCents - m.unaccountedCents) / 100, drawing: m.drawingCents / 100, unaccounted: m.unaccountedCents / 100, net: (m.incomeCents - m.expenseCents - m.drawingCents) / 100, count: m.count }));
+  // Stat cards stay ledger-accurate (unaccounted added back); only the bars below exclude it.
+  const totals = data.reduce((a, m) => ({ income: a.income + m.income, expense: a.expense + m.expense + m.unaccounted, drawing: a.drawing + m.drawing }), { income: 0, expense: 0, drawing: 0 });
+  const totalUnaccounted = data.reduce((a, m) => a + m.unaccounted, 0);
   const openMonth = (month: string) => nav(`/finance/book?from=${month}-01&to=${nextMonthStart(month)}${toggles.pending ? '&pending=1' : ''}`);
   return (
     <Section title="Financial analytics" aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
@@ -96,14 +113,14 @@ function FinancialAnalytics({ period, toggles }: { period: Period; toggles: Togg
       ) : (
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div className="rounded-lg border bg-card p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Income, expenses and drawings by month, confirmed rows (cash basis). Click a month to open its records.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Income, expenses and drawings by month, confirmed rows (cash basis). Click a month to open its records.{totalUnaccounted > 0 ? ` One-time catch-up entries (${formatPHP(totalUnaccounted)} total) are excluded from the bars so they don't flatten real monthly activity; they're still counted in Expenses and Position at right.` : ''}</p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) openMonth(p.month); }} style={{ cursor: 'pointer' }}>
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
                   <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [formatPHP(Number(v)), String(name)]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { count?: number; net?: number } | undefined; return `${l} · ${p?.count ?? 0} rows · net ${formatPHP(p?.net ?? 0)}`; }} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [formatPHP(Number(v)), String(name)]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { count?: number; net?: number; unaccounted?: number } | undefined; return `${l} · ${p?.count ?? 0} rows · net ${formatPHP(p?.net ?? 0)}${p?.unaccounted ? ` (excl. ${formatPHP(p.unaccounted)} catch-up)` : ''}`; }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="income" name="Income" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="Expenses" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
@@ -144,45 +161,67 @@ function PerformanceTrend({ period, onDrill }: { period: Period; onDrill: (token
   });
   const financeVisible = qs.some((q) => q.data?.financeVisible);
   const click = (tokenKey: 'token' | 'revToken') => (e: unknown) => { const p = (e as { activePayload?: Array<{ payload: Record<string, string | undefined> }> }).activePayload?.[0]?.payload; const t = p?.[tokenKey]; if (t) onDrill(t); };
+  // Each measure gets its own single-axis chart (dataviz skill: never a dual-axis
+  // chart) instead of forcing two different scales onto one plot.
   return (
     <Section title="Monthly performance">
       {pending ? <CardSkeleton /> : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border bg-card p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Occupancy and sold nights by month (through the last completed night). Click a month for its stays.</p>
-            <div className="h-56">
+            <p className="mb-2 text-xs text-muted-foreground">Sold nights and occupancy by month (through the last completed night). Click a month for its stays.</p>
+            <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('token')} style={{ cursor: 'pointer' }}>
+                <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('token')} style={{ cursor: 'pointer' }}>
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                  <YAxis yAxisId="n" tickLine={false} axisLine={false} fontSize={11} width={32} />
-                  <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} fontSize={11} width={36} tickFormatter={(v: number) => `${v}%`} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => (name === 'Occupancy' ? `${Number(v).toFixed(0)}%` : String(v))} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                  <Bar yAxisId="n" dataKey="nights" name="Sold nights" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="p" type="monotone" dataKey="occupancy" name="Occupancy" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                </ComposedChart>
+                  <YAxis tickLine={false} axisLine={false} fontSize={11} width={28} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} />
+                  <Bar dataKey="nights" name="Sold nights" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('token')} style={{ cursor: 'pointer' }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} fontSize={11} width={32} tickFormatter={(v: number) => `${v}%`} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => `${Number(v).toFixed(0)}%`} />
+                  <Line type="monotone" dataKey="occupancy" name="Occupancy" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <MiniLegend items={[{ label: 'Sold nights', color: 'var(--chart-3)' }, { label: 'Occupancy', color: 'var(--chart-1)' }]} />
           </div>
           <div className="rounded-lg border bg-card p-3">
-            <p className="mb-2 text-xs text-muted-foreground">{financeVisible ? 'Accommodation revenue, ADR and RevPAR by month (stay basis, excludes cleaning and platform fees). Hover for coverage; click for the stays.' : 'Financial trend is hidden for this session'}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{financeVisible ? 'Accommodation revenue, then ADR and RevPAR (same per-night scale), by month (stay basis, excludes cleaning and platform fees). Hover for coverage; click for the stays.' : 'Financial trend is hidden for this session'}</p>
             {financeVisible && (
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('revToken')} style={{ cursor: 'pointer' }}>
-                    <CartesianGrid vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                    <YAxis yAxisId="rev" tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
-                    <YAxis yAxisId="rate" orientation="right" tickLine={false} axisLine={false} fontSize={11} width={48} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { coverage?: string; covered?: number; excluded?: number } | undefined; return `${l} · coverage ${p?.coverage ?? '?'} (${p?.covered ?? 0} nights covered, ${p?.excluded ?? 0} without an amount)`; }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="rev" dataKey="revenue" name="Accommodation revenue" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="rate" type="monotone" dataKey="adr" name="ADR" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                    <Line yAxisId="rate" type="monotone" dataKey="revpar" name="RevPAR" stroke="var(--chart-4)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
+              <>
+                <div className="h-28">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('revToken')} style={{ cursor: 'pointer' }}>
+                      <CartesianGrid vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                      <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                      <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { coverage?: string; covered?: number; excluded?: number } | undefined; return `${l} · coverage ${p?.coverage ?? '?'} (${p?.covered ?? 0} nights covered, ${p?.excluded ?? 0} without an amount)`; }} />
+                      <Bar dataKey="revenue" name="Accommodation revenue" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-28">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click('revToken')} style={{ cursor: 'pointer' }}>
+                      <CartesianGrid vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                      <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => formatPHP(Number(v))} />
+                      <Line type="monotone" dataKey="adr" name="ADR" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      <Line type="monotone" dataKey="revpar" name="RevPAR" stroke="var(--chart-4)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <MiniLegend items={[{ label: 'Accommodation revenue', color: 'var(--chart-1)' }, { label: 'ADR', color: 'var(--chart-2)' }, { label: 'RevPAR', color: 'var(--chart-4)' }]} />
+              </>
             )}
           </div>
         </div>
@@ -207,19 +246,35 @@ function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles 
       ) : (
         <div className="rounded-lg border bg-card p-3">
           <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month from the cleaning log. {toggles.allReadings ? 'Every reading is summed, including first entries, negative re-entries and flagged rows.' : `First readings, negative re-entries and flagged rows are left out${excluded ? ` (${excluded} in this period)` : ''}.`} Click a month to open its cleanings.</p>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); }} style={{ cursor: 'pointer' }}>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis yAxisId="e" tickLine={false} axisLine={false} fontSize={11} width={44} tickFormatter={(v: number) => `${v}`} />
-                <YAxis yAxisId="w" orientation="right" tickLine={false} axisLine={false} fontSize={11} width={40} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => (name === 'Water (m³)' ? `${v} m³` : `${v} kWh`)} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings summed, ${p?.excluded ?? 0} left out`; }} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                <Bar yAxisId="e" dataKey="kwh" name="Electricity (kWh)" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
-                <Line yAxisId="w" type="monotone" dataKey="m3" name="Water (m³)" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Electricity (kWh)</p>
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); }} style={{ cursor: 'pointer' }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis tickLine={false} axisLine={false} fontSize={11} width={40} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => `${v} kWh`} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
+                    <Bar dataKey="kwh" name="Electricity (kWh)" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Water (m³)</p>
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); }} style={{ cursor: 'pointer' }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis tickLine={false} axisLine={false} fontSize={11} width={36} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => `${v} m³`} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
+                    <Line type="monotone" dataKey="m3" name="Water (m³)" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
       )}

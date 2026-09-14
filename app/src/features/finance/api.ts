@@ -57,18 +57,21 @@ export async function fetchLedgerBook(propertyId: string, f: { from?: string; to
 }
 
 // Monthly income, expense and drawing totals (confirmed rows only).
-export type MonthTotal = { month: string; incomeCents: number; expenseCents: number; drawingCents: number; count: number };
+// unaccountedCents is tracked separately (not subtracted from expenseCents) so
+// totals/position stay ledger-accurate; only the monthly trend chart uses it
+// to keep a one-time catch-up entry (D-113) from dwarfing real monthly activity.
+export type MonthTotal = { month: string; incomeCents: number; expenseCents: number; drawingCents: number; unaccountedCents: number; count: number };
 export async function fetchMonthlyTotals(propertyId: string, fromMonth: string, toMonthExclusive?: string): Promise<MonthTotal[]> {
-  let q = supabase.from('transactions').select('transaction_date, txn_type, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').not('source', 'in', NOT_MIRROR).gte('transaction_date', fromMonth).order('transaction_date', { ascending: true });
+  let q = supabase.from('transactions').select('transaction_date, txn_type, category, gross_amount').eq('property_id', propertyId).eq('status', 'confirmed').not('source', 'in', NOT_MIRROR).gte('transaction_date', fromMonth).order('transaction_date', { ascending: true });
   if (toMonthExclusive) q = q.lt('transaction_date', toMonthExclusive);
-  const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'gross_amount'>>(await q.range(0, 4999));
+  const res = unwrapList<Pick<Txn, 'transaction_date' | 'txn_type' | 'category' | 'gross_amount'>>(await q.range(0, 4999));
   const byMonth = new Map<string, MonthTotal>();
   for (const r of res.rows) {
     const month = r.transaction_date.slice(0, 7);
-    const t = byMonth.get(month) ?? { month, incomeCents: 0, expenseCents: 0, drawingCents: 0, count: 0 };
+    const t = byMonth.get(month) ?? { month, incomeCents: 0, expenseCents: 0, drawingCents: 0, unaccountedCents: 0, count: 0 };
     const c = toCentavos(r.gross_amount) ?? 0;
     if (r.txn_type === 'income') t.incomeCents += c;
-    else if (r.txn_type === 'expense') t.expenseCents += c;
+    else if (r.txn_type === 'expense') { t.expenseCents += c; if (r.category === 'unaccounted') t.unaccountedCents += c; }
     else if (r.txn_type === 'drawing') t.drawingCents += c;
     t.count += 1;
     byMonth.set(month, t);
