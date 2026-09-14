@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarRange, ClipboardList, Wallet } from 'lucide-react';
 import { useSession } from '@/auth/session';
 import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
-import { PageHeader, Section } from '@/components/data/page-header';
+import { Section } from '@/components/data/page-header';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { Field } from '@/components/data/detail-sheet';
 import { CopyButton } from '@/components/data/copy-button';
@@ -64,21 +64,34 @@ export default function BookingDetailPage() {
           const st = d.stay;
           return (
             <div className="space-y-6">
-              <PageHeader
-                title={st.guestName}
-                description={<span className="inline-flex items-center gap-1">{st.code}<CopyButton value={st.code} label="Copy code" /> · {st.kind.replace('_', ' ')}</span>}
-                actions={
-                  <>
-                    {st.guestId && <Button variant="outline" asChild><Link to={`/guests/${st.guestId}`}>Guest profile</Link></Button>}
-                    {canManage && st.kind === 'direct' && st.bookingState !== 'cancelled' && st.bookingState !== 'completed' && (
-                      <Button variant="destructive" onClick={() => setCancelOpen(true)}>Cancel booking</Button>
-                    )}
-                  </>
-                }
-              />
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                    {st.guestName.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-xl font-semibold tracking-tight">{st.guestName}</h1>
+                      <StatusBadge tone={bookingTone(st.bookingState)}>{st.bookingState}</StatusBadge>
+                      <StatusBadge tone={payoutTone(st.payoutState)}>{st.payoutState.replaceAll('_', ' ')}</StatusBadge>
+                    </div>
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">{st.code}<CopyButton value={st.code} label="Copy code" /> · {st.kind.replace('_', ' ')}</p>
+                    <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="tabular">{formatDate(st.checkin, 'long')} → {formatDate(st.checkout, 'long')} · {st.nights}n</span>
+                      <span className="capitalize">Payment {st.paymentState.replaceAll('_', ' ')}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {st.guestId && <Button variant="outline" asChild><Link to={`/guests/${st.guestId}`}>Guest profile</Link></Button>}
+                  {canManage && st.kind === 'direct' && st.bookingState !== 'cancelled' && st.bookingState !== 'completed' && (
+                    <Button variant="destructive" onClick={() => setCancelOpen(true)}>Cancel booking</Button>
+                  )}
+                </div>
+              </div>
               <div className="grid gap-4 lg:grid-cols-3">
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>States</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="size-4 text-muted-foreground" aria-hidden /> States</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     <Field label="Booking"><StatusBadge tone={bookingTone(st.bookingState)}>{st.bookingState}</StatusBadge></Field>
                     <Field label="Payment"><span className="capitalize">{st.paymentState.replaceAll('_', ' ')}</span></Field>
@@ -88,7 +101,7 @@ export default function BookingDetailPage() {
                   </CardContent>
                 </Card>
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>Stay</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><CalendarRange className="size-4 text-muted-foreground" aria-hidden /> Stay</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     <Field label="Check-in">{formatDate(st.checkin, 'long')}{d.reservation?.checkin_time ? ` · ${d.reservation.checkin_time}` : ''}</Field>
                     <Field label="Checkout">{formatDate(st.checkout, 'long')}{d.reservation?.checkout_time ? ` · ${d.reservation.checkout_time}` : ''}</Field>
@@ -101,7 +114,7 @@ export default function BookingDetailPage() {
                   </CardContent>
                 </Card>
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>Charges</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="size-4 text-muted-foreground" aria-hidden /> Charges</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     {canFinance ? (
                       <>

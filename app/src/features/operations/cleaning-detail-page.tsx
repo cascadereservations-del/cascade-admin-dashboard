@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Camera, ClipboardList, Gauge, Sparkles } from 'lucide-react';
 import { useSession } from '@/auth/session';
 import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
-import { PageHeader, Section } from '@/components/data/page-header';
+import { Section } from '@/components/data/page-header';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { Field } from '@/components/data/detail-sheet';
+import { CopyButton } from '@/components/data/copy-button';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,10 +105,25 @@ export default function CleaningDetailPage() {
           const anyReviewed = d.evidence.some((e) => e.reviews.length > 0);
           return (
             <div className="space-y-6">
-              <PageHeader title={`${c.last_guest_name ?? 'Cleaning'} · ${formatDateTime(c.cleaned_at)}`} description={`Submission ${c.submission_id} by ${c.cleaner_name}${c.cleaning_type ? ` · ${c.cleaning_type}` : ''}`} />
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Sparkles className="size-6" aria-hidden /></div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-xl font-semibold tracking-tight">{c.last_guest_name ?? 'Cleaning'}</h1>
+                      <StatusBadge tone={c.is_complete ? 'good' : c.is_complete === false ? 'warn' : 'neutral'}>{c.is_complete === null ? 'unknown' : c.is_complete ? 'complete' : 'incomplete'}</StatusBadge>
+                    </div>
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">Submission {c.submission_id}<CopyButton value={c.submission_id} /></p>
+                    <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="tabular">{formatDateTime(c.cleaned_at)}</span>
+                      <span>{c.cleaner_name}{c.cleaning_type ? ` · ${c.cleaning_type}` : ''}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div className="grid gap-4 lg:grid-cols-3">
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>States</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="size-4 text-muted-foreground" aria-hidden /> States</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     <Field label="Submission"><StatusBadge tone={c.is_complete ? 'good' : c.is_complete === false ? 'warn' : 'neutral'}>{c.is_complete === null ? 'unknown' : c.is_complete ? 'complete' : 'incomplete'}</StatusBadge></Field>
                     <Field label="Checklist">{c.completion_pct !== null ? `${Number(c.completion_pct).toFixed(0)}%` : 'not recorded'}</Field>
@@ -120,7 +136,7 @@ export default function CleaningDetailPage() {
                   </CardContent>
                 </Card>
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>Meters</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Gauge className="size-4 text-muted-foreground" aria-hidden /> Meters</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     {d.meters.length === 0 ? <p className="text-muted-foreground">No meter readings on this submission.</p> : d.meters.map((m) => (
                       <div key={m.id} className="space-y-1">
@@ -144,7 +160,7 @@ export default function CleaningDetailPage() {
                   </CardContent>
                 </Card>
                 <Card className="py-4 gap-3">
-                  <CardHeader><CardTitle>Photos</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Camera className="size-4 text-muted-foreground" aria-hidden /> Photos</CardTitle></CardHeader>
                   <CardContent className="text-sm">
                     <p className="text-muted-foreground">Counts from the submission: {c.preclean_photo_count ?? 0} before · {c.afterclean_photo_count ?? 0} after · {c.meter_photo_count ?? 0} meter · {c.other_photo_count ?? 0} other.</p>
                     {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No objects under submission folder {c.submission_id}.</p> : (
