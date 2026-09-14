@@ -30,7 +30,7 @@ export function RequireSession({ children }: { children: ReactNode }) {
     );
   }
   if (s.status === 'signed_out') return <Navigate to="/sign-in" replace state={{ from: loc.pathname + loc.search }} />;
-  if (s.status === 'no_profile' || s.caps.disabled || !s.caps.sessionCurrent) {
+  if (s.status !== 'error' && (s.status === 'no_profile' || s.caps.disabled || !s.caps.sessionCurrent)) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-16 text-center" role="alert">
         <ShieldAlert className="size-8 text-muted-foreground" aria-hidden />

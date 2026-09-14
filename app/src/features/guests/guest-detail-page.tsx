@@ -20,6 +20,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FollowUpForm } from './follow-up-form';
+import { ProfileExtraFields, ProfileExtras } from './profile-extras';
+import { safeMessengerUrl, validateIdPhoto } from './local-records';
 import { companionIdPhotoUrl, deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
 
 // CRM01-CRM06. Profile fields are optional and carry provenance; the timeline
@@ -32,30 +34,38 @@ import { companionIdPhotoUrl, deleteGuestCompanion, fetchFollowUps, fetchGuest, 
 
 type CompanionDraft = { id?: string; name: string; contact_number: string; id_type: string; id_number: string; notes: string; version?: number };
 
-function CompanionsSection({ guestId }: { guestId: string }) {
+export function CompanionsSection({ guestId }: { guestId: string }) {
   const qc = useQueryClient();
   const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
   const [draft, setDraft] = useState<CompanionDraft | null>(null);
   const [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const refresh = () => void qc.invalidateQueries({ queryKey: ['companions', guestId] });
 
   const save = useMutation({
     mutationFn: async () => {
       if (!draft) throw new Error('nothing to save');
-      const r = await saveGuestCompanion(guestId, draft.id ?? null, { name: draft.name, contact_number: draft.contact_number, id_type: draft.id_type, id_number: draft.id_number, notes: draft.notes }, draft.version, reason || 'Companion details updated');
+      if (draft.name.trim().length < 2) throw new Error('Enter the companion’s name.');
+      if (reason.trim().length < 3) throw new Error('Add a reason for this change.');
+      if (file) await validateIdPhoto(file);
+      const r = await saveGuestCompanion(guestId, draft.id ?? null, { name: draft.name.trim(), contact_number: draft.contact_number, id_type: draft.id_type, id_number: draft.id_number, notes: draft.notes }, draft.version, reason);
+      // A later upload failure must not turn Retry into a second companion.
+      setDraft({ ...draft, id: r.id, version: r.version });
+      refresh();
       if (file) {
-        const path = await uploadCompanionIdPhoto(r.id, file);
+        const path = uploadedPath ?? await uploadCompanionIdPhoto(r.id, file);
+        setUploadedPath(path);
         await saveGuestCompanion(guestId, r.id, { id_photo_path: path }, r.version, 'ID photo uploaded');
       }
       return r;
     },
-    onSuccess: () => { toast.success('Companion saved'); setDraft(null); setFile(null); setReason(''); refresh(); },
+    onSuccess: () => { toast.success('Companion saved'); setDraft(null); setFile(null); setUploadedPath(null); setReason(''); refresh(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
   const remove = useMutation({
-    mutationFn: (id: string) => deleteGuestCompanion(id, reason || 'Removed'),
+    mutationFn: (id: string) => { if (reason.trim().length < 3) throw new Error('Add a reason for removing this companion.'); return deleteGuestCompanion(id, reason); },
     onSuccess: () => { toast.success('Companion removed'); setConfirmDelete(null); setReason(''); refresh(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
@@ -63,7 +73,7 @@ function CompanionsSection({ guestId }: { guestId: string }) {
     try { window.open(await companionIdPhotoUrl(path), '_blank', 'noopener'); }
     catch (e) { toast.error(toAppError(e).message); }
   };
-  const open = (c?: Companion) => { setFile(null); setReason(''); setDraft(c ? { id: c.id, name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', version: c.version } : { name: '', contact_number: '', id_type: '', id_number: '', notes: '' }); };
+  const open = (c?: Companion) => { setFile(null); setUploadedPath(null); setReason(''); setDraft(c ? { id: c.id, name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', version: c.version } : { name: '', contact_number: '', id_type: '', id_number: '', notes: '' }); };
 
   return (
     <Section title="Companions" aside={<Button size="sm" variant="outline" onClick={() => open()}>Add companion</Button>}>
@@ -79,30 +89,31 @@ function CompanionsSection({ guestId }: { guestId: string }) {
                 {c.id_photo_path && <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={() => openPhoto(c.id_photo_path!)}>View ID photo</Button>}
                 <div className="ml-auto flex gap-1">
                   <Button size="sm" variant="outline" onClick={() => open(c)}>Edit</Button>
-                  {confirmDelete === c.id ? <Button size="sm" variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate(c.id)}>Confirm</Button> : <Button size="sm" variant="outline" onClick={() => setConfirmDelete(c.id)}>Remove</Button>}
+                  {confirmDelete === c.id ? <div className="flex flex-wrap gap-2"><Input aria-label="Reason for removing companion" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} /><Button size="sm" variant="destructive" disabled={remove.isPending || reason.trim().length < 3} onClick={() => remove.mutate(c.id)}>Confirm removal</Button><Button size="sm" variant="ghost" onClick={() => { setConfirmDelete(null); setReason(''); }}>Keep companion</Button></div> : <Button size="sm" variant="outline" onClick={() => { setConfirmDelete(c.id); setReason(''); }}>Remove</Button>}
                 </div>
               </li>
             ))}
           </ul>
         )}
       </QueryState>
-      <DetailSheet open={!!draft} onOpenChange={(o) => !o && setDraft(null)} title={draft?.id ? 'Edit companion' : 'Add companion'}>
+      <DetailSheet open={!!draft} onOpenChange={(o) => { if (!o && !save.isPending) setDraft(null); }} title={draft?.id ? 'Edit companion' : 'Add companion'}>
         {draft && (
           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
             <div><Label htmlFor="cp-name">Name</Label><Input id="cp-name" required minLength={2} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="text-base" /></div>
             <div><Label htmlFor="cp-contact">Contact number</Label><Input id="cp-contact" value={draft.contact_number} onChange={(e) => setDraft({ ...draft, contact_number: e.target.value })} className="text-base" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>ID type</Label><Select value={draft.id_type || 'unset'} onValueChange={(v) => setDraft({ ...draft, id_type: v === 'unset' ? '' : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unset">—</SelectItem><SelectItem value="passport">Passport</SelectItem><SelectItem value="drivers_license">Driver's license</SelectItem><SelectItem value="national_id">National ID</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div><Label htmlFor="cp-type">ID type</Label><Select value={draft.id_type || 'unset'} onValueChange={(v) => setDraft({ ...draft, id_type: v === 'unset' ? '' : v })}><SelectTrigger id="cp-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unset">—</SelectItem><SelectItem value="passport">Passport</SelectItem><SelectItem value="drivers_license">Driver's license</SelectItem><SelectItem value="national_id">National ID</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
               <div><Label htmlFor="cp-idnum">ID number</Label><Input id="cp-idnum" value={draft.id_number} onChange={(e) => setDraft({ ...draft, id_number: e.target.value })} className="text-base" /></div>
             </div>
             <div>
               <Label htmlFor="cp-photo">ID photo</Label>
-              <Input id="cp-photo" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-base" />
-              <p className="mt-1 text-xs text-muted-foreground">Uploads directly to Cascade's private storage when you save.</p>
+              <Input id="cp-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={save.isPending} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setUploadedPath(null); }} className="text-base" />
+              <p className="mt-1 text-xs text-muted-foreground">JPEG, PNG or WebP, up to 10 MB. Uploads to Cascade's private storage when you save.</p>
             </div>
             <div><Label htmlFor="cp-notes">Notes</Label><Textarea id="cp-notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} className="text-base" /></div>
-            <div><Label htmlFor="cp-reason">Reason (optional)</Label><Input id="cp-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button></div>
+            <div><Label htmlFor="cp-reason">Reason for change</Label><Input id="cp-reason" required minLength={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
+            {save.isError && draft.id && <p role="alert" className="text-sm">Details may already be saved. Retry keeps the same companion; check the list before cancelling.</p>}
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={save.isPending} onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button></div>
           </form>
         )}
       </DetailSheet>
@@ -137,9 +148,9 @@ export default function GuestDetailPage() {
     },
     onError: (e) => { const err = toAppError(e); toast.error(err.kind === 'conflict' ? 'The profile changed since you opened it. Reload and reapply your edit.' : err.message); },
   });
-  const doPreview = useMutation({ mutationFn: () => previewMerge(id, mergeId), onSuccess: setPreview, onError: (e) => toast.error(toAppError(e).message) });
+  const doPreview = useMutation({ mutationFn: (target: string) => previewMerge(id, target), onSuccess: (data, target) => setPreview({ ...data, targetId: target }), onError: (e) => toast.error(toAppError(e).message) });
   const doMerge = useMutation({
-    mutationFn: () => mergeGuests(id, mergeId, mergeReason),
+    mutationFn: () => { if (!preview || preview.targetId !== mergeId) throw new Error('Preview this guest again before merging.'); return mergeGuests(id, mergeId, mergeReason); },
     onSuccess: () => { toast.success('Guests merged; the other record is now inactive and linked here.'); setPreview(null); setMergeId(''); void qc.invalidateQueries(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
@@ -173,7 +184,7 @@ export default function GuestDetailPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" onClick={() => setNewTask(true)}>New follow-up</Button>
-                <Button onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button>
+                <Button disabled={!!detailsError} onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button>
               </div>
             </div>
 
@@ -181,11 +192,11 @@ export default function GuestDetailPage() {
               <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" aria-hidden /> Contact</CardTitle></CardHeader><CardContent className="space-y-3">
                 <div className="flex items-center gap-2 text-sm"><Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.phone ? <span className="inline-flex items-center gap-1">{g.phone}<CopyButton value={g.phone} /></span> : <span className="text-muted-foreground">Phone not recorded</span>}</div>
                 <div className="flex items-center gap-2 text-sm"><Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.email ? <span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span> : <span className="text-muted-foreground">E-mail not recorded</span>}</div>
-                <div className="flex items-center gap-2 text-sm"><MessageCircle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{d?.messenger_link ? <a href={d.messenger_link} target="_blank" rel="noopener noreferrer" className="underline">Open Messenger conversation</a> : d?.messenger_psid ? <span className="inline-flex items-center gap-1">PSID {d.messenger_psid}<CopyButton value={d.messenger_psid} /> (open the Page inbox)</span> : <span className="text-muted-foreground">No Messenger link recorded</span>}</div>
+                <div className="flex items-center gap-2 text-sm"><MessageCircle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{safeMessengerUrl(d?.messenger_link) ? <a href={safeMessengerUrl(d?.messenger_link)!} target="_blank" rel="noopener noreferrer" className="underline">Open Messenger conversation</a> : d?.messenger_psid ? <span className="inline-flex items-center gap-1">PSID {d.messenger_psid}<CopyButton value={d.messenger_psid} /> (open the Page inbox)</span> : <span className="text-muted-foreground">No Messenger link recorded</span>}</div>
                 <div className="mt-1 border-t pt-3">
                   <Field label="Preferred channel">{d?.preferred_channel ?? 'not stated'}</Field>
                   <Field label="Language">{d?.language ?? 'not stated'}</Field>
-                  <Field label="Preferences">{d?.stay_preferences ?? 'none recorded'}</Field>
+                  <Field label="Preferred phone">{d?.contact_number || 'not stated'}</Field>
                   <Field label="Tags">{d?.tags?.length ? d.tags.join(', ') : 'none'}</Field>
                 </div>
                 {detailsError && <p className="text-xs text-muted-foreground">Profile details unavailable: {detailsError}</p>}
@@ -200,7 +211,8 @@ export default function GuestDetailPage() {
               </CardContent></Card>
             </div>
 
-            <CompanionsSection guestId={id} />
+            <ProfileExtras key={id} details={d} />
+            <CompanionsSection key={id} guestId={id} />
 
             <Section title="Follow-ups" aside={<Button size="sm" variant="outline" onClick={() => setNewTask(true)}>Add</Button>}>
               <QueryState query={tasks}>
@@ -235,13 +247,13 @@ export default function GuestDetailPage() {
 
             <Section title="Identity review">
               <div className="flex flex-wrap items-end gap-2">
-                <div><Label htmlFor="merge-id">Merge another guest into this one (guest id)</Label><Input id="merge-id" className="w-80 text-base sm:text-sm" value={mergeId} onChange={(e) => setMergeId(e.target.value)} /></div>
-                <Button variant="outline" disabled={!mergeId || doPreview.isPending} onClick={() => doPreview.mutate()}>Preview</Button>
+                <div className="min-w-0 flex-1"><Label htmlFor="merge-id">Merge another guest into this one (guest id)</Label><Input id="merge-id" className="w-full text-base sm:text-sm" value={mergeId} onChange={(e) => { setMergeId(e.target.value); setPreview(null); }} /></div>
+                <Button variant="outline" disabled={!mergeId || doPreview.isPending} onClick={() => doPreview.mutate(mergeId)}>Preview</Button>
               </div>
-              {preview && (
+              {preview && preview.targetId === mergeId && (
                 <div className="mt-2 space-y-2 rounded-lg border p-3 text-sm">
                   <p>Affects {String(preview.reservations)} reservations, {String(preview.inquiries)} inquiries, {String(preview.followUps)} follow-ups, {String(preview.conversations)} conversations.</p>
-                  <p>{preview.sharedContact ? 'Verified shared phone or e-mail: merge allowed.' : 'No shared verified contact. Name-only similarity cannot be merged.'}</p>
+                  <p>{preview.sharedContact ? 'Matching phone or e-mail recorded. Confirm these are the same person before merging.' : 'No shared contact. Name-only similarity cannot be merged.'}</p>
                   <div className="flex flex-wrap items-end gap-2"><div className="min-w-60 flex-1"><Label htmlFor="merge-reason">Reason</Label><Textarea id="merge-reason" rows={1} value={mergeReason} onChange={(e) => setMergeReason(e.target.value)} className="text-base sm:text-sm" /></div><Button variant="destructive" disabled={!preview.sharedContact || mergeReason.trim().length < 3 || doMerge.isPending} onClick={() => doMerge.mutate()}>Merge</Button></div>
                 </div>
               )}
@@ -249,14 +261,15 @@ export default function GuestDetailPage() {
 
             <DetailSheet open={editing} onOpenChange={setEditing} title="Edit profile" description="Only the fields you change are saved, with your reason recorded in the profile history.">
               <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+                <ProfileExtraFields details={d} change={(key, value) => setPatch((current) => ({ ...current, [key]: value }))} />
                 <div><Label htmlFor="pf-name">Display name</Label><Input id="pf-name" defaultValue={d?.display_name ?? ''} onChange={(e) => setPatch({ ...patch, display_name: e.target.value })} className="text-base" /></div>
-                <div><Label>Preferred channel</Label><Select defaultValue={d?.preferred_channel ?? 'unset'} onValueChange={(v) => setPatch({ ...patch, preferred_channel: v === 'unset' ? '' : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unset">Not stated</SelectItem>{['messenger', 'phone', 'email', 'airbnb', 'other'].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label htmlFor="pf-channel">Preferred channel</Label><Select defaultValue={d?.preferred_channel ?? 'unset'} onValueChange={(v) => setPatch({ ...patch, preferred_channel: v === 'unset' ? '' : v })}><SelectTrigger id="pf-channel"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unset">Not stated</SelectItem>{['messenger', 'phone', 'email', 'airbnb', 'other'].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label htmlFor="pf-lang">Language</Label><Input id="pf-lang" defaultValue={d?.language ?? ''} onChange={(e) => setPatch({ ...patch, language: e.target.value })} className="text-base" /></div>
                 <div><Label htmlFor="pf-link">Messenger link</Label><Input id="pf-link" defaultValue={d?.messenger_link ?? ''} onChange={(e) => setPatch({ ...patch, messenger_link: e.target.value })} className="text-base" /></div>
                 <div><Label htmlFor="pf-pref">Stay preferences (guest-stated)</Label><Textarea id="pf-pref" defaultValue={d?.stay_preferences ?? ''} onChange={(e) => setPatch({ ...patch, stay_preferences: e.target.value })} className="text-base" /></div>
                 <div><Label htmlFor="pf-tags">Tags (comma separated)</Label><Input id="pf-tags" defaultValue={d?.tags?.join(', ') ?? ''} onChange={(e) => setPatch({ ...patch, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} className="text-base" /></div>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" defaultChecked={d?.vip ?? false} onChange={(e) => setPatch({ ...patch, vip: e.target.checked })} /> VIP (manual)</label>
-                <div><Label htmlFor="pf-reason">Reason for change</Label><Input id="pf-reason" required value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
+                <div><Label htmlFor="pf-reason">Reason for change</Label><Input id="pf-reason" required minLength={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
                 <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button><Button type="submit" disabled={save.isPending || Object.keys(patch).length === 0}>Save</Button></div>
               </form>
             </DetailSheet>

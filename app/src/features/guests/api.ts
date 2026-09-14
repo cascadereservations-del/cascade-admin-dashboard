@@ -1,18 +1,22 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { guestPage, guestSearchPattern, validateProfilePatch } from './validation';
+import { validateIdPhoto } from './local-records';
 
 // Guests adapter (P19/P20). Profiles extend `guests` via guest_profile_details;
 // the timeline is server-assembled and permission-filtered.
 
-export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes: string | null };
-export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number };
+export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null };
+export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number; contact_number?: string | null; birthday?: string | null; address?: string | null; airbnb_profile_id?: string | null; id_on_file?: boolean; id_type?: string | null; id_number?: string | null; id_drive_url?: string | null; id_verified_at?: string | null };
 
 export async function fetchGuests(propertyId: string, f: { q?: string; tier?: string; page?: string }) {
-  let q = supabase.from('guests').select('*', { count: 'exact' }).eq('property_id', propertyId).eq('is_active', true).order('last_stay_date', { ascending: false, nullsFirst: false });
-  if (f.q) q = q.or(`name.ilike.%${f.q}%,phone.ilike.%${f.q}%,email.ilike.%${f.q}%`);
+  const page = guestPage(f.page);
+  const pattern = f.q ? guestSearchPattern(f.q) : null;
+  if (f.q?.trim() && !pattern) return { rows: [] as GuestRow[], total: 0, page };
+  let q = supabase.from('guests').select('id,name,phone,email,source,tier,total_stays,total_nights_stayed,first_stay_date,last_stay_date,is_active,created_at,updated_at', { count: 'exact' }).eq('property_id', propertyId).eq('is_active', true).order('last_stay_date', { ascending: false, nullsFirst: false }).order('id');
+  if (pattern) q = q.or(`name.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`);
   if (f.tier) q = q.eq('tier', f.tier);
-  const page = Number(f.page) || 1;
   const res = await q.range((page - 1) * 25, page * 25 - 1);
   return { ...unwrapList<GuestRow>(res), page };
 }
@@ -29,6 +33,7 @@ export function fetchTimeline(guestId: string) {
 }
 
 export function saveProfile(guestId: string, patch: Record<string, unknown>, expectedVersion: number | null, reason: string) {
+  validateProfilePatch(patch, reason);
   return rpc<{ ok: boolean; version: number; updatedAt: string }>('save_guest_profile_v1', { p_guest_id: guestId, p_patch: patch, p_expected_version: expectedVersion, p_reason: reason });
 }
 
@@ -68,8 +73,10 @@ export function deleteGuestCompanion(companionId: string, reason: string) {
   return rpc<{ ok: boolean; id: string }>('delete_guest_companion_v1', { p_companion_id: companionId, p_reason: reason });
 }
 export async function uploadCompanionIdPhoto(companionId: string, file: File) {
-  const path = `${companionId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const { error } = await supabase.storage.from('guest-id-photos').upload(path, file, { upsert: false });
+  const mime = await validateIdPhoto(file);
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mime];
+  const path = `${companionId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from('guest-id-photos').upload(path, file, { upsert: false, contentType: mime });
   if (error) throw error;
   return path;
 }

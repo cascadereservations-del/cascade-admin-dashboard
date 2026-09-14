@@ -18,9 +18,9 @@ export function DetailSheet({ open, onOpenChange, title, description, children }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] gap-2 text-sm">
+    <dl className="grid grid-cols-[minmax(6rem,9rem)_minmax(0,1fr)] gap-2 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
-    </div>
+    </dl>
   );
 }

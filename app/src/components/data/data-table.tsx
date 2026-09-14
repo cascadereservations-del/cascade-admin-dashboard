@@ -53,7 +53,7 @@ export function DataTable<T>({ columns, rows, total, page = 1, pageSize = 25, on
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">{toolbar}</div>
+        <div className="flex items-center gap-2">{toolbar}{total !== undefined && total > rows.length && <span className="text-xs text-muted-foreground">Column sorting applies to this page.</span>}</div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" aria-label="Choose columns">
@@ -107,7 +107,7 @@ export function DataTable<T>({ columns, rows, total, page = 1, pageSize = 25, on
                   key={r.id}
                   className={cn(onRowClick && 'cursor-pointer')}
                   onClick={onRowClick ? () => onRowClick(r.original) : undefined}
-                  onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(r.original); } : undefined}
+                  onKeyDown={onRowClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRowClick(r.original); } } : undefined}
                   tabIndex={onRowClick ? 0 : undefined}
                 >
                   {r.getVisibleCells().map((c) => (

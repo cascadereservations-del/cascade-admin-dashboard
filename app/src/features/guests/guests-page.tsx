@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useSession } from '@/auth/session';
@@ -16,6 +16,7 @@ import { DetailSheet } from '@/components/data/detail-sheet';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FollowUpForm } from './follow-up-form';
+import { LocalRecordsPanel } from './local-records-panel';
 import { fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
@@ -25,9 +26,10 @@ import { fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type Follow
 // Messenger handoffs, Inquiries) instead of one long scroll. Each query is
 // enabled only for its active tab.
 
-const DEFAULTS = { q: '', tier: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
+const DEFAULTS = { tier: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
 const TABS = [
   { value: 'crm', label: 'Guest CRM' },
+  { value: 'local', label: 'Collected records' },
   { value: 'followups', label: 'Follow-ups' },
   { value: 'handoffs', label: 'Messenger handoffs' },
   { value: 'inquiries', label: 'Inquiries' },
@@ -36,9 +38,16 @@ const TABS = [
 export default function GuestsPage() {
   const s = useSession();
   const nav = useNavigate();
-  const { state, set, reset, activeFilterCount } = useUrlState(DEFAULTS);
-  const tab = state.tab || 'crm';
-  const query = useQuery({ queryKey: ['guests', s.propertyId, state.q, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, state), enabled: tab === 'crm' });
+  const { state, set, reset } = useUrlState(DEFAULTS);
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState(() => params.get('q') ?? '');
+  const [queryText, setQueryText] = useState(() => params.get('q') ?? '');
+  // Honor an old search link once, then remove personal search text from history.
+  useEffect(() => { if (params.has('q')) { const next = new URLSearchParams(params); next.delete('q'); setParams(next, { replace: true }); } }, [params, setParams]);
+  useEffect(() => { const timer = setTimeout(() => setQueryText(search), 250); return () => clearTimeout(timer); }, [search]);
+  const clearFilters = () => { setSearch(''); setQueryText(''); reset(); };
+  const tab = TABS.some((t) => t.value === state.tab) ? state.tab : 'crm';
+  const query = useQuery({ queryKey: ['guests', s.propertyId, queryText, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, { ...state, q: queryText }), enabled: tab === 'crm' && search === queryText });
   const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId), enabled: tab === 'followups' });
   const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs, enabled: tab === 'handoffs' });
   const inquiries = useQuery({ queryKey: ['inquiries', s.propertyId], queryFn: () => fetchInquiries(s.propertyId), enabled: tab === 'inquiries' });
@@ -54,21 +63,25 @@ export default function GuestsPage() {
   const taskStatusFilter = state.taskStatus;
   return (
     <div>
-      <PageHeader title="Guests" description="Canonical guest records, open follow-ups, Messenger handoffs and direct-booking inquiries." />
+      <PageHeader title="Guests" description="Know your guests, prepare for their stays and keep every request in view." />
       <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'crm' ? '' : v })} className="mb-3">
-        <TabsList className="flex-wrap">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto">
           {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
         </TabsList>
 
         <TabsContent value="crm">
-          <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Name, phone or e-mail" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+          <FilterBar search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} searchPlaceholder="Name, phone or e-mail" activeCount={(search ? 1 : 0) + (state.tier ? 1 : 0)} onClear={clearFilters} density={density} onDensity={(d) => set({ density: d })}>
             <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
           </FilterBar>
           <QueryState query={query}>
-            {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
+            {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>} /> : (
               <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
             )}
           </QueryState>
+        </TabsContent>
+
+        <TabsContent value="local">
+          {tab === 'local' && <LocalRecordsPanel key={s.session?.user.id ?? 'signed-out'} />}
         </TabsContent>
 
         <TabsContent value="followups">

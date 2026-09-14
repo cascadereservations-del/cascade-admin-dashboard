@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { DEFAULT_PROPERTY_ID } from '@/lib/env';
 import { buildCapabilities, isStaffRole, type Aal, type Capabilities, type StaffRole } from './capabilities';
@@ -50,18 +50,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionState['status']>('loading');
   const [caps, setCaps] = useState<Capabilities>(EMPTY);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const generation = useRef(0);
 
   const refresh = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    const s = data.session;
-    setSession(s);
-    if (!s) {
-      setCaps(EMPTY);
-      setStatus('signed_out');
-      return;
-    }
+    const current = ++generation.current;
+    qc.clear();
+    setCaps(EMPTY);
+    setStatus('loading');
     try {
+      const { data, error } = await supabase.auth.getSession();
+      if (generation.current !== current) return;
+      if (error) throw error;
+      const s = data.session;
+      setSession(s);
+      if (!s) { setStatus('signed_out'); return; }
       const { access, aal } = await loadAccess();
+      if (generation.current !== current) return;
       if (!access) {
         setCaps(EMPTY);
         setStatus('no_profile');
@@ -80,25 +84,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
       setErrorMessage(undefined);
     } catch (e) {
+      if (generation.current !== current) return;
       setCaps(EMPTY);
       setStatus('error');
       setErrorMessage(e instanceof Error ? e.message : 'Could not load staff access');
     }
-  }, []);
+  }, [qc]);
 
   useEffect(() => {
     void refresh();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
+        generation.current++; // an old access response cannot restore a signed-out session
         qc.clear(); // sensitive cache never survives sign-out
         setSession(null);
         setCaps(EMPTY);
         setStatus('signed_out');
-      } else if (event === 'SIGNED_IN' || event === 'MFA_CHALLENGE_VERIFIED' || event === 'USER_UPDATED') {
+      } else if (event === 'SIGNED_IN' || event === 'MFA_CHALLENGE_VERIFIED' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
         void refresh();
       }
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { generation.current++; sub.subscription.unsubscribe(); };
   }, [refresh, qc]);
 
   const signOut = useCallback(async () => {

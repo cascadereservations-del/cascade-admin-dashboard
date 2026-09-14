@@ -5,3 +5,12 @@ test-results/
 .env
 .env.local
 *.local
+# Private administrative inputs and generated manifests must never be published.
+*.local.json
+*.local.jsonl
+*.private.*
+private/
+Airbnb Client Details/
+guest-details.md
+drive-upload-manifest*.json
+guest-records*.json
