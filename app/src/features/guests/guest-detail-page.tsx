@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Mail, MessageCircle, Phone } from 'lucide-react';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
-import { PageHeader, Section } from '@/components/data/page-header';
+import { Section } from '@/components/data/page-header';
 import { EmptyState, ErrorState, QueryState } from '@/components/data/query-state';
 import { DetailSheet, Field } from '@/components/data/detail-sheet';
 import { CopyButton } from '@/components/data/copy-button';
@@ -68,26 +68,46 @@ export default function GuestDetailPage() {
       <QueryState query={guest}>
         {({ guest: g, details: d, detailsError }) => (
           <div className="space-y-6">
-            <PageHeader title={d?.display_name ?? g.name} description={<span>{g.name} · {g.source}{d?.vip && <> · <StatusBadge tone="warn">VIP</StatusBadge></>}</span>} actions={<><Button variant="outline" onClick={() => setNewTask(true)}>New follow-up</Button><Button onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button></>} />
-            <div className="grid gap-4 lg:grid-cols-3">
-              <Card className="py-4 gap-3"><CardHeader><CardTitle>Contact</CardTitle></CardHeader><CardContent className="space-y-2">
-                <Field label="Phone">{g.phone ? <span className="inline-flex items-center gap-1">{g.phone}<CopyButton value={g.phone} /></span> : 'not recorded'}</Field>
-                <Field label="E-mail">{g.email ? <span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span> : 'not recorded'}</Field>
-                <Field label="Preferred channel">{d?.preferred_channel ?? 'not stated'}</Field>
-                <Field label="Language">{d?.language ?? 'not stated'}</Field>
-                <Field label="Messenger">{d?.messenger_link ? <a href={d.messenger_link} target="_blank" rel="noopener noreferrer" className="underline">Open conversation</a> : d?.messenger_psid ? <span className="inline-flex items-center gap-1">PSID {d.messenger_psid}<CopyButton value={d.messenger_psid} /> (open the Page inbox)</span> : 'no link recorded'}</Field>
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                  {(d?.display_name ?? g.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight">{d?.display_name ?? g.name}</h1>
+                    <StatusBadge tone="neutral">{g.source}</StatusBadge>
+                    {g.tier && <StatusBadge tone={g.tier === 'vip' ? 'warn' : 'info'}>{g.tier}</StatusBadge>}
+                    {d?.vip && <StatusBadge tone="warn">VIP</StatusBadge>}
+                  </div>
+                  {(d?.display_name && d.display_name !== g.name) && <p className="mt-0.5 text-sm text-muted-foreground">{g.name}</p>}
+                  <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span className="tabular">{g.total_stays ?? 0} {g.total_stays === 1 ? 'stay' : 'stays'} · {g.total_nights_stayed ?? 0} nights</span>
+                    <span>Last stay {formatDate(g.last_stay_date, 'long')}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => setNewTask(true)}>New follow-up</Button>
+                <Button onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" aria-hidden /> Contact</CardTitle></CardHeader><CardContent className="space-y-3">
+                <div className="flex items-center gap-2 text-sm"><Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.phone ? <span className="inline-flex items-center gap-1">{g.phone}<CopyButton value={g.phone} /></span> : <span className="text-muted-foreground">Phone not recorded</span>}</div>
+                <div className="flex items-center gap-2 text-sm"><Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.email ? <span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span> : <span className="text-muted-foreground">E-mail not recorded</span>}</div>
+                <div className="flex items-center gap-2 text-sm"><MessageCircle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{d?.messenger_link ? <a href={d.messenger_link} target="_blank" rel="noopener noreferrer" className="underline">Open Messenger conversation</a> : d?.messenger_psid ? <span className="inline-flex items-center gap-1">PSID {d.messenger_psid}<CopyButton value={d.messenger_psid} /> (open the Page inbox)</span> : <span className="text-muted-foreground">No Messenger link recorded</span>}</div>
+                <div className="mt-1 border-t pt-3">
+                  <Field label="Preferred channel">{d?.preferred_channel ?? 'not stated'}</Field>
+                  <Field label="Language">{d?.language ?? 'not stated'}</Field>
+                  <Field label="Preferences">{d?.stay_preferences ?? 'none recorded'}</Field>
+                  <Field label="Tags">{d?.tags?.length ? d.tags.join(', ') : 'none'}</Field>
+                </div>
                 {detailsError && <p className="text-xs text-muted-foreground">Profile details unavailable: {detailsError}</p>}
               </CardContent></Card>
-              <Card className="py-4 gap-3"><CardHeader><CardTitle>Stays</CardTitle></CardHeader><CardContent className="space-y-2">
-                <Field label="Completed stays">{g.total_stays ?? 0}</Field>
-                <Field label="Nights">{g.total_nights_stayed ?? 0}</Field>
+              <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="size-4 text-muted-foreground" aria-hidden /> Record</CardTitle></CardHeader><CardContent className="space-y-2">
                 <Field label="First stay">{formatDate(g.first_stay_date, 'long')}</Field>
-                <Field label="Last stay">{formatDate(g.last_stay_date, 'long')}</Field>
-                <Field label="Tier">{g.tier ?? 'unclassified'}</Field>
-                <Field label="Preferences">{d?.stay_preferences ?? 'none recorded'}</Field>
-                <Field label="Tags">{d?.tags?.length ? d.tags.join(', ') : 'none'}</Field>
-              </CardContent></Card>
-              <Card className="py-4 gap-3"><CardHeader><CardTitle>Record</CardTitle></CardHeader><CardContent className="space-y-2">
                 <Field label="Guest id"><span className="inline-flex items-center gap-1 text-xs">{g.id}<CopyButton value={g.id} /></span></Field>
                 <Field label="Created">{formatDateTime(g.created_at)}</Field>
                 <Field label="Updated">{formatDateTime(d?.updated_at ?? g.updated_at)}</Field>
