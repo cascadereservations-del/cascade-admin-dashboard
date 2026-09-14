@@ -1,8 +1,8 @@
 # RELEASE — deployment order, compatibility and rollback
 
-Status 2026-09-13 (later session): **steps 1-4 done.** Rehearsal passed on Alfred (3 migrations, 9/9 forward checks, pgTAP 56/56); backend release `admin_modernisation_backend_20260913` **applied to production** (ledger `20260913100000/110000/120000`, restore point `cascade-supabase-20260913T061633Z`); the new admin is published read-only at `next/` (`https://cascadereservations-del.github.io/cascade-admin-dashboard/next/`) with the legacy admin still the default. Mutations are gated by `app/src/lib/rollout.ts` (`ENABLED_MUTATION_MODULES`, currently empty).
+Status 2026-09-14 (admin session 11): **step 7 done on Lloyd's "switch"** — root `index.html` + `assets/` are the new admin, the legacy admin lives at `legacy/`, `next/` still mirrors the build. Rollback = revert that commit. Earlier status 2026-09-13: **steps 1-4 done.** Rehearsal passed on Alfred (3 migrations, 9/9 forward checks, pgTAP 56/56); backend release `admin_modernisation_backend_20260913` **applied to production** (ledger `20260913100000/110000/120000`, restore point `cascade-supabase-20260913T061633Z`); the new admin is published read-only at `next/` (`https://cascadereservations-del.github.io/cascade-admin-dashboard/next/`) with the legacy admin still the default. Mutations are gated by `app/src/lib/rollout.ts` (`ENABLED_MUTATION_MODULES`, currently empty).
 
-To enable a module (step 5): add it to `ENABLED_MUTATION_MODULES` in order `bookings` → `operations` → `readiness` → `inventory` → `follow_ups` → `finance`, run `npm run check`, copy `dist/` to `next/` (keep `next/legacy/`), commit, push.
+Publishing a build: run `npm run check`, copy `dist/index.html` to `index.html` and `dist/assets/` to `assets/` (and the same into `next/`), commit, Lloyd pushes. Step 5 (all six modules in `ENABLED_MUTATION_MODULES`) completed 2026-09-13.
 
 ## What must happen, in order (PRD section 11 rollout)
 

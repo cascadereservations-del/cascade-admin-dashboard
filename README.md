@@ -2,7 +2,7 @@
 
 Two entry points live in this repository during the rollout (PRD section 11):
 
-- `index.html` / `index2.html` — the **legacy** single-file admin, still the served page.
+- `index.html` + `assets/` — the **new admin**, served at the repository root since 2026-09-14 (step 7). `legacy/index.html` / `legacy/index2.html` — the legacy single-file admin, kept reachable at `legacy/`.
 - `app/` — the **new** React + TypeScript + Vite + shadcn/ui admin, built to `dist/`.
 
 ## Run the new admin locally
@@ -24,7 +24,7 @@ Runs typecheck, vitest unit tests, the four legacy tests and a production build.
 
 ## Backend
 
-New RPCs and tables live in `../stay-site/supabase/migrations/20260913*.sql` with pgTAP suites and a release contract. Applied to production on 2026-09-13 after a rehearsal on Alfred. The new admin is published read-only under `next/` (built `dist/` plus `next/legacy/`); writes are enabled module by module in `app/src/lib/rollout.ts`. See `docs/RELEASE.md`.
+New RPCs and tables live in `../stay-site/supabase/migrations/20260913*.sql` with pgTAP suites and a release contract. Applied to production on 2026-09-13 after a rehearsal on Alfred. The new admin is the default entry point at the root (built `dist/`, copied to `index.html` + `assets/`; `next/` still mirrors it); all six mutation modules are enabled in `app/src/lib/rollout.ts`. See `docs/RELEASE.md`.
 
 ## Documentation
 
