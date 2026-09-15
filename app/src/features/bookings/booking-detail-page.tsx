@@ -212,7 +212,10 @@ export default function BookingDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancel this booking</DialogTitle>
-            <DialogDescription>Records a cancellation lifecycle event. Nothing financial is deleted; any refund must be authorised separately.</DialogDescription>
+            <DialogDescription>
+              Records a cancellation lifecycle event. Nothing financial is deleted; any refund must be authorised separately.
+              {canFinance && query.data?.stay?.totalAmount != null && <><br /><strong className="text-foreground">Quoted total: {formatPHP(query.data.stay.totalAmount)}</strong>{query.data.stay.depositAmount ? <> · Deposit: {formatPHP(query.data.stay.depositAmount)}</> : ''}</>}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="reason">Reason (required)</Label>

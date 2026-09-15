@@ -63,6 +63,13 @@ function pctDelta(cur: number, prior: number): number | null {
 function fmtDeltaPct(v: number | null): string {
   return v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(0)}%`;
 }
+// Charts widen a too-narrow slicer selection to a trailing 12 months so a
+// bar chart still reads as a trend (see chartPeriod below); this makes that
+// substitution visible in the section title instead of silently showing a
+// different window than the one the user picked.
+function periodSuffix(period: Period): string {
+  return period.label === 'Last twelve months' ? ' · last 12 months' : '';
+}
 
 // Ordinary least squares over index 0..n-1, ignoring null/NaN points (a
 // reading-count anomaly shouldn't distort the fitted line). Returns null for
@@ -222,7 +229,7 @@ function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
   const position = totals.income - totals.expense - totals.drawing;
   const openMonth = (month: string) => nav(`/finance/book?from=${month}-01&to=${nextMonthStart(month)}${toggles.pending ? '&pending=1' : ''}`);
   return (
-    <Section title="Income vs expenses" aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
+    <Section title={`Income vs expenses${periodSuffix(period)}`} aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No confirmed transactions in this period.</p>
       ) : (
@@ -268,22 +275,26 @@ function DrawingsTrend({ period }: { period: Period }) {
   const q = useMonthlyTotals(period);
   const data = monthlyRows(q);
   const total = data.reduce((a, m) => a + m.drawing, 0);
-  if (q.isPending || q.isError || total === 0) return null;
+  if (q.isPending || q.isError) return null;
   return (
-    <Section title="Owner drawings">
+    <Section title={`Owner drawings${periodSuffix(period)}`}>
       <div className="rounded-lg border bg-card p-3">
         <p className="mb-2 text-xs text-muted-foreground">Money drawn out by the owner each month, kept off the income/expenses chart so it never reads as a business cost.</p>
-        <div className="h-32">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="var(--border)" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-              <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} />
-              <Bar dataKey="drawing" name="Drawings" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground">No owner drawings in this period.</p>
+        ) : (
+          <div className="h-32">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} />
+                <Bar dataKey="drawing" name="Drawings" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </Section>
   );
@@ -353,7 +364,7 @@ function PerformanceTrend({ period, onDrill }: { period: Period; onDrill: (token
   // Each measure gets its own single-axis chart (dataviz skill: never a dual-axis
   // chart) instead of forcing two different scales onto one plot.
   return (
-    <Section title="Monthly performance">
+    <Section title={`Monthly performance${periodSuffix(period)}`}>
       {pending ? <CardSkeleton /> : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border bg-card p-3">
@@ -438,7 +449,7 @@ function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles 
   const excluded = data.reduce((a, m) => a + m.excluded, 0);
   const click = (e: unknown) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); };
   return (
-    <Section title="Utilities" aside={<Link to="/operations" className="text-xs text-primary hover:underline">Open the cleaning log</Link>}>
+    <Section title={`Utilities${periodSuffix(period)}`} aside={<Link to="/operations" className="text-xs text-primary hover:underline">Open the cleaning log</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No meter readings in this period.</p>
       ) : (
@@ -511,7 +522,7 @@ function ConsumptionEfficiency({ period, toggles }: { period: Period; toggles: T
   const priorAvg = completeWithData.length > 1 ? completeWithData.slice(0, -1).reduce((a, d) => a + (d.kwhPerNight ?? 0), 0) / (completeWithData.length - 1) : null;
   const flag = last && priorAvg && priorAvg > 0 ? ((last.kwhPerNight! - priorAvg) / priorAvg) * 100 : null;
   return (
-    <Section title="Consumption per occupied night">
+    <Section title={`Consumption per occupied night${periodSuffix(period)}`}>
       {pending ? <CardSkeleton /> : withData.length < 2 ? (
         <p className="text-sm text-muted-foreground">Not enough months with both meter readings and sold nights yet.</p>
       ) : (

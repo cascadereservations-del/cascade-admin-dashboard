@@ -88,7 +88,7 @@ export default function PurchasesPage() {
                     <div className="min-w-0 flex-1"><span className="font-medium">{r.item_name}</span> · {formatNumber(r.quantity, 2)} {r.purchase_unit ?? ''}<div className="text-xs text-muted-foreground">{r.reason ?? 'no reason'} · proposed {formatDateTime(r.proposed_at)}{r.approved_at ? ` · decided ${formatDateTime(r.approved_at)}` : ''}{r.received_at ? ` · received ${formatNumber(r.received_quantity, 2)} on ${formatDate(r.received_at.slice(0, 10))}` : ''}</div></div>
                     <StatusBadge tone={tone(r.status)}>{r.status}</StatusBadge>
                     {canApprove && r.status === 'proposed' && <><Button size="sm" onClick={() => decide.mutate({ id: r.id, status: 'approved' })}>Approve</Button><Button size="sm" variant="outline" onClick={() => decide.mutate({ id: r.id, status: 'rejected' })}>Reject</Button></>}
-                    {canApprove && (r.status === 'proposed' || r.status === 'approved') && <Button size="sm" variant="ghost" onClick={() => decide.mutate({ id: r.id, status: 'cancelled' })}>Delete</Button>}
+                    {canApprove && (r.status === 'proposed' || r.status === 'approved') && <Button size="sm" variant="ghost" onClick={() => decide.mutate({ id: r.id, status: 'cancelled' })}>Cancel</Button>}
                     {canApprove && r.status === 'approved' && r.item_id && <Button size="sm" variant="outline" onClick={() => setReceive({ id: r.id, item_id: r.item_id!, packs: r.quantity, cost: '', supplier: '' })}>Receive</Button>}
                   </li>
                 ))}
