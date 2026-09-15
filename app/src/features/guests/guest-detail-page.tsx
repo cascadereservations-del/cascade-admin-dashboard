@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FollowUpForm } from './follow-up-form';
-import { ProfileExtraFields, ProfileExtras } from './profile-extras';
+import { ImportantNotes, ProfileExtraFields, PrivateGuestDetails, isPlausiblePHMobile, phNetworkHint } from './profile-extras';
 import { safeMessengerUrl, validateIdPhoto } from './local-records';
 import { companionIdPhotoUrl, deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
 
@@ -121,6 +121,17 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
   );
 }
 
+// The primary guest has no id_photo_path column of their own (2026-09-15
+// decision: reuse the companion mechanism rather than a new migration) -- a
+// companion row named after the guest holds their own ID photo when collected.
+function PrimaryIdPhoto({ guestId, guestName }: { guestId: string; guestName: string }) {
+  const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
+  const self = companions.data?.find((c) => c.name.trim().toLowerCase() === guestName.trim().toLowerCase() && c.id_photo_path);
+  const open = async () => { try { window.open(await companionIdPhotoUrl(self!.id_photo_path!), '_blank', 'noopener'); } catch (e) { toast.error(toAppError(e).message); } };
+  if (!self) return <p className="text-xs text-muted-foreground">No ID photo on file. Add one as a companion record named "{guestName}" below.</p>;
+  return <Button size="sm" variant="outline" onClick={open}>View ID photo</Button>;
+}
+
 export default function GuestDetailPage() {
   const { id = '' } = useParams();
   const s = useSession();
@@ -165,8 +176,11 @@ export default function GuestDetailPage() {
           <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
               <div className="flex items-start gap-4">
-                <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                  {(d?.display_name ?? g.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+                <div className="flex shrink-0 flex-col items-center gap-1.5">
+                  <div aria-hidden className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                    {(d?.display_name ?? g.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+                  </div>
+                  <PrimaryIdPhoto guestId={id} guestName={g.name} />
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -188,17 +202,36 @@ export default function GuestDetailPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <ImportantNotes key={`notes-${id}`} details={d} />
+
+            {/* @2xl/main measures the actual content width left after the sidebar, not raw
+                viewport -- same fix as booking-detail-page/cleaning-detail-page (session 17,
+                D-130): lg:grid-cols-2 went 2-up with too little room for Field's own
+                label+value grid, wrapping the guest id onto two lines. */}
+            <div className="grid gap-4 @2xl/main:grid-cols-2">
               <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" aria-hidden /> Contact</CardTitle></CardHeader><CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm"><Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.phone ? <span className="inline-flex items-center gap-1">{g.phone}<CopyButton value={g.phone} /></span> : <span className="text-muted-foreground">Phone not recorded</span>}</div>
-                <div className="flex items-center gap-2 text-sm"><Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{g.email ? <span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span> : <span className="text-muted-foreground">E-mail not recorded</span>}</div>
-                <div className="flex items-center gap-2 text-sm"><MessageCircle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{safeMessengerUrl(d?.messenger_link) ? <a href={safeMessengerUrl(d?.messenger_link)!} target="_blank" rel="noopener noreferrer" className="underline">Open Messenger conversation</a> : d?.messenger_psid ? <span className="inline-flex items-center gap-1">PSID {d.messenger_psid}<CopyButton value={d.messenger_psid} /> (open the Page inbox)</span> : <span className="text-muted-foreground">No Messenger link recorded</span>}</div>
-                <div className="mt-1 border-t pt-3">
-                  <Field label="Preferred channel">{d?.preferred_channel ?? 'not stated'}</Field>
-                  <Field label="Language">{d?.language ?? 'not stated'}</Field>
-                  <Field label="Preferred phone">{d?.contact_number || 'not stated'}</Field>
-                  <Field label="Tags">{d?.tags?.length ? d.tags.join(', ') : 'none'}</Field>
-                </div>
+                {(() => {
+                  const phone = g.phone ?? d?.contact_number;
+                  if (!phone) return null;
+                  const network = phNetworkHint(phone);
+                  const plausible = isPlausiblePHMobile(phone);
+                  return <div className="flex items-center gap-2 text-sm">
+                    <Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="inline-flex items-center gap-1">{phone}<CopyButton value={phone} /></span>
+                    {network && <span className="text-xs text-muted-foreground">({network})</span>}
+                    {!plausible && <span className="text-xs text-amber-600" title="Doesn't match a standard PH mobile format -- check for a transcription error">⚠ check format</span>}
+                  </div>;
+                })()}
+                {g.email && <div className="flex items-center gap-2 text-sm"><Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /><span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span></div>}
+                {(safeMessengerUrl(d?.messenger_link) || d?.messenger_psid) && <div className="flex items-center gap-2 text-sm"><MessageCircle className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />{safeMessengerUrl(d?.messenger_link) ? <a href={safeMessengerUrl(d?.messenger_link)!} target="_blank" rel="noopener noreferrer" className="underline">Open Messenger conversation</a> : <span className="inline-flex items-center gap-1">PSID {d!.messenger_psid}<CopyButton value={d!.messenger_psid!} /> (open the Page inbox)</span>}</div>}
+                {!g.phone && !d?.contact_number && !g.email && !d?.messenger_psid && !safeMessengerUrl(d?.messenger_link) && <p className="text-sm text-muted-foreground">No contact details recorded.</p>}
+                {(d?.preferred_channel || d?.language || d?.tags?.length) ? (
+                  <div className="mt-1 border-t pt-3">
+                    {d?.preferred_channel && <Field label="Preferred channel">{d.preferred_channel}</Field>}
+                    {d?.language && <Field label="Language">{d.language}</Field>}
+                    {!!d?.tags?.length && <Field label="Tags">{d.tags.join(', ')}</Field>}
+                  </div>
+                ) : null}
                 {detailsError && <p className="text-xs text-muted-foreground">Profile details unavailable: {detailsError}</p>}
               </CardContent></Card>
               <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="size-4 text-muted-foreground" aria-hidden /> Record</CardTitle></CardHeader><CardContent className="space-y-2">
@@ -211,8 +244,8 @@ export default function GuestDetailPage() {
               </CardContent></Card>
             </div>
 
-            <ProfileExtras key={id} details={d} />
-            <CompanionsSection key={id} guestId={id} />
+            <PrivateGuestDetails key={`private-${id}`} details={d} />
+            <CompanionsSection key={`companions-${id}`} guestId={id} />
 
             <Section title="Follow-ups" aside={<Button size="sm" variant="outline" onClick={() => setNewTask(true)}>Add</Button>}>
               <QueryState query={tasks}>

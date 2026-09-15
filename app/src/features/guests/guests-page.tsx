@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FollowUpForm } from './follow-up-form';
 import { LocalRecordsPanel } from './local-records-panel';
-import { fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
+import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
 // guests stay separate rows here; merging is a reviewed action on the detail.
@@ -26,7 +26,14 @@ import { fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type Follow
 // Messenger handoffs, Inquiries) instead of one long scroll. Each query is
 // enabled only for its active tab.
 
-const DEFAULTS = { tier: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
+const DEFAULTS = { tier: '', flag: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
+const FLAG_OPTIONS = [
+  { value: 'id_on_file', label: 'ID on file' },
+  { value: 'missing_details', label: 'Missing details' },
+  { value: 'upcoming_birthday', label: 'Upcoming birthday' },
+  { value: 'repeat', label: 'Repeat guest' },
+  { value: 'has_companions', label: 'Has companions' },
+];
 const TABS = [
   { value: 'crm', label: 'Guest CRM' },
   { value: 'local', label: 'Collected records' },
@@ -47,7 +54,7 @@ export default function GuestsPage() {
   useEffect(() => { const timer = setTimeout(() => setQueryText(search), 250); return () => clearTimeout(timer); }, [search]);
   const clearFilters = () => { setSearch(''); setQueryText(''); reset(); };
   const tab = TABS.some((t) => t.value === state.tab) ? state.tab : 'crm';
-  const query = useQuery({ queryKey: ['guests', s.propertyId, queryText, state.tier, state.page], queryFn: () => fetchGuests(s.propertyId, { ...state, q: queryText }), enabled: tab === 'crm' && search === queryText });
+  const query = useQuery({ queryKey: ['guests', s.propertyId, queryText, state.tier, state.flag, state.page], queryFn: () => fetchGuests(s.propertyId, { ...state, q: queryText }), enabled: tab === 'crm' && search === queryText });
   const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId), enabled: tab === 'followups' });
   const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs, enabled: tab === 'handoffs' });
   const inquiries = useQuery({ queryKey: ['inquiries', s.propertyId], queryFn: () => fetchInquiries(s.propertyId), enabled: tab === 'inquiries' });
@@ -59,6 +66,16 @@ export default function GuestsPage() {
     { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
     { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{row.original.tier}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
+    { id: 'flags', header: 'Flags', accessorFn: () => '', cell: ({ row }) => {
+      const r = row.original;
+      const soon = r.birthday && daysToNextBirthday(r.birthday) <= 30;
+      return <div className="flex flex-wrap gap-1">
+        {r.id_on_file && <StatusBadge tone="good">ID on file</StatusBadge>}
+        {soon && <StatusBadge tone="warn">Birthday soon</StatusBadge>}
+        {r.has_companions && <StatusBadge tone="info">Companions</StatusBadge>}
+        {!r.id_on_file && !r.has_contact_number && <StatusBadge tone="neutral">Missing details</StatusBadge>}
+      </div>;
+    } },
   ], []);
   const taskStatusFilter = state.taskStatus;
   return (
@@ -70,8 +87,9 @@ export default function GuestsPage() {
         </TabsList>
 
         <TabsContent value="crm">
-          <FilterBar search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} searchPlaceholder="Name, phone or e-mail" activeCount={(search ? 1 : 0) + (state.tier ? 1 : 0)} onClear={clearFilters} density={density} onDensity={(d) => set({ density: d })}>
+          <FilterBar search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} searchPlaceholder="Name, phone or e-mail" activeCount={(search ? 1 : 0) + (state.tier ? 1 : 0) + (state.flag ? 1 : 0)} onClear={clearFilters} density={density} onDensity={(d) => set({ density: d })}>
             <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
+            <FilterSelect label="Flags" value={state.flag || undefined} onChange={(v) => { set({ flag: v ?? '', page: '1' }); }} options={FLAG_OPTIONS} />
           </FilterBar>
           <QueryState query={query}>
             {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>} /> : (

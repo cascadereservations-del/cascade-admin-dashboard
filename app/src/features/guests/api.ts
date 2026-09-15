@@ -7,18 +7,75 @@ import { validateIdPhoto } from './local-records';
 // Guests adapter (P19/P20). Profiles extend `guests` via guest_profile_details;
 // the timeline is server-assembled and permission-filtered.
 
-export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null };
+export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; has_contact_number?: boolean };
 export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number; contact_number?: string | null; birthday?: string | null; address?: string | null; airbnb_profile_id?: string | null; id_on_file?: boolean; id_type?: string | null; id_number?: string | null; id_drive_url?: string | null; id_verified_at?: string | null };
 
-export async function fetchGuests(propertyId: string, f: { q?: string; tier?: string; page?: string }) {
+export type GuestFlag = 'id_on_file' | 'missing_details' | 'upcoming_birthday' | 'repeat' | 'has_companions';
+const GUEST_FLAGS: readonly GuestFlag[] = ['id_on_file', 'missing_details', 'upcoming_birthday', 'repeat', 'has_companions'];
+
+export function daysToNextBirthday(birthday: string, today = new Date()): number {
+  const parts = birthday.split('-');
+  const m = Number(parts[1] ?? 1);
+  const d = Number(parts[2] ?? 1);
+  const now = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  let next = Date.UTC(today.getUTCFullYear(), m - 1, d);
+  if (next < now) next = Date.UTC(today.getUTCFullYear() + 1, m - 1, d);
+  return Math.round((next - now) / 86_400_000);
+}
+
+// Flags that need a row-set computed ahead of the paged fetch (PostgREST can't
+// filter cleanly on an embedded to-one relation's boolean via the query builder,
+// and birthday proximity needs date math). The property has well under a
+// thousand guests, so one small unpaginated helper query per flag is cheap and
+// keeps the total/page count exact rather than filtering only within one page.
+async function guestIdsForFlag(propertyId: string, flag: GuestFlag): Promise<string[] | null> {
+  if (flag === 'id_on_file' || flag === 'missing_details') {
+    const { data, error } = await supabase.from('guest_profile_details').select('guest_id, id_on_file, contact_number');
+    if (error) throw error;
+    const hasDetails = new Set((data ?? []).filter((r) => r.id_on_file || r.contact_number).map((r) => r.guest_id));
+    if (flag === 'id_on_file') return [...hasDetails];
+    const { data: all, error: e2 } = await supabase.from('guests').select('id').eq('property_id', propertyId).eq('is_active', true);
+    if (e2) throw e2;
+    return (all ?? []).map((g) => g.id).filter((id) => !hasDetails.has(id));
+  }
+  if (flag === 'upcoming_birthday') {
+    const { data, error } = await supabase.from('guest_profile_details').select('guest_id, birthday').not('birthday', 'is', null);
+    if (error) throw error;
+    return (data ?? []).filter((r) => r.birthday && daysToNextBirthday(r.birthday) <= 30).map((r) => r.guest_id);
+  }
+  if (flag === 'has_companions') {
+    const { data, error } = await supabase.from('guest_companions').select('guest_id');
+    if (error) throw error;
+    return [...new Set((data ?? []).map((r) => r.guest_id))];
+  }
+  return null; // 'repeat' is a plain column filter on `guests`, no id-set needed
+}
+
+export async function fetchGuests(propertyId: string, f: { q?: string; tier?: string; page?: string; flag?: string }) {
   const page = guestPage(f.page);
   const pattern = f.q ? guestSearchPattern(f.q) : null;
   if (f.q?.trim() && !pattern) return { rows: [] as GuestRow[], total: 0, page };
-  let q = supabase.from('guests').select('id,name,phone,email,source,tier,total_stays,total_nights_stayed,first_stay_date,last_stay_date,is_active,created_at,updated_at', { count: 'exact' }).eq('property_id', propertyId).eq('is_active', true).order('last_stay_date', { ascending: false, nullsFirst: false }).order('id');
+  const flag = GUEST_FLAGS.find((v) => v === f.flag);
+  let q = supabase.from('guests').select('id,name,phone,email,source,tier,total_stays,total_nights_stayed,first_stay_date,last_stay_date,is_active,created_at,updated_at,guest_profile_details(id_on_file,birthday,contact_number)', { count: 'exact' }).eq('property_id', propertyId).eq('is_active', true).order('last_stay_date', { ascending: false, nullsFirst: false }).order('id');
   if (pattern) q = q.or(`name.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`);
   if (f.tier) q = q.eq('tier', f.tier);
+  if (flag === 'repeat') q = q.gt('total_stays', 1);
+  else if (flag) {
+    const ids = await guestIdsForFlag(propertyId, flag);
+    if (ids && ids.length === 0) return { rows: [] as GuestRow[], total: 0, page };
+    if (ids) q = q.in('id', ids);
+  }
   const res = await q.range((page - 1) * 25, page * 25 - 1);
-  return { ...unwrapList<GuestRow>(res), page };
+  if (res.error) throw res.error;
+  const companionIds = new Set(await guestIdsForFlag(propertyId, 'has_companions'));
+  type Details = { id_on_file: boolean | null; birthday: string | null; contact_number: string | null };
+  type RawRow = GuestRow & { guest_profile_details: Details | Details[] | null };
+  const rows: GuestRow[] = ((res.data ?? []) as RawRow[]).map((r) => {
+    const details = Array.isArray(r.guest_profile_details) ? r.guest_profile_details[0] : r.guest_profile_details;
+    const { guest_profile_details: _drop, ...rest } = r;
+    return { ...rest, id_on_file: details?.id_on_file ?? false, birthday: details?.birthday ?? null, has_companions: companionIds.has(r.id), has_contact_number: !!details?.contact_number };
+  });
+  return { rows, total: res.count ?? rows.length, page };
 }
 
 export async function fetchGuest(id: string) {
