@@ -1,9 +1,9 @@
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, CheckCircle2, HelpCircle } from 'lucide-react';
 import { useSession } from '@/auth/session';
-import { formatDate, formatDateTime, periodPreset, relativeDay, todayManila } from '@/lib/dates';
-import { formatPHP } from '@/lib/money';
+import { comparablePeriod, formatDate, formatDateTime, periodPreset, relativeDay, todayManila, type Period } from '@/lib/dates';
+import { decimalToNumber, formatPHP } from '@/lib/money';
 import { formatMetricValue } from '@/components/data/kpi-card';
 import { fetchMetrics } from '@/features/insights/api';
 import { PageHeader, Section } from '@/components/data/page-header';
@@ -54,10 +54,22 @@ const STRIP: Array<{ key: string; title: string; finance: boolean }> = [
   { key: 'cash_received', title: 'Cash received MTD', finance: true },
 ];
 
+// Same elapsed-length period, 1/2/3 months back, so "3-month average" compares
+// like against like (e.g. 1-15 Sep against 1-15 of each prior month) rather
+// than a partial month against three full ones.
+function trailingPeriods(cur: Period): Period[] {
+  const p1 = comparablePeriod(cur, 'month');
+  const p2 = comparablePeriod(p1, 'month');
+  const p3 = comparablePeriod(p2, 'month');
+  return [p1, p2, p3];
+}
+
 function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
   const s = useSession();
   const p = periodPreset('mtd');
   const q = useQuery({ queryKey: ['metrics', s.propertyId, p.start, p.endExclusive], queryFn: () => fetchMetrics(s.propertyId, p.start, p.endExclusive), staleTime: 300_000 });
+  const trailing = trailingPeriods(p);
+  const tqs = useQueries({ queries: trailing.map((tp) => ({ queryKey: ['metrics', s.propertyId, tp.start, tp.endExclusive], queryFn: () => fetchMetrics(s.propertyId, tp.start, tp.endExclusive), staleTime: 300_000 })) });
   const items = STRIP.filter((k) => financeVisible || !k.finance);
   return (
     <section aria-label="Key figures, month to date">
@@ -71,11 +83,21 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
         <div className="grid gap-2 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           {items.map((k) => {
             const m = q.data?.metrics[k.key];
+            const cur = m ? decimalToNumber(m.value) : NaN;
+            const trailingVals = tqs.map((tq) => decimalToNumber(tq.data?.metrics[k.key]?.value)).filter(Number.isFinite);
+            const avg = trailingVals.length > 0 ? trailingVals.reduce((a, v) => a + v, 0) / trailingVals.length : null;
+            const deltaPct = avg !== null && avg !== 0 && Number.isFinite(cur) ? ((cur - avg) / Math.abs(avg)) * 100 : null;
+            const dir = deltaPct === null ? null : deltaPct > 5 ? 'up' : deltaPct < -5 ? 'down' : 'flat';
             return (
               <div key={k.key} className="rounded-lg border bg-card px-3 py-2.5">
                 <p className="truncate text-xs text-muted-foreground">{k.title}</p>
                 <p className={`tabular text-lg font-semibold ${!m || m.value === null ? 'text-muted-foreground' : ''}`}>{m ? formatMetricValue(m) : q.isPending ? '…' : 'Not available'}</p>
                 {m && m.coverage !== 'complete' && <p className="text-[11px] text-muted-foreground capitalize">{m.coverage} coverage</p>}
+                {dir && (
+                  <p className={`text-[11px] ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '≈'} {Math.abs(deltaPct!).toFixed(0)}% vs 3-mo avg{dir === 'down' && deltaPct! < -20 ? ' - well below recent months' : dir === 'up' && deltaPct! > 20 ? ' - well above recent months' : ''}
+                  </p>
+                )}
               </div>
             );
           })}

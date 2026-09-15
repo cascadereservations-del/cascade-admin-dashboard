@@ -6,7 +6,7 @@ import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { addIsoDays, comparablePeriod, formatDate, nightsInPeriod, periodPreset, todayManila, type Period } from '@/lib/dates';
 import { fetchMonthlyTotals } from '@/features/finance/api';
-import { formatPHP } from '@/lib/money';
+import { decimalToNumber, formatPHP } from '@/lib/money';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { CardSkeleton, PartialBanner, QueryState } from '@/components/data/query-state';
 import { KpiCard, formatMetricValue } from '@/components/data/kpi-card';
@@ -45,11 +45,7 @@ const PRESETS: Array<[string, string]> = [['mtd', 'Month'], ['qtd', 'Quarter'], 
 const tooltipStyle = { borderRadius: 8, borderColor: 'var(--border)', background: 'var(--popover)', color: 'var(--popover-foreground)' };
 
 // A metric's `value` is `null` for "not available" (never 0 - see formatMetricValue).
-// `Number(null)` is 0, so a bare Number() here would silently turn "unknown" into
-// zero; guard explicitly and let callers fall back to a real NaN check.
-function numOrNaN(v: string | null | undefined): number {
-  return v === null || v === undefined ? NaN : Number(v);
-}
+const numOrNaN = decimalToNumber;
 function shiftMonthKey(month: string, delta: number): string {
   const [y, m] = month.split('-').map(Number);
   const total = y! * 12 + (m! - 1) + delta;
@@ -66,6 +62,24 @@ function pctDelta(cur: number, prior: number): number | null {
 }
 function fmtDeltaPct(v: number | null): string {
   return v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(0)}%`;
+}
+
+// Ordinary least squares over index 0..n-1, ignoring null/NaN points (a
+// reading-count anomaly shouldn't distort the fitted line). Returns null for
+// every point when fewer than 2 usable points exist.
+function linearTrend(ys: Array<number | null>): Array<number | null> {
+  const pts = ys.map((y, x) => ({ x, y })).filter((p): p is { x: number; y: number } => p.y !== null && Number.isFinite(p.y));
+  if (pts.length < 2) return ys.map(() => null);
+  const n = pts.length;
+  const sumX = pts.reduce((a, p) => a + p.x, 0);
+  const sumY = pts.reduce((a, p) => a + p.y, 0);
+  const sumXY = pts.reduce((a, p) => a + p.x * p.y, 0);
+  const sumXX = pts.reduce((a, p) => a + p.x * p.x, 0);
+  const denom = n * sumXX - sumX * sumX;
+  if (denom === 0) return ys.map(() => sumY / n);
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  return ys.map((_, x) => Math.round((intercept + slope * x) * 100) / 100);
 }
 
 function StatDelta({ label, value, deltaLabel, bad }: { label: string; value: string; deltaLabel: string; bad?: boolean }) {
@@ -406,33 +420,43 @@ function PerformanceTrend({ period, onDrill }: { period: Period; onDrill: (token
 }
 
 // Electricity and water from the meter photos the cleaners submit, summed per
-// month. A spike is a misread meter first and a leak second.
-function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles }) {
+// month. A spike is a misread meter first and a leak second. Both series are
+// bars (actual) with a fitted trend line (session 17b, per Lloyd) so a slow
+// creep reads clearly against month-to-month noise.
+function useUtilityMonths(period: Period, toggles: Toggles) {
   const s = useSession();
-  const nav = useNavigate();
   const from = period.start.slice(0, 7) + '-01';
-  const q = useQuery({ queryKey: ['utility-months', s.propertyId, from, period.endExclusive, toggles.allReadings], queryFn: () => fetchUtilityMonths(s.propertyId, from, period.endExclusive, toggles.allReadings ? () => true : isConsumptionReading), staleTime: 300_000 });
-  const data = (q.data ?? []).map((m) => ({ ...m, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), kwh: Math.round(m.kwh), m3: Math.round(m.m3 * 10) / 10 }));
+  return useQuery({ queryKey: ['utility-months', s.propertyId, from, period.endExclusive, toggles.allReadings], queryFn: () => fetchUtilityMonths(s.propertyId, from, period.endExclusive, toggles.allReadings ? () => true : isConsumptionReading), staleTime: 300_000 });
+}
+function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles }) {
+  const nav = useNavigate();
+  const q = useUtilityMonths(period, toggles);
+  const rows = (q.data ?? []).map((m) => ({ ...m, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), kwh: Math.round(m.kwh), m3: Math.round(m.m3 * 10) / 10 }));
+  const kwhTrend = linearTrend(rows.map((r) => r.kwh));
+  const m3Trend = linearTrend(rows.map((r) => r.m3));
+  const data = rows.map((r, i) => ({ ...r, kwhTrend: kwhTrend[i], m3Trend: m3Trend[i] }));
   const excluded = data.reduce((a, m) => a + m.excluded, 0);
+  const click = (e: unknown) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); };
   return (
     <Section title="Utilities" aside={<Link to="/operations" className="text-xs text-primary hover:underline">Open the cleaning log</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No meter readings in this period.</p>
       ) : (
         <div className="rounded-lg border bg-card p-3">
-          <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month from the cleaning log. {toggles.allReadings ? 'Every reading is summed, including first entries, negative re-entries and flagged rows.' : `First readings, negative re-entries and flagged rows are left out${excluded ? ` (${excluded} in this period)` : ''}.`} Click a month to open its cleanings.</p>
+          <p className="mb-2 text-xs text-muted-foreground">Electricity (kWh) and water (m³) consumed per month, bars against a fitted trend line. {toggles.allReadings ? 'Every reading is summed, including first entries, negative re-entries and flagged rows.' : `First readings, negative re-entries and flagged rows are left out${excluded ? ` (${excluded} in this period)` : ''}.`} Click a month to open its cleanings.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <p className="mb-1 text-xs font-medium text-muted-foreground">Electricity (kWh)</p>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); }} style={{ cursor: 'pointer' }}>
+                  <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click} style={{ cursor: 'pointer' }}>
                     <CartesianGrid vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
                     <YAxis tickLine={false} axisLine={false} fontSize={11} width={40} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => `${v} kWh`} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [`${v} kWh`, name]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
                     <Bar dataKey="kwh" name="Electricity (kWh)" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
+                    <Line type="linear" dataKey="kwhTrend" name="Trend" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="none" />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -440,12 +464,89 @@ function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles 
               <p className="mb-1 text-xs font-medium text-muted-foreground">Water (m³)</p>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); }} style={{ cursor: 'pointer' }}>
+                  <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={click} style={{ cursor: 'pointer' }}>
                     <CartesianGrid vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
                     <YAxis tickLine={false} axisLine={false} fontSize={11} width={36} />
-                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => `${v} m³`} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
-                    <Line type="monotone" dataKey="m3" name="Water (m³)" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [`${v} m³`, name]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { readings?: number; excluded?: number } | undefined; return `${l} · ${p?.readings ?? 0} readings, ${p?.excluded ?? 0} left out`; }} />
+                    <Bar dataKey="m3" name="Water (m³)" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+                    <Line type="linear" dataKey="m3Trend" name="Trend" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="none" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// Consumption per occupied night (session 17b, per Lloyd): normalizes
+// electricity/water by how many nights the unit was actually sold that
+// month, so a rise in usage from more guests reads differently from a rise
+// per guest (the second is the one worth investigating - a leak or waste,
+// not just a busier month).
+function ConsumptionEfficiency({ period, toggles }: { period: Period; toggles: Toggles }) {
+  const s = useSession();
+  const uq = useUtilityMonths(period, toggles);
+  const months = monthsIn(period);
+  const qs = useQueries({ queries: months.map((m) => ({ queryKey: ['metrics', s.propertyId, m.start, m.endExclusive], queryFn: () => fetchMetrics(s.propertyId, m.start, m.endExclusive), staleTime: 300_000 })) });
+  const byMonth = new Map((uq.data ?? []).map((u) => [u.month, u]));
+  const today = todayManila();
+  const data = months.map((m, i) => {
+    const u = byMonth.get(m.month);
+    const nights = numOrNaN(qs[i]?.data?.metrics.sold_nights?.value) || 0;
+    return { label: m.label, nights, complete: m.endExclusive <= today, kwhPerNight: u && nights > 0 ? Math.round((u.kwh / nights) * 10) / 10 : null, m3PerNight: u && nights > 0 ? Math.round((u.m3 / nights) * 100) / 100 : null };
+  });
+  const pending = uq.isPending || qs.some((q) => q.isPending);
+  const withData = data.filter((d) => d.kwhPerNight !== null);
+  // Compare the last COMPLETE month's rate against the average of the rest,
+  // never the in-progress month: a partial month divides a real baseline load
+  // (fridge, pool pump) by only a few nights so far and reads as a false spike
+  // even with nothing wrong. Also skip a single busy/slow month comparing
+  // against itself.
+  const completeWithData = withData.filter((d) => d.complete);
+  const last = completeWithData.at(-1);
+  const priorAvg = completeWithData.length > 1 ? completeWithData.slice(0, -1).reduce((a, d) => a + (d.kwhPerNight ?? 0), 0) / (completeWithData.length - 1) : null;
+  const flag = last && priorAvg && priorAvg > 0 ? ((last.kwhPerNight! - priorAvg) / priorAvg) * 100 : null;
+  return (
+    <Section title="Consumption per occupied night">
+      {pending ? <CardSkeleton /> : withData.length < 2 ? (
+        <p className="text-sm text-muted-foreground">Not enough months with both meter readings and sold nights yet.</p>
+      ) : (
+        <div className="rounded-lg border bg-card p-3">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Electricity and water divided by that month's sold nights - a rate, not a total, so it separates "more guests" from "each guest using more."
+            {flag !== null && Math.abs(flag) >= 15 && (
+              <span className={flag > 0 ? ' text-destructive' : ''}> {last!.label} ran {Math.abs(flag).toFixed(0)}% {flag > 0 ? 'more' : 'less'} electricity per occupied night than the months before it{flag > 0 ? ' - worth checking for a leak, AC left running, or a higher-occupancy stay (more people in the same unit also raises this rate)' : ''}.</span>
+            )}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">kWh per occupied night</p>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis tickLine={false} axisLine={false} fontSize={11} width={32} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [v === null ? 'no data' : `${v} kWh/night`, name]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { nights?: number } | undefined; return `${l} · ${p?.nights ?? 0} sold nights`; }} />
+                    <Line type="monotone" dataKey="kwhPerNight" name="kWh/night" stroke="var(--chart-5)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Water per occupied night</p>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis tickLine={false} axisLine={false} fontSize={11} width={32} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [v === null ? 'no data' : `${v} m³/night`, name]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { nights?: number } | undefined; return `${l} · ${p?.nights ?? 0} sold nights`; }} />
+                    <Line type="monotone" dataKey="m3PerNight" name="m³/night" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -514,6 +615,7 @@ export default function InsightsPage() {
             <DrawingsTrend period={chartPeriod} />
             <ForwardProjection fallbackAdr={numOrNaN(now.data?.metrics.adr?.value)} />
             <UtilitiesChart period={chartPeriod} toggles={toggles} />
+            <ConsumptionEfficiency period={chartPeriod} toggles={toggles} />
             <Section title="Definitions">
               <p className="text-sm text-muted-foreground">Definitions version {Object.values(d.metrics)[0]?.definitionVersion}. Nights use [check-in, checkout). Calendar blocks are never sold nights. Forecasts are not mixed into actuals. Full formulas are in docs/METRICS.md.</p>
             </Section>

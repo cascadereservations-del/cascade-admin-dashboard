@@ -59,6 +59,14 @@ export function formatPercent(value: Decimal | number | null | undefined, digits
   return `${n.toFixed(digits)}%`;
 }
 
+/** `Number(null)` is 0, which silently turns "not available" into a real
+ * zero for any caller doing arithmetic (deltas, averages) on a MetricResult's
+ * `value`. Use this wherever such a value needs to be a number: it returns a
+ * real NaN for null/undefined so `Number.isFinite` can tell "unknown" from 0. */
+export function decimalToNumber(value: Decimal | null | undefined): number {
+  return value === null || value === undefined ? NaN : Number(value);
+}
+
 export function formatNumber(value: Decimal | number | null | undefined, digits = 0): string {
   if (value === null || value === undefined || value === '') return '—';
   const n = typeof value === 'number' ? value : Number(value);
