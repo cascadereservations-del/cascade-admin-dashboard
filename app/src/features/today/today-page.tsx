@@ -3,8 +3,9 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, CheckCircle2, HelpCircle } from 'lucide-react';
 import { useSession } from '@/auth/session';
 import { comparablePeriod, formatDate, formatDateTime, periodPreset, relativeDay, todayManila, type Period } from '@/lib/dates';
-import { decimalToNumber, formatPHP } from '@/lib/money';
+import { decimalToNumber, formatNumber, formatPHP, formatPercent } from '@/lib/money';
 import { formatMetricValue } from '@/components/data/kpi-card';
+import type { MetricUnit } from '@/types/contracts';
 import { fetchMetrics } from '@/features/insights/api';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { CardSkeleton, EmptyState, QueryState } from '@/components/data/query-state';
@@ -16,6 +17,12 @@ import { fetchOverview, type Overview, type OverviewStay } from './api';
 
 // Today (P10). Every card links to the matching records; a failed or
 // unavailable section stays visible as such and never reads "all clear".
+
+function formatByUnit(v: number, unit: MetricUnit): string {
+  if (unit === 'PHP') return formatPHP(v);
+  if (unit === 'percent') return formatPercent(v);
+  return formatNumber(v, unit === 'day' ? 1 : 0);
+}
 
 function StayLink({ st }: { st: OverviewStay }) {
   return <Link to={`/bookings/${st.kind}/${st.id}`} className="font-medium hover:underline">{st.guest}</Link>;
@@ -84,8 +91,9 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
           {items.map((k) => {
             const m = q.data?.metrics[k.key];
             const cur = m ? decimalToNumber(m.value) : NaN;
-            const trailingVals = tqs.map((tq) => decimalToNumber(tq.data?.metrics[k.key]?.value)).filter(Number.isFinite);
-            const avg = trailingVals.length > 0 ? trailingVals.reduce((a, v) => a + v, 0) / trailingVals.length : null;
+            const trailingVals = tqs.map((tq) => decimalToNumber(tq.data?.metrics[k.key]?.value)); // aligned 1:1 with `trailing`, NaN kept in place
+            const finiteVals = trailingVals.filter(Number.isFinite);
+            const avg = finiteVals.length > 0 ? finiteVals.reduce((a, v) => a + v, 0) / finiteVals.length : null;
             const deltaPct = avg !== null && avg !== 0 && Number.isFinite(cur) ? ((cur - avg) / Math.abs(avg)) * 100 : null;
             const dir = deltaPct === null ? null : deltaPct > 5 ? 'up' : deltaPct < -5 ? 'down' : 'flat';
             return (
@@ -94,8 +102,11 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
                 <p className={`tabular text-lg font-semibold ${!m || m.value === null ? 'text-muted-foreground' : ''}`}>{m ? formatMetricValue(m) : q.isPending ? '…' : 'Not available'}</p>
                 {m && m.coverage !== 'complete' && <p className="text-[11px] text-muted-foreground capitalize">{m.coverage} coverage</p>}
                 {dir && (
-                  <p className={`text-[11px] ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '≈'} {Math.abs(deltaPct!).toFixed(0)}% vs 3-mo avg{dir === 'down' && deltaPct! < -20 ? ' - well below recent months' : dir === 'up' && deltaPct! > 20 ? ' - well above recent months' : ''}
+                  <p
+                    className={`text-[11px] ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}
+                    title={`3-month average (same elapsed days each month): ${trailing.map((tp, i) => `${formatDate(tp.start, 'short')}-${formatDate(tp.endExclusive, 'short')} ${Number.isFinite(trailingVals[i]) ? formatByUnit(trailingVals[i]!, m!.unit) : 'no data'}`).join(', ')}`}
+                  >
+                    {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '≈'} {Math.abs(deltaPct!).toFixed(0)}% vs 3-mo avg ({formatByUnit(avg!, m!.unit)}){dir === 'down' && deltaPct! < -20 ? ' - well below recent months' : dir === 'up' && deltaPct! > 20 ? ' - well above recent months' : ''}
                   </p>
                 )}
               </div>

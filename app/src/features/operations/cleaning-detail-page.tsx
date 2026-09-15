@@ -121,7 +121,11 @@ export default function CleaningDetailPage() {
                   </div>
                 </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-3">
+              {/* @5xl/main measures the actual content width left after the sidebar,
+                  not the raw viewport - lg: alone went 3-up while there was still too
+                  little room for this card's own label+value grid, forcing every word
+                  in Notes onto its own line (reproduced live at 1040px viewport). */}
+              <div className="grid gap-4 @5xl/main:grid-cols-3">
                 <Card className="py-4 gap-3">
                   <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="size-4 text-muted-foreground" aria-hidden /> States</CardTitle></CardHeader>
                   <CardContent className="space-y-2">

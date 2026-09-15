@@ -89,7 +89,10 @@ export default function BookingDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-3">
+              {/* Same fix as cleaning-detail-page: @5xl/main measures actual content
+                  width after the sidebar, so the Field label+value grid below never
+                  gets squeezed narrow enough to break every word onto its own line. */}
+              <div className="grid gap-4 @5xl/main:grid-cols-3">
                 <Card className="py-4 gap-3">
                   <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="size-4 text-muted-foreground" aria-hidden /> States</CardTitle></CardHeader>
                   <CardContent className="space-y-2">

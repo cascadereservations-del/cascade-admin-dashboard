@@ -170,7 +170,7 @@ export function AppShell() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="flex-1 px-3 py-4 sm:px-6" id="main">
+        <main className="@container/main flex-1 px-3 py-4 sm:px-6" id="main">
           <Outlet />
         </main>
       </SidebarInset>
