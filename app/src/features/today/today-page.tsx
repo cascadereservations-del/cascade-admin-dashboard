@@ -29,14 +29,15 @@ function StayLink({ st }: { st: OverviewStay }) {
 }
 
 function ReadinessCard({ r }: { r: Overview['readiness'] }) {
-  const tone = r.state === 'ready' ? 'good' : r.state === 'not_ready' ? 'bad' : 'warn';
-  const Icon = r.state === 'ready' ? CheckCircle2 : r.state === 'not_ready' ? AlertTriangle : HelpCircle;
+  const tone = r.state === 'ready' ? 'good' : r.state === 'not_ready' || r.state === 'overdue' ? 'bad' : 'warn';
+  const Icon = r.state === 'ready' ? CheckCircle2 : r.state === 'not_ready' || r.state === 'overdue' ? AlertTriangle : HelpCircle;
   const lc = r.lastCleaning;
+  const stateLabel = r.state === 'overdue' && r.daysOverdue != null ? `no report, ${r.daysOverdue} day${r.daysOverdue === 1 ? '' : 's'} overdue` : r.state.replace('_', ' ');
   return (
     <Card className="py-4 gap-3">
       <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-4" aria-hidden /> Property readiness</CardTitle></CardHeader>
       <CardContent className="space-y-2 text-sm">
-        <StatusBadge tone={tone}>{r.state.replace('_', ' ')}</StatusBadge>
+        <StatusBadge tone={tone}>{stateLabel}</StatusBadge>
         <p className="text-muted-foreground">
           {lc ? `Last cleaning ${formatDateTime(lc.cleanedAt)} by ${lc.cleaner} (${lc.complete ? 'complete' : 'incomplete'}${lc.issues ? `, ${lc.issues} issues` : ''}).` : 'No cleaning report since the last checkout.'}
         </p>
@@ -136,7 +137,7 @@ export default function TodayPage() {
                     <p className="text-muted-foreground">Nobody in house by dates.</p>
                   ) : (
                     o.currentStays.map((st) => (
-                      <p key={st.id}><StayLink st={st} /> · until {formatDate(st.checkout, 'weekday')} · arrival state <em>unknown</em> (date-only)</p>
+                      <p key={st.id}><StayLink st={st} /> · until {formatDate(st.checkout, 'weekday')} · Checked in</p>
                     ))
                   )}
                 </CardContent>

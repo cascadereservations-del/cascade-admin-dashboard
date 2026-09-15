@@ -11,12 +11,13 @@ export type Overview = {
   departures: OverviewStay[];
   nextArrival: OverviewStay | null;
   readiness: {
-    state: 'ready' | 'not_ready' | 'unknown' | 'awaiting_review';
+    state: 'ready' | 'not_ready' | 'unknown' | 'overdue' | 'awaiting_review';
     lastCleaning: { id: string; cleanedAt: string; cleaner: string; complete: boolean | null; completionPct: string | null; issues: number | null } | null;
     review: { id: string; outcome: string; reason: string | null; reviewedAt: string } | null;
     blockingWorkOrders: number;
     lastCheckout: string | null;
     nextCheckin: string | null;
+    daysOverdue: number | null;
   };
   blockingWorkOrders: Array<{ id: string; title: string; priority: string; status: string; dueAt: string | null }>;
   lowStock: Array<{ id: string; name: string; qty: string; unit: string; reorderBelow: string; out: boolean }>;
