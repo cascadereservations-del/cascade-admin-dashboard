@@ -46,3 +46,14 @@ export type Drilldown ={ key: string; periodStart: string; periodEndExclusive: s
 export function fetchDrilldown(propertyId: string, token: string) {
   return rpc<Drilldown>('get_report_drilldown_v1', { p_property_id: propertyId, p_token: token });
 }
+
+// Confirmed calendar nights overlapping [from, toExclusive) - for the forward
+// projection. NOT the same as get_hospitality_metrics_v1's future_booked_nights,
+// which is a global "from today onward" count independent of the period passed
+// in (verified live: it returns the same number for both a current and a past
+// comparison period), so it cannot be called per-month to bucket a trend.
+export type FutureStay = { checkin_date: string; checkout_date: string };
+export async function fetchFutureStays(propertyId: string, from: string, toExclusive: string): Promise<FutureStay[]> {
+  const res = unwrapList<FutureStay>(await supabase.from('calendar_events').select('checkin_date, checkout_date').eq('property_id', propertyId).eq('status', 'confirmed').lt('checkin_date', toExclusive).gt('checkout_date', from).range(0, 999));
+  return res.rows;
+}

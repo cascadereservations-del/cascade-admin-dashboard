@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
-import { addIsoDays, comparablePeriod, formatDate, periodPreset, type Period } from '@/lib/dates';
+import { addIsoDays, comparablePeriod, formatDate, nightsInPeriod, periodPreset, todayManila, type Period } from '@/lib/dates';
 import { fetchMonthlyTotals } from '@/features/finance/api';
 import { formatPHP } from '@/lib/money';
 import { PageHeader, Section } from '@/components/data/page-header';
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import type { MetricResult } from '@/types/contracts';
-import { fetchDrilldown, fetchMetrics, fetchUtilityMonths, isConsumptionReading } from './api';
+import { fetchDrilldown, fetchFutureStays, fetchMetrics, fetchUtilityMonths, isConsumptionReading } from './api';
 
 // INS01/INS03/INS05: server-calculated hospitality metrics with an
 // equivalent-elapsed comparison period and deterministic plain-language
@@ -43,6 +43,95 @@ const DEFS: Record<string, [string, string]> = {
 const ORDER = ['occupancy', 'adr', 'revpar', 'accommodation_revenue', 'cash_received', 'expected_payout', 'sold_nights', 'future_booked_nights', 'average_length_of_stay', 'returning_guest_rate', 'cancellation_rate', 'booking_lead_time'];
 const PRESETS: Array<[string, string]> = [['mtd', 'Month'], ['qtd', 'Quarter'], ['ytd', 'Year'], ['prev-month', 'Prev month'], ['prev-quarter', 'Prev quarter'], ['prev-year', 'Prev year'], ['last30', 'Last 30'], ['last90', 'Last 90'], ['custom', 'Custom']];
 const tooltipStyle = { borderRadius: 8, borderColor: 'var(--border)', background: 'var(--popover)', color: 'var(--popover-foreground)' };
+
+// A metric's `value` is `null` for "not available" (never 0 - see formatMetricValue).
+// `Number(null)` is 0, so a bare Number() here would silently turn "unknown" into
+// zero; guard explicitly and let callers fall back to a real NaN check.
+function numOrNaN(v: string | null | undefined): number {
+  return v === null || v === undefined ? NaN : Number(v);
+}
+function shiftMonthKey(month: string, delta: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const total = y! * 12 + (m! - 1) + delta;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+function monthBounds(month: string): { start: string; endExclusive: string } {
+  return { start: `${month}-01`, endExclusive: `${shiftMonthKey(month, 1)}-01` };
+}
+function monthLabel(month: string): string {
+  return formatDate(`${month}-01`, 'long').replace(/^\d+ /, '');
+}
+function pctDelta(cur: number, prior: number): number | null {
+  return Number.isFinite(cur) && Number.isFinite(prior) && prior !== 0 ? ((cur - prior) / Math.abs(prior)) * 100 : null;
+}
+function fmtDeltaPct(v: number | null): string {
+  return v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(0)}%`;
+}
+
+function StatDelta({ label, value, deltaLabel, bad }: { label: string; value: string; deltaLabel: string; bad?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="tabular text-xl font-semibold">{value}</p>
+      <p className={`text-xs ${bad ? 'text-destructive' : 'text-muted-foreground'}`}>{deltaLabel}</p>
+    </div>
+  );
+}
+
+// Fixed operator check, independent of the period slicer above: this real
+// calendar month against the same month last year, plus a short plain-language
+// "what changed" list. The trend charts below stay slicer-driven; this answers
+// "are we up or down year over year" regardless of what the slicer is set to.
+function MonthSnapshot() {
+  const s = useSession();
+  const thisMonth = todayManila().slice(0, 7);
+  const lastMonth = shiftMonthKey(thisMonth, -1);
+  const lastYear = shiftMonthKey(thisMonth, -12);
+  const tb = monthBounds(thisMonth);
+  const yb = monthBounds(lastYear);
+  const totalsQ = useQuery({ queryKey: ['month-snapshot-totals', s.propertyId, lastYear], queryFn: () => fetchMonthlyTotals(s.propertyId, yb.start, tb.endExclusive), staleTime: 300_000 });
+  const [curM, yearM] = useQueries({ queries: [
+    { queryKey: ['metrics', s.propertyId, tb.start, tb.endExclusive], queryFn: () => fetchMetrics(s.propertyId, tb.start, tb.endExclusive), staleTime: 300_000 },
+    { queryKey: ['metrics', s.propertyId, yb.start, yb.endExclusive], queryFn: () => fetchMetrics(s.propertyId, yb.start, yb.endExclusive), staleTime: 300_000 },
+  ] });
+  if (totalsQ.isPending || curM?.isPending || yearM?.isPending) return <CardSkeleton />;
+  if (totalsQ.isError) return null; // a nicety on top of the slicer-driven charts; don't block the page on it
+
+  const byMonth = new Map((totalsQ.data ?? []).map((m) => [m.month, m]));
+  const curIncome = (byMonth.get(thisMonth)?.incomeCents ?? 0) / 100;
+  const priorIncome = (byMonth.get(lastMonth)?.incomeCents ?? 0) / 100;
+  const yearIncome = (byMonth.get(lastYear)?.incomeCents ?? 0) / 100;
+  const hasYearData = byMonth.has(lastYear);
+  const occCur = numOrNaN(curM?.data?.metrics.occupancy?.value);
+  const occYear = numOrNaN(yearM?.data?.metrics.occupancy?.value);
+  const adrCur = numOrNaN(curM?.data?.metrics.adr?.value);
+  const adrYear = numOrNaN(yearM?.data?.metrics.adr?.value);
+  const incYoY = hasYearData ? pctDelta(curIncome, yearIncome) : null;
+  const occYoY = Number.isFinite(occCur) && Number.isFinite(occYear) ? occCur - occYear : null;
+  const adrYoY = Number.isFinite(adrCur) && Number.isFinite(adrYear) ? pctDelta(adrCur, adrYear) : null;
+
+  const changes: string[] = [];
+  const incMoM = pctDelta(curIncome, priorIncome);
+  if (incMoM !== null) changes.push(`Income ${fmtDeltaPct(incMoM)} vs ${monthLabel(lastMonth)} (${formatPHP(priorIncome)} → ${formatPHP(curIncome)}).`);
+  if (incYoY !== null) changes.push(`Income ${fmtDeltaPct(incYoY)} vs ${monthLabel(lastYear)}.`);
+  if (occYoY !== null) changes.push(`Occupancy ${occYoY >= 0 ? '+' : ''}${occYoY.toFixed(0)} pts vs last year (${occYear.toFixed(0)}% → ${occCur.toFixed(0)}%).`);
+  if (adrYoY !== null) changes.push(`ADR ${fmtDeltaPct(adrYoY)} vs last year.`);
+
+  return (
+    <Section title={`${monthLabel(thisMonth)} vs ${monthLabel(lastYear)}`}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatDelta label="Income" value={formatPHP(curIncome)} deltaLabel={incYoY !== null ? `${fmtDeltaPct(incYoY)} vs last year` : 'no data last year'} bad={incYoY !== null && incYoY < 0} />
+        <StatDelta label="Occupancy" value={Number.isFinite(occCur) ? `${occCur.toFixed(0)}%` : 'Not available'} deltaLabel={occYoY !== null ? `${occYoY >= 0 ? '+' : ''}${occYoY.toFixed(0)} pts vs last year` : 'no data last year'} bad={occYoY !== null && occYoY < 0} />
+        <StatDelta label="ADR" value={Number.isFinite(adrCur) ? formatPHP(adrCur) : 'Not available'} deltaLabel={adrYoY !== null ? `${fmtDeltaPct(adrYoY)} vs last year` : 'no data last year'} bad={adrYoY !== null && adrYoY < 0} />
+      </div>
+      {changes.length > 0 && (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+          {changes.slice(0, 4).map((c) => <li key={c}>{c}</li>)}
+        </ul>
+      )}
+    </Section>
+  );
+}
 
 // Plain HTML legend for a pair/trio of single-axis charts sharing one card
 // (Recharts' <Legend> only composes inside a single chart's own tree).
@@ -96,36 +185,48 @@ function nextMonthStart(month: string): string {
 
 type Toggles = { pending: boolean; allReadings: boolean };
 
-// Financial analytics (D-095): confirmed money in, out and drawn per month.
-function FinancialAnalytics({ period, toggles }: { period: Period; toggles: Toggles }) {
+// Money (D-095, redesigned session 17 per D-120's "wall of bars" critique):
+// income vs expenses as the primary comparison, net as a line on the SAME
+// axis (all three are PHP, so this is not the dual-axis mistake), drawings
+// split into their own small chart below (D-yet, see 04-HANDOFF) so an owner
+// transfer never reads as a cost sitting next to real operating expenses.
+function useMonthlyTotals(period: Period) {
   const s = useSession();
+  return useQuery({ queryKey: ['monthly-totals', s.propertyId, period.start, period.endExclusive], queryFn: () => fetchMonthlyTotals(s.propertyId, period.start.slice(0, 7) + '-01', period.endExclusive), staleTime: 300_000 });
+}
+function monthlyRows(q: ReturnType<typeof useMonthlyTotals>) {
+  return (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: (m.expenseCents - m.unaccountedCents) / 100, drawing: m.drawingCents / 100, unaccounted: m.unaccountedCents / 100, net: (m.incomeCents - m.expenseCents - m.drawingCents) / 100, count: m.count }));
+}
+
+function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
   const nav = useNavigate();
-  const q = useQuery({ queryKey: ['monthly-totals', s.propertyId, period.start, period.endExclusive], queryFn: () => fetchMonthlyTotals(s.propertyId, period.start.slice(0, 7) + '-01', period.endExclusive), staleTime: 300_000 });
-  const data = (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: (m.expenseCents - m.unaccountedCents) / 100, drawing: m.drawingCents / 100, unaccounted: m.unaccountedCents / 100, net: (m.incomeCents - m.expenseCents - m.drawingCents) / 100, count: m.count }));
-  // Stat cards stay ledger-accurate (unaccounted added back); only the bars below exclude it.
+  const q = useMonthlyTotals(period);
+  const data = monthlyRows(q);
+  // Stat cards stay ledger-accurate (unaccounted added back); only the bars exclude it.
   const totals = data.reduce((a, m) => ({ income: a.income + m.income, expense: a.expense + m.expense + m.unaccounted, drawing: a.drawing + m.drawing }), { income: 0, expense: 0, drawing: 0 });
   const totalUnaccounted = data.reduce((a, m) => a + m.unaccounted, 0);
+  const position = totals.income - totals.expense - totals.drawing;
   const openMonth = (month: string) => nav(`/finance/book?from=${month}-01&to=${nextMonthStart(month)}${toggles.pending ? '&pending=1' : ''}`);
   return (
-    <Section title="Financial analytics" aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
+    <Section title="Income vs expenses" aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No confirmed transactions in this period.</p>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div className="rounded-lg border bg-card p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Income, expenses and drawings by month, confirmed rows (cash basis). Click a month to open its records.{totalUnaccounted > 0 ? ` One-time catch-up entries (${formatPHP(totalUnaccounted)} total) are excluded from the bars so they don't flatten real monthly activity; they're still counted in Expenses and Position at right.` : ''}</p>
+            <p className="mb-2 text-xs text-muted-foreground">Income and expenses side by side each month, net position as the line. Confirmed rows, cash basis. Click a month to open its records.{totalUnaccounted > 0 ? ` One-time catch-up entries (${formatPHP(totalUnaccounted)} total) are excluded from the bars so they don't flatten real monthly activity; they're still counted in Expenses and Position at right.` : ''}</p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) openMonth(p.month); }} style={{ cursor: 'pointer' }}>
+                <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) openMonth(p.month); }} style={{ cursor: 'pointer' }}>
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
                   <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [formatPHP(Number(v)), String(name)]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { count?: number; net?: number; unaccounted?: number } | undefined; return `${l} · ${p?.count ?? 0} rows · net ${formatPHP(p?.net ?? 0)}${p?.unaccounted ? ` (excl. ${formatPHP(p.unaccounted)} catch-up)` : ''}`; }} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v, name) => [formatPHP(Number(v)), String(name)]} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { count?: number; net?: number; unaccounted?: number } | undefined; return `${l} · ${p?.count ?? 0} rows${p?.unaccounted ? ` (excl. ${formatPHP(p.unaccounted)} catch-up)` : ''}`; }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="income" name="Income" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="Expenses" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="drawing" name="Drawings" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Line type="monotone" dataKey="net" name="Net" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -133,13 +234,87 @@ function FinancialAnalytics({ period, toggles }: { period: Period; toggles: Togg
             <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Income</p><p className="tabular text-xl font-semibold">{formatPHP(totals.income)}</p></div>
             <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Expenses</p><p className="tabular text-xl font-semibold">{formatPHP(totals.expense)}</p></div>
             <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Drawings</p><p className="tabular text-xl font-semibold">{formatPHP(totals.drawing)}</p></div>
-            <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Position (income − expenses − drawings)</p><p className={`tabular text-xl font-semibold ${totals.income - totals.expense - totals.drawing < 0 ? 'text-destructive' : ''}`}>{formatPHP(totals.income - totals.expense - totals.drawing)}</p></div>
+            <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Position (income − expenses − drawings)</p><p className={`tabular text-xl font-semibold ${position < 0 ? 'text-destructive' : ''}`}>{formatPHP(position)}</p></div>
             <div className="overflow-x-auto rounded-lg border bg-card">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-muted-foreground"><th className="px-3 py-1.5">Month</th><th className="px-3 py-1.5 text-right">Net</th></tr></thead>
                 <tbody>{data.slice(-6).reverse().map((m) => <tr key={m.month} className="cursor-pointer border-t hover:bg-muted/40" onClick={() => openMonth(m.month)}><td className="px-3 py-1.5">{m.label}</td><td className={`tabular px-3 py-1.5 text-right ${m.net < 0 ? 'text-destructive' : ''}`}>{formatPHP(m.net)}</td></tr>)}</tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// Drawings, deliberately on their own axis and scale so an owner's personal
+// draw never gets read as an operating cost sitting next to real expenses.
+function DrawingsTrend({ period }: { period: Period }) {
+  const q = useMonthlyTotals(period);
+  const data = monthlyRows(q);
+  const total = data.reduce((a, m) => a + m.drawing, 0);
+  if (q.isPending || q.isError || total === 0) return null;
+  return (
+    <Section title="Owner drawings">
+      <div className="rounded-lg border bg-card p-3">
+        <p className="mb-2 text-xs text-muted-foreground">Money drawn out by the owner each month, kept off the income/expenses chart so it never reads as a business cost.</p>
+        <div className="h-32">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+              <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} />
+              <Bar dataKey="drawing" name="Drawings" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// Forward projection (session 17): confirmed nights already on the calendar
+// for the next 3 months, priced at the current period's ADR (falling back to
+// the standard nightly rate from app_settings, 01-FACTS, when no ADR is
+// computable yet). Explicitly labeled as a projection, never mixed into the
+// actuals charts above - dashed/translucent styling marks it as not-yet-real.
+function ForwardProjection({ fallbackAdr }: { fallbackAdr: number }) {
+  const s = useSession();
+  const thisMonth = todayManila().slice(0, 7);
+  const months = [1, 2, 3].map((n) => {
+    const month = shiftMonthKey(thisMonth, n);
+    const b = monthBounds(month);
+    return { month, ...b, label: monthLabel(month) };
+  });
+  const windowStart = monthBounds(shiftMonthKey(thisMonth, 1)).start;
+  const windowEnd = monthBounds(shiftMonthKey(thisMonth, 3)).endExclusive;
+  const q = useQuery({ queryKey: ['future-stays', s.propertyId, windowStart, windowEnd], queryFn: () => fetchFutureStays(s.propertyId, windowStart, windowEnd), staleTime: 300_000 });
+  const adr = Number.isFinite(fallbackAdr) && fallbackAdr > 0 ? fallbackAdr : 1780;
+  const data = months.map((m) => {
+    const nights = (q.data ?? []).reduce((a, r) => a + nightsInPeriod(r.checkin_date, r.checkout_date, m.start, m.endExclusive), 0);
+    return { label: m.label, nights, projected: Math.round(nights * adr) };
+  });
+  const totalNights = data.reduce((a, d) => a + d.nights, 0);
+  const pending = q.isPending;
+  return (
+    <Section title="Forward projection">
+      {pending ? <CardSkeleton /> : totalNights === 0 ? (
+        <p className="text-sm text-muted-foreground">No confirmed bookings on the calendar past this month yet.</p>
+      ) : (
+        <div className="rounded-lg border bg-card p-3">
+          <p className="mb-2 text-xs text-muted-foreground">Projection, not a forecast: confirmed nights already on the calendar for the next 3 months, at {formatPHP(adr, { whole: true })}/night ({Number.isFinite(fallbackAdr) && fallbackAdr > 0 ? "this period's ADR" : 'the standard rate — no ADR computed yet'}). New bookings and cancellations will move these bars.</p>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v: number) => formatPHP(v, { whole: true }).replace('PHP', '₱')} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--muted)' }} formatter={(v) => formatPHP(Number(v))} labelFormatter={(l, payload) => { const p = payload?.[0]?.payload as { nights?: number } | undefined; return `${l} · ${p?.nights ?? 0} nights booked so far`; }} />
+                <Bar dataKey="projected" name="Projected revenue" fill="var(--chart-1)" fillOpacity={0.35} stroke="var(--chart-1)" strokeDasharray="4 3" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
@@ -333,8 +508,11 @@ export default function InsightsPage() {
                 );
               })}
             </div>
+            <MonthSnapshot />
             <PerformanceTrend period={chartPeriod} onDrill={setToken} />
-            <FinancialAnalytics period={chartPeriod} toggles={toggles} />
+            <MoneyTrend period={chartPeriod} toggles={toggles} />
+            <DrawingsTrend period={chartPeriod} />
+            <ForwardProjection fallbackAdr={numOrNaN(now.data?.metrics.adr?.value)} />
             <UtilitiesChart period={chartPeriod} toggles={toggles} />
             <Section title="Definitions">
               <p className="text-sm text-muted-foreground">Definitions version {Object.values(d.metrics)[0]?.definitionVersion}. Nights use [check-in, checkout). Calendar blocks are never sold nights. Forecasts are not mixed into actuals. Full formulas are in docs/METRICS.md.</p>
