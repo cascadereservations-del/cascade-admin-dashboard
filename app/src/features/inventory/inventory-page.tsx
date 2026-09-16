@@ -113,7 +113,7 @@ export default function InventoryPage() {
   const consumableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [
     nameCol, qtyCol,
     { id: 'reorder', header: 'Reorder below', accessorFn: (r) => r.reorderBelow ?? '', cell: ({ row }) => <span className="tabular">{row.original.reorderBelow ?? '—'}</span> },
-    { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? '', cell: ({ row }) => (row.original.coverageDays ? <span className="tabular">{formatNumber(row.original.coverageDays, 0)} days</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>) },
+    { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? r.estCoverageDays ?? '', cell: ({ row }) => (row.original.coverageDays ? <span className="tabular">{formatNumber(row.original.coverageDays, 0)} days</span> : row.original.estCoverageDays ? <span className="tabular text-muted-foreground">~{formatNumber(row.original.estCoverageDays, 0)} days (estimated)</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>) },
     controlCol, stateCol,
   ], [nameCol]);
   const durableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [nameCol, qtyCol, controlCol, stateCol], [nameCol]);
@@ -129,9 +129,11 @@ export default function InventoryPage() {
   const APPLIANCE_EXCEPTIONS = new Set(['Washing Machine (Panasonic)']);
   const isAppliance = (i: Item) => i.category === 'Kitchen & Dining' || APPLIANCE_EXCEPTIONS.has(i.name);
   // Coverage isn't populated for any item yet (needs 14+ days of usage
-  // history); until it is, fall back to on-hand ÷ reorder-below so "lowest
-  // coverage first" still means something instead of an arbitrary order.
-  const coverageKey = (i: Item) => (i.coverageDays !== null ? Number(i.coverageDays) : i.reorderBelow !== null && Number(i.reorderBelow) > 0 ? Number(i.qty) / Number(i.reorderBelow) : Infinity);
+  // history); until it is, prefer the estimated figure (consumption_per_booking
+  // x turnover rate), falling back further to on-hand ÷ reorder-below so
+  // "lowest coverage first" still means something instead of an arbitrary
+  // order even for items with neither real usage data nor a set consumption rate.
+  const coverageKey = (i: Item) => (i.coverageDays !== null ? Number(i.coverageDays) : i.estCoverageDays !== null ? Number(i.estCoverageDays) : i.reorderBelow !== null && Number(i.reorderBelow) > 0 ? Number(i.qty) / Number(i.reorderBelow) : Infinity);
 
   return (
     <div>
@@ -223,6 +225,9 @@ export default function InventoryPage() {
                 <div>
                   <div>{selected.usageDays && selected.usageDays >= 14 ? `${formatNumber(selected.usage30d, 2)} over ${selected.usageDays} days · ${selected.avgDaily}/day` : `Not enough usage history (${selected.usageDays ?? 0} days recorded)`}</div>
                   <div className="text-xs text-muted-foreground">Sum of recorded consumption in the last 30 days; needs at least 14 distinct days with a usage entry before it's shown.</div>
+                  {!(selected.usageDays && selected.usageDays >= 14) && selected.estDailyUsage && (
+                    <div className="mt-1 text-xs text-muted-foreground">Estimated meanwhile: ~{selected.estDailyUsage}/day, from this item's catalogued per-turnover consumption times the recent turnover rate — not a measurement.</div>
+                  )}
                 </div>
               </Field>
               <Field label="Stock control">{selected.movementControlled ? `Movement ledger${selected.baselineNote ? ` · baseline: ${selected.baselineNote}` : ''}` : 'Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.'}</Field>

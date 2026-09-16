@@ -9,8 +9,12 @@ export type Item = {
   id: string; name: string; category: string; unit: string; qty: string; reorderBelow: string | null; consumable: boolean; active: boolean; status: string | null;
   unitCost: string | null; purchaseUnit: string | null; unitsPerPurchase: string | null; photo: string | null; movementControlled: boolean; baselineNote: string | null;
   usage30d: string | null; usageDays: number | null; avgDaily: string | null; coverageDays: string | null; attention: boolean;
+  // Estimated fallback (D-137 follow-up) for when coverageDays has no real
+  // usage history yet: consumption_per_booking x the recent turnover rate.
+  // Always label this as an estimate in the UI - never present it as measured.
+  estDailyUsage: string | null; estCoverageDays: string | null;
 };
-export type Catalogue = { items: Item[]; sourceAsOf: string | null; forecastNote: string };
+export type Catalogue = { items: Item[]; sourceAsOf: string | null; forecastNote: string; turnoverRatePerDay: number };
 
 export function fetchCatalogue(propertyId: string) {
   return rpc<Catalogue>('get_inventory_catalogue_v1', { p_property_id: propertyId });
