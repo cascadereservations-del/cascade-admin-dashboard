@@ -9,6 +9,7 @@ import { formatDateTime, todayManila } from '@/lib/dates';
 import { formatNumber, formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
+import { Printer } from 'lucide-react';
 import { PageHeader, Section } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
@@ -17,10 +18,34 @@ import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
 import { DetailSheet, Field } from '@/components/data/detail-sheet';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
+
+// Plain HTML table for the print-only view (#PRINT01): no sorting, filtering
+// or row-click, since a printed page can't act on any of those anyway.
+function PrintTable({ title, rows }: { title: string; rows: Item[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <table className="mb-6 w-full border-collapse text-xs">
+      <caption className="mb-1 text-left text-sm font-semibold">{title} ({rows.length})</caption>
+      <thead><tr className="border-b border-black"><th className="py-1 text-left">Item</th><th className="py-1 text-left">Category</th><th className="py-1 text-right">On hand</th><th className="py-1 text-left">Reorder below</th><th className="py-1 text-left">State</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-b border-gray-300">
+            <td className="py-1">{r.name}</td>
+            <td className="py-1">{r.category}</td>
+            <td className="py-1 text-right tabular">{formatNumber(r.qty, 2)} {r.unit}</td>
+            <td className="py-1">{r.reorderBelow ?? '—'}</td>
+            <td className="py-1">{!r.active ? 'inactive' : Number(r.qty) <= 0 ? 'out of stock' : r.attention ? 'attention' : 'ok'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 // INV01/INV02/INV05: catalogue with attention filters, advisory coverage
 // ("Not enough usage history" when < 14 usage days), and movement history.
@@ -42,6 +67,8 @@ export default function InventoryPage() {
   const [rKey, setRKey] = useState(() => newIdempotencyKey('receipt'));
   const [aKey, setAKey] = useState(() => newIdempotencyKey('adjust'));
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSel, setPrintSel] = useState({ consumables: true, appliances: true, stores: true });
 
   const doReceipt = useMutation({
     mutationFn: () => recordReceipt(selected!.id, receipt.packs, receipt.unitCost || null, receipt.supplier || null, receipt.date, null, rKey),
@@ -108,48 +135,82 @@ export default function InventoryPage() {
 
   return (
     <div>
-      <PageHeader title="Inventory" description="Consumables and durable items. Advisory reorder estimates never place orders." actions={<><Button variant="outline" asChild><Link to="/inventory/purchases">Purchases</Link></Button>{canManage && <Button variant="outline" asChild><Link to="/inventory/counts">Counts</Link></Button>}</>} />
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Item name" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
-        <FilterSelect label="Attention" value={state.attention || undefined} onChange={(v) => set({ attention: v ?? '' })} options={[{ value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }, { value: 'inactive', label: 'Inactive' }, { value: 'attention', label: 'Attention required' }]} />
-        <FilterSelect label="Category" value={state.category || undefined} onChange={(v) => set({ category: v ?? '' })} options={[...new Set((query.data?.items ?? []).map((i) => i.category))].sort().map((c) => ({ value: c, label: c }))} />
-      </FilterBar>
-      <QueryState query={query}>
-        {(data) => {
-          let rows = data.items;
-          if (state.q) rows = rows.filter((i) => i.name.toLowerCase().includes(state.q.toLowerCase()));
-          if (state.category) rows = rows.filter((i) => i.category === state.category);
-          if (state.attention === 'low') rows = rows.filter((i) => i.reorderBelow !== null && Number(i.qty) <= Number(i.reorderBelow) && Number(i.qty) > 0);
-          if (state.attention === 'out') rows = rows.filter((i) => Number(i.qty) <= 0);
-          if (state.attention === 'inactive') rows = rows.filter((i) => !i.active);
-          if (state.attention === 'attention') rows = rows.filter((i) => i.attention);
-          if (!state.attention) rows = rows.filter((i) => i.active);
-          if (rows.length === 0) return <EmptyState title="No items match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} />;
-          const consumables = rows.filter((i) => i.consumable).sort((a, b) => coverageKey(a) - coverageKey(b));
-          const appliances = rows.filter((i) => !i.consumable && isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
-          const stores = rows.filter((i) => !i.consumable && !isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
-          return (
-            <div className="space-y-6">
-              <Section title={`Consumables (${consumables.length})`}>
-                {consumables.length === 0 ? <p className="text-sm text-muted-foreground">No consumables match.</p> : (
-                  <DataTable columns={consumableColumns} rows={consumables} density={density} caption="Consumables" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
-                )}
-              </Section>
-              <Section title={`Appliances & utensils (${appliances.length})`}>
-                {appliances.length === 0 ? <p className="text-sm text-muted-foreground">No appliances or utensils match.</p> : (
-                  <DataTable columns={durableColumns} rows={appliances} density={density} caption="Appliances and utensils" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
-                )}
-              </Section>
-              <Section title={`Stores (${stores.length})`}>
-                {stores.length === 0 ? <p className="text-sm text-muted-foreground">No store items match.</p> : (
-                  <DataTable columns={durableColumns} rows={stores} density={density} caption="Stores" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
-                )}
-              </Section>
-              <Freshness sourceAsOf={data.sourceAsOf} label="Catalogue updated" />
-              <p className="text-xs text-muted-foreground">{data.forecastNote}</p>
+      <div className="print:hidden">
+        <PageHeader title="Inventory" description="Consumables and durable items. Advisory reorder estimates never place orders." actions={<><Button variant="outline" onClick={() => setPrintOpen(true)} disabled={!query.data}><Printer className="size-4" aria-hidden /> Print</Button><Button variant="outline" asChild><Link to="/inventory/purchases">Purchases</Link></Button>{canManage && <Button variant="outline" asChild><Link to="/inventory/counts">Counts</Link></Button>}</>} />
+        <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Item name" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+          <FilterSelect label="Attention" value={state.attention || undefined} onChange={(v) => set({ attention: v ?? '' })} options={[{ value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }, { value: 'inactive', label: 'Inactive' }, { value: 'attention', label: 'Attention required' }]} />
+          <FilterSelect label="Category" value={state.category || undefined} onChange={(v) => set({ category: v ?? '' })} options={[...new Set((query.data?.items ?? []).map((i) => i.category))].sort().map((c) => ({ value: c, label: c }))} />
+        </FilterBar>
+        <QueryState query={query}>
+          {(data) => {
+            let rows = data.items;
+            if (state.q) rows = rows.filter((i) => i.name.toLowerCase().includes(state.q.toLowerCase()));
+            if (state.category) rows = rows.filter((i) => i.category === state.category);
+            if (state.attention === 'low') rows = rows.filter((i) => i.reorderBelow !== null && Number(i.qty) <= Number(i.reorderBelow) && Number(i.qty) > 0);
+            if (state.attention === 'out') rows = rows.filter((i) => Number(i.qty) <= 0);
+            if (state.attention === 'inactive') rows = rows.filter((i) => !i.active);
+            if (state.attention === 'attention') rows = rows.filter((i) => i.attention);
+            if (!state.attention) rows = rows.filter((i) => i.active);
+            if (rows.length === 0) return <EmptyState title="No items match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} />;
+            const consumables = rows.filter((i) => i.consumable).sort((a, b) => coverageKey(a) - coverageKey(b));
+            const appliances = rows.filter((i) => !i.consumable && isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+            const stores = rows.filter((i) => !i.consumable && !isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+            return (
+              <div className="space-y-6">
+                <Section title={`Consumables (${consumables.length})`}>
+                  {consumables.length === 0 ? <p className="text-sm text-muted-foreground">No consumables match.</p> : (
+                    <DataTable columns={consumableColumns} rows={consumables} density={density} caption="Consumables" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                  )}
+                </Section>
+                <Section title={`Appliances & utensils (${appliances.length})`}>
+                  {appliances.length === 0 ? <p className="text-sm text-muted-foreground">No appliances or utensils match.</p> : (
+                    <DataTable columns={durableColumns} rows={appliances} density={density} caption="Appliances and utensils" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                  )}
+                </Section>
+                <Section title={`Stores (${stores.length})`}>
+                  {stores.length === 0 ? <p className="text-sm text-muted-foreground">No store items match.</p> : (
+                    <DataTable columns={durableColumns} rows={stores} density={density} caption="Stores" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                  )}
+                </Section>
+                <Freshness sourceAsOf={data.sourceAsOf} label="Catalogue updated" />
+                <p className="text-xs text-muted-foreground">{data.forecastNote}</p>
+              </div>
+            );
+          }}
+        </QueryState>
+      </div>
+      {query.data && (() => {
+        // Print reflects the full active catalogue, grouped the same way as
+        // on screen, but ignores the on-screen search/attention/category
+        // filters - "select a group or include all" is about which of the
+        // three sections to print, not what's currently filtered.
+        const all = query.data.items.filter((i) => i.active);
+        const pConsumables = all.filter((i) => i.consumable).sort((a, b) => coverageKey(a) - coverageKey(b));
+        const pAppliances = all.filter((i) => !i.consumable && isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+        const pStores = all.filter((i) => !i.consumable && !isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+        return (
+          <>
+            <DetailSheet open={printOpen} onOpenChange={setPrintOpen} title="Print inventory" description="Choose which groups to include, then print.">
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={printSel.consumables} onCheckedChange={(v) => setPrintSel({ ...printSel, consumables: v === true })} /> Consumables ({pConsumables.length})</label>
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={printSel.appliances} onCheckedChange={(v) => setPrintSel({ ...printSel, appliances: v === true })} /> Appliances & utensils ({pAppliances.length})</label>
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={printSel.stores} onCheckedChange={(v) => setPrintSel({ ...printSel, stores: v === true })} /> Stores ({pStores.length})</label>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setPrintSel({ consumables: true, appliances: true, stores: true })}>Select all</Button>
+                  <Button disabled={!printSel.consumables && !printSel.appliances && !printSel.stores} onClick={() => { setPrintOpen(false); window.print(); }}>Print</Button>
+                </div>
+              </div>
+            </DetailSheet>
+            <div className="hidden print:block">
+              <h1 className="mb-4 text-lg font-semibold">Cascade Hideaway — Inventory</h1>
+              <p className="mb-4 text-xs text-muted-foreground">Printed {formatDateTime(new Date().toISOString())}</p>
+              {printSel.consumables && <PrintTable title="Consumables" rows={pConsumables} />}
+              {printSel.appliances && <PrintTable title="Appliances & utensils" rows={pAppliances} />}
+              {printSel.stores && <PrintTable title="Stores" rows={pStores} />}
             </div>
-          );
-        }}
-      </QueryState>
+          </>
+        );
+      })()}
       <DetailSheet open={!!selected} onOpenChange={(o) => !o && set({ item: '' })} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
         {selected && (
           <div className="space-y-4">

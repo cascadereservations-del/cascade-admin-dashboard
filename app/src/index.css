@@ -172,4 +172,17 @@
       transition-duration: 0.01ms !important;
     }
   }
+  /* Sheets/dialogs render through a Portal appended to document.body, outside
+     any print:hidden wrapper on the page that opened them. Closing one and
+     firing window.print() right after is a race against its close animation
+     - the overlay (z-50, full-viewport) was still on screen when the print
+     snapshot was taken, blanking out whatever should have printed underneath
+     it. This hides every sheet/dialog unconditionally for print, app-wide,
+     rather than timing one call to close before printing. */
+  @media print {
+    [data-slot="sheet-overlay"], [data-slot="sheet-content"],
+    [data-slot="dialog-overlay"], [data-slot="dialog-content"] {
+      display: none !important;
+    }
+  }
 }
