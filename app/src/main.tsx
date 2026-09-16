@@ -9,6 +9,14 @@ import { SessionProvider } from '@/auth/session';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { router } from './routes';
 
+// Apple HIG token sheet (session 27, index.css [data-theme="hig"]): open with ?theme=hig to compare
+// against the default, ?theme=default to go back; the choice is remembered on this browser only.
+{
+  const picked = new URLSearchParams(window.location.search).get('theme');
+  if (picked) localStorage.setItem('cascade-theme', picked);
+  if ((picked ?? localStorage.getItem('cascade-theme')) === 'hig') document.documentElement.dataset.theme = 'hig';
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

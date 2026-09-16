@@ -186,3 +186,60 @@
     }
   }
 }
+
+/* Apple HIG token sheet v2 (session 27; PLAN-apple-design-language-adoption step 1, D-160 #5).
+   Lives side by side with v1 above: <html data-theme="hig"> switches it on (open the app with
+   ?theme=hig, ?theme=default switches back; main.tsx remembers the choice). Keeps the D-095 hues
+   and adopts HIG's ROLES and everything non-colour:
+   - label hierarchy (label / secondaryLabel / tertiaryLabel) on the same ink,
+   - grouped backgrounds (page = systemGroupedBackground, card = secondarySystemGroupedBackground),
+   - one tint (teal stays the tint), separator a touch firmer,
+   - type scale (Large Title / Title 2 / Title 3 / Body 15 / Footnote 13), continuous-corner radii,
+   - materials (soft two-layer card shadow, no hairline), motion 0.2-0.35 s ease-in-out,
+   - lucide at SF-Symbols stroke 1.75.
+   Not the default until Lloyd compares. */
+[data-theme="hig"] {
+  --radius: 0.75rem;
+  --foreground: oklch(0.22 0.03 245);          /* label */
+  --muted-foreground: oklch(0.47 0.02 240);    /* secondaryLabel */
+  --hig-tertiary: oklch(0.62 0.015 235);       /* tertiaryLabel: timestamps, helper text */
+  --background: oklch(0.965 0.006 215);        /* systemGroupedBackground */
+  --card: oklch(1 0 0);                        /* secondarySystemGroupedBackground */
+  --popover: oklch(1 0 0);
+  --secondary: oklch(0.935 0.012 215);
+  --muted: oklch(0.945 0.008 218);
+  --accent: oklch(0.955 0.03 85);              /* D-095 sand stays the selection colour */
+  --border: oklch(0.88 0.01 220);              /* separator */
+  --input: oklch(0.88 0.01 220);
+  --primary: oklch(0.5 0.1 205);               /* the one tint (D-095 teal) */
+  --ring: oklch(0.6 0.11 200);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 5%), 0 6px 16px oklch(0 0 0 / 5%);
+  --motion-fast: 200ms;
+  --motion-base: 250ms;
+  --motion-slow: 350ms;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-theme="hig"].dark {
+  /* HIG dark: elevated greys, base below cards, never inverted */
+  --background: oklch(0.155 0.02 240);         /* base */
+  --card: oklch(0.215 0.025 238);              /* elevated */
+  --popover: oklch(0.235 0.025 238);
+  --secondary: oklch(0.27 0.03 235);
+  --muted: oklch(0.25 0.025 236);
+  --foreground: oklch(0.95 0.008 210);
+  --muted-foreground: oklch(0.70 0.018 220);
+  --hig-tertiary: oklch(0.55 0.015 225);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
+  --primary: oklch(0.8 0.11 190);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 35%), 0 8px 20px oklch(0 0 0 / 25%);
+}
+[data-theme="hig"] h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }   /* Large Title */
+[data-theme="hig"] h2 { font-size: 1.375rem; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; } /* Title 2 */
+[data-theme="hig"] h3 { font-size: 1.125rem; line-height: 1.3; font-weight: 600; }                            /* Title 3 */
+[data-theme="hig"] small, [data-theme="hig"] .text-xs { font-size: 0.8667rem; color: var(--hig-tertiary); }   /* Footnote 13 */
+[data-theme="hig"] [data-slot="card"] { border-radius: var(--radius-xl); border-color: transparent; box-shadow: var(--shadow-card); }
+[data-theme="hig"] [data-slot="button"], [data-theme="hig"] [data-slot="input"], [data-theme="hig"] [data-slot="select-trigger"] { border-radius: var(--radius-md); transition-duration: var(--motion-fast); transition-timing-function: var(--motion-ease); }
+[data-theme="hig"] [data-slot="table-cell"], [data-theme="hig"] [data-slot="table-head"] { padding-block: 0.7rem; }
+[data-theme="hig"] [data-slot="sheet-content"], [data-theme="hig"] [data-slot="dialog-content"] { border-radius: var(--radius-xl); transition-duration: var(--motion-base); }
+[data-theme="hig"] svg.lucide { stroke-width: 1.75; }
