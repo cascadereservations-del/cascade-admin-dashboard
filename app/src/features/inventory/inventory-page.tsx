@@ -9,7 +9,7 @@ import { formatDateTime, todayManila } from '@/lib/dates';
 import { formatNumber, formatPHP } from '@/lib/money';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
-import { PageHeader } from '@/components/data/page-header';
+import { PageHeader, Section } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { EmptyState, QueryState } from '@/components/data/query-state';
@@ -26,7 +26,7 @@ import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, r
 // ("Not enough usage history" when < 14 usage days), and movement history.
 // Receipts and adjustments go through the single movement path.
 
-const DEFAULTS = { q: '', attention: '', category: '', page: '1', density: 'comfortable', item: '' };
+const DEFAULTS = { q: '', attention: '', category: '', density: 'comfortable', item: '' };
 
 export default function InventoryPage() {
   const s = useSession();
@@ -77,14 +77,34 @@ export default function InventoryPage() {
     },
   });
 
-  const columns = useMemo<ColumnDef<Item, unknown>[]>(() => [
-    { id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div></div> },
-    { id: 'qty', header: 'On hand', accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> },
+  const nameCol = useMemo<ColumnDef<Item, unknown>>(() => ({ id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div></div> }), [set]);
+  const qtyCol: ColumnDef<Item, unknown> = { id: 'qty', header: 'On hand', accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> };
+  const controlCol: ColumnDef<Item, unknown> = { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : 'legacy quantity'}</StatusBadge> };
+  const stateCol: ColumnDef<Item, unknown> = { id: 'state', header: 'State', accessorFn: (r) => r.attention, cell: ({ row }) => (!row.original.active ? <StatusBadge tone="neutral">inactive</StatusBadge> : Number(row.original.qty) <= 0 ? <StatusBadge tone="bad">out of stock</StatusBadge> : row.original.attention ? <StatusBadge tone="warn">attention</StatusBadge> : <StatusBadge tone="good">ok</StatusBadge>) };
+  // Consumables carry reorder-point and coverage columns; durables don't run
+  // out on a schedule, so those two columns would only ever read empty there.
+  const consumableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [
+    nameCol, qtyCol,
     { id: 'reorder', header: 'Reorder below', accessorFn: (r) => r.reorderBelow ?? '', cell: ({ row }) => <span className="tabular">{row.original.reorderBelow ?? '—'}</span> },
     { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? '', cell: ({ row }) => (row.original.coverageDays ? <span className="tabular">{formatNumber(row.original.coverageDays, 0)} days</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>) },
-    { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : 'legacy quantity'}</StatusBadge> },
-    { id: 'state', header: 'State', accessorFn: (r) => r.attention, cell: ({ row }) => (!row.original.active ? <StatusBadge tone="neutral">inactive</StatusBadge> : Number(row.original.qty) <= 0 ? <StatusBadge tone="bad">out of stock</StatusBadge> : row.original.attention ? <StatusBadge tone="warn">attention</StatusBadge> : <StatusBadge tone="good">ok</StatusBadge>) },
-  ], [set]);
+    controlCol, stateCol,
+  ], [nameCol]);
+  const durableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [nameCol, qtyCol, controlCol, stateCol], [nameCol]);
+
+  // Phase-3 grouping (D-137): the category field mixes real appliances with
+  // utensils and furniture under one label ("Kitchen & Dining" holds the
+  // fridge and a fork alike), and there's no dedicated appliance flag
+  // anywhere in the schema or the standalone CH_Inventory app. Confirmed live
+  // 2026-09-16: moving "Kitchen & Dining" plus the one miscategorized
+  // Washing Machine into Appliances, everything else durable into Stores,
+  // reuses the existing category data with a single named exception rather
+  // than inventing a new field.
+  const APPLIANCE_EXCEPTIONS = new Set(['Washing Machine (Panasonic)']);
+  const isAppliance = (i: Item) => i.category === 'Kitchen & Dining' || APPLIANCE_EXCEPTIONS.has(i.name);
+  // Coverage isn't populated for any item yet (needs 14+ days of usage
+  // history); until it is, fall back to on-hand ÷ reorder-below so "lowest
+  // coverage first" still means something instead of an arbitrary order.
+  const coverageKey = (i: Item) => (i.coverageDays !== null ? Number(i.coverageDays) : i.reorderBelow !== null && Number(i.reorderBelow) > 0 ? Number(i.qty) / Number(i.reorderBelow) : Infinity);
 
   return (
     <div>
@@ -103,10 +123,27 @@ export default function InventoryPage() {
           if (state.attention === 'inactive') rows = rows.filter((i) => !i.active);
           if (state.attention === 'attention') rows = rows.filter((i) => i.attention);
           if (!state.attention) rows = rows.filter((i) => i.active);
-          const page = Number(state.page) || 1;
-          return rows.length === 0 ? <EmptyState title="No items match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
-            <div className="space-y-2">
-              <DataTable columns={columns} rows={rows.slice((page - 1) * 25, page * 25)} total={rows.length} page={page} onPageChange={(p) => set({ page: String(p) })} density={density} caption="Inventory catalogue" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+          if (rows.length === 0) return <EmptyState title="No items match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} />;
+          const consumables = rows.filter((i) => i.consumable).sort((a, b) => coverageKey(a) - coverageKey(b));
+          const appliances = rows.filter((i) => !i.consumable && isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+          const stores = rows.filter((i) => !i.consumable && !isAppliance(i)).sort((a, b) => a.name.localeCompare(b.name));
+          return (
+            <div className="space-y-6">
+              <Section title={`Consumables (${consumables.length})`}>
+                {consumables.length === 0 ? <p className="text-sm text-muted-foreground">No consumables match.</p> : (
+                  <DataTable columns={consumableColumns} rows={consumables} density={density} caption="Consumables" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                )}
+              </Section>
+              <Section title={`Appliances & utensils (${appliances.length})`}>
+                {appliances.length === 0 ? <p className="text-sm text-muted-foreground">No appliances or utensils match.</p> : (
+                  <DataTable columns={durableColumns} rows={appliances} density={density} caption="Appliances and utensils" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                )}
+              </Section>
+              <Section title={`Stores (${stores.length})`}>
+                {stores.length === 0 ? <p className="text-sm text-muted-foreground">No store items match.</p> : (
+                  <DataTable columns={durableColumns} rows={stores} density={density} caption="Stores" getRowId={(r) => r.id} onRowClick={(r) => set({ item: r.id })} />
+                )}
+              </Section>
               <Freshness sourceAsOf={data.sourceAsOf} label="Catalogue updated" />
               <p className="text-xs text-muted-foreground">{data.forecastNote}</p>
             </div>

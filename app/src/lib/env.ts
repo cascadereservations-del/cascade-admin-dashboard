@@ -16,7 +16,10 @@ export const APP_VERSION = '2.0.0-alpha';
 export const EXTERNAL_APPS = [
   { key: 'guide', label: 'Guest guide', href: 'https://cascadereservations-del.github.io/Welcome-To-Cascades-/' },
   { key: 'cleaners', label: 'Cleaner checklist', href: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/' },
-  { key: 'inventory', label: 'Inventory PWA', href: 'https://cascadereservations-del.github.io/inventory/' },
+  // 'inventory' removed 2026-09-16 (D-137): the dashboard's own Inventory tab
+  // now covers what the standalone CH_Inventory PWA did. Keeping both linked
+  // side by side was redundant, and the standalone app's shared-PIN gate is
+  // weaker than this app's per-staff sign-in.
   { key: 'manual', label: 'Operations manual', href: 'https://cascadereservations-del.github.io/Cascade-Manual/' },
   { key: 'site', label: 'Booking site', href: 'https://cascadereservations-del.github.io/Stay_At_CascadeGSC/' },
   { key: 'legacy', label: 'Legacy admin', href: './legacy/index.html' },
