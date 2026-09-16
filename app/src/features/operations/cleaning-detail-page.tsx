@@ -25,26 +25,63 @@ import { METER_FLAGS, fetchCleaningDetail, reviewEvidence, reviewMeterReading, r
 // are shown as advisory; readiness needs a human decision with a reason for
 // overrides. An unreadable meter photo is uncertainty, not misconduct.
 
+type ChecklistItem = { text?: string; checked?: unknown; critical?: unknown };
+type ChecklistSection = { icon?: string; title?: string; items?: ChecklistItem[] };
+
+// The cleaner app stores checklist_details as sections with icon/title/items
+// (confirmed uniform across every stored submission), not a flat {label, done}
+// list. The old renderer expected the latter and fell back to a bare array
+// index for every section, which is why it showed "0 1 2 3 4" with no text.
 function ChecklistView({ details }: { details: unknown }) {
   if (!details || typeof details !== 'object') return <p className="text-sm text-muted-foreground">No checklist detail stored.</p>;
-  const entries: Array<[string, unknown]> = Array.isArray(details)
-    ? details.map((e, i) => {
-        const o = e as { id?: string; label?: string; done?: unknown; value?: unknown };
-        return [String(o.label ?? o.id ?? i), o.done ?? o.value];
-      })
-    : Object.entries(details as Record<string, unknown>);
+  const sections = Array.isArray(details) ? (details as ChecklistSection[]) : null;
+  const looksSectioned = sections?.every((s) => Array.isArray(s?.items));
+  if (!sections || !looksSectioned) {
+    // Fallback for any other stored shape: flat {label|id, done|value} entries.
+    const entries: Array<[string, unknown]> = Array.isArray(details)
+      ? (details as unknown[]).map((e, i) => {
+          const o = e as { id?: string; label?: string; done?: unknown; value?: unknown };
+          return [String(o.label ?? o.id ?? i), o.done ?? o.value];
+        })
+      : Object.entries(details as Record<string, unknown>);
+    return (
+      <ul className="grid gap-1 text-sm sm:grid-cols-2">
+        {entries.slice(0, 200).map(([k, v], i) => {
+          const ok = v === true || v === 'done' || v === 'yes';
+          return (
+            <li key={i} className="flex items-start gap-2">
+              <span aria-hidden className="mt-0.5 text-xs">{ok ? '✓' : v === false ? '✕' : '○'}</span>
+              <span className="min-w-0 break-words">{k}{typeof v === 'string' && !ok ? `: ${v}` : ''}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
   return (
-    <ul className="grid gap-1 text-sm sm:grid-cols-2">
-      {entries.slice(0, 200).map(([k, v], i) => {
-        const ok = v === true || v === 'done' || v === 'yes';
+    <div className="space-y-4">
+      {sections.map((s, si) => {
+        const items = s.items ?? [];
+        const done = items.filter((it) => it.checked === true).length;
         return (
-          <li key={i} className="flex items-start gap-2">
-            <span aria-hidden className="mt-0.5 text-xs">{ok ? '✓' : v === false ? '✕' : '○'}</span>
-            <span className="min-w-0 break-words">{k}{typeof v === 'string' && !ok ? `: ${v}` : ''}</span>
-          </li>
+          <div key={si}>
+            <p className="mb-1 text-sm font-medium">{s.icon ? `${s.icon} ` : ''}{s.title ?? `Section ${si + 1}`} <span className="text-xs font-normal text-muted-foreground">({done}/{items.length})</span></p>
+            <ul className="grid gap-1 text-sm sm:grid-cols-2">
+              {items.map((it, ii) => {
+                const ok = it.checked === true;
+                const critical = it.critical === true;
+                return (
+                  <li key={ii} className={`flex items-start gap-2 ${!ok && critical ? 'text-destructive' : ''}`}>
+                    <span aria-hidden className="mt-0.5 text-xs">{ok ? '✓' : '✕'}</span>
+                    <span className="min-w-0 break-words">{it.text ?? ''}{!ok && critical ? ' (critical)' : ''}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -136,7 +173,16 @@ export default function CleaningDetailPage() {
                     <Field label="Readiness">{d.readiness[0] ? `${d.readiness[0].outcome.replace('_', ' ')} · ${formatDateTime(d.readiness[0].reviewed_at)}` : 'not reviewed'}</Field>
                     <Field label="Cleaner fee">{canFees ? (c.fee_amount ? `${formatPHP(c.fee_amount)} · ${c.fee_paid_at ? `paid ${formatDateTime(c.fee_paid_at)}` : 'accrued, unpaid'}` : 'no fee recorded') : 'restricted'}</Field>
                     {c.incomplete_reasons?.length ? <Field label="Incomplete"><ul className="list-disc pl-4">{c.incomplete_reasons.map((r) => <li key={r}>{r}</li>)}</ul></Field> : null}
-                    {c.notes && <Field label="Notes">{c.notes}</Field>}
+                    <Field label="Issues">{c.issue_count ? <StatusBadge tone="warn">{c.issue_count} issue{c.issue_count > 1 ? 's' : ''}</StatusBadge> : 'none reported'}</Field>
+                    {c.notes && (
+                      <Field label="Notes">
+                        <div className="space-y-0.5">
+                          {c.notes.split('\n').map((line, i) => (
+                            <p key={i} className={line.includes('[URGENT]') ? 'font-medium text-destructive' : undefined}>{line}</p>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="py-4 gap-3">
@@ -167,8 +213,27 @@ export default function CleaningDetailPage() {
                   <CardHeader><CardTitle className="flex items-center gap-2"><Camera className="size-4 text-muted-foreground" aria-hidden /> Photos</CardTitle></CardHeader>
                   <CardContent className="text-sm">
                     <p className="text-muted-foreground">Counts from the submission: {c.preclean_photo_count ?? 0} before · {c.afterclean_photo_count ?? 0} after · {c.meter_photo_count ?? 0} meter · {c.other_photo_count ?? 0} other.</p>
-                    {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No objects under submission folder {c.submission_id}.</p> : (
-                      <ul className="mt-2 max-h-48 overflow-auto text-xs">{d.photos.map((p) => <li key={p.name} className="truncate">{p.name}</li>)}</ul>
+                    {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No photo objects found for this submission.</p> : (
+                      <div className="mt-2 max-h-64 space-y-3 overflow-auto">
+                        {(['meter', 'before', 'after', 'other'] as const).map((section) => {
+                          const shots = d.photos === 'unavailable' ? [] : d.photos.filter((p) => p.section === section);
+                          if (shots.length === 0) return null;
+                          return (
+                            <div key={section}>
+                              <p className="mb-1 text-xs font-medium capitalize text-muted-foreground">{section} ({shots.length})</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {shots.map((p) => p.url ? (
+                                  <a key={p.name} href={p.url} target="_blank" rel="noreferrer" title={p.name}>
+                                    <img src={p.url} alt="" loading="lazy" className="size-16 rounded border object-cover" />
+                                  </a>
+                                ) : (
+                                  <span key={p.name} className="max-w-24 truncate rounded border px-1.5 py-1 text-xs" title={p.name}>{p.name}</span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </CardContent>
                 </Card>

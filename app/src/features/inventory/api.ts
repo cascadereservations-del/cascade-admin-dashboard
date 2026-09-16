@@ -44,6 +44,9 @@ export function saveShoppingItem(propertyId: string, item: Record<string, unknow
 }
 
 export type Purchase = { id: string; item_id: string | null; purchased_at: string; qty: string; unit_cost: string | null; total_cost: string | null; supplier: string | null; notes: string | null; purchase_unit: string | null; units_per_purchase: number };
+export async function fetchItemPurchases(itemId: string) {
+  return unwrapList<Purchase>(await supabase.from('inventory_purchases').select('*').eq('item_id', itemId).order('purchased_at', { ascending: false }).limit(50));
+}
 export async function fetchPurchases(propertyId: string) {
   const items = await supabase.from('inventory_items').select('id, name').eq('property_id', propertyId);
   const ids = (items.data ?? []).map((i) => i.id);

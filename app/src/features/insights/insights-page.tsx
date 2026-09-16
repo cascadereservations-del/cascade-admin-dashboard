@@ -216,7 +216,11 @@ function useMonthlyTotals(period: Period) {
   return useQuery({ queryKey: ['monthly-totals', s.propertyId, period.start, period.endExclusive], queryFn: () => fetchMonthlyTotals(s.propertyId, period.start.slice(0, 7) + '-01', period.endExclusive), staleTime: 300_000 });
 }
 function monthlyRows(q: ReturnType<typeof useMonthlyTotals>) {
-  return (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: (m.expenseCents - m.unaccountedCents) / 100, drawing: m.drawingCents / 100, unaccounted: m.unaccountedCents / 100, net: (m.incomeCents - m.expenseCents - m.drawingCents) / 100, count: m.count }));
+  // Net matches the Expense bar's own exclusion of one-time catch-up entries
+  // (unaccountedCents) - otherwise a big catch-up month draws a line drop with
+  // no corresponding bar spike next to it. The stat cards use `totals` below,
+  // which adds unaccounted back in separately and stay ledger-exact.
+  return (q.data ?? []).map((m) => ({ month: m.month, label: formatDate(m.month + '-01', 'short').replace(/^\d+ /, ''), income: m.incomeCents / 100, expense: (m.expenseCents - m.unaccountedCents) / 100, drawing: m.drawingCents / 100, unaccounted: m.unaccountedCents / 100, net: (m.incomeCents - (m.expenseCents - m.unaccountedCents) - m.drawingCents) / 100, count: m.count }));
 }
 
 function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
@@ -235,7 +239,7 @@ function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div className="rounded-lg border bg-card p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Income and expenses side by side each month, net position as the line. Confirmed rows, cash basis. Click a month to open its records.{totalUnaccounted > 0 ? ` One-time catch-up entries (${formatPHP(totalUnaccounted)} total) are excluded from the bars so they don't flatten real monthly activity; they're still counted in Expenses and Position at right.` : ''}</p>
+            <p className="mb-2 text-xs text-muted-foreground">Income and expenses side by side each month, net position as the line. Confirmed rows, cash basis. Click a month to open its records.{totalUnaccounted > 0 ? ` One-time catch-up entries (${formatPHP(totalUnaccounted)} total) are excluded from the bars and the net line so they don't flatten real monthly activity; they're still counted in Expenses and Position at right.` : ''}</p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }} onClick={(e) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) openMonth(p.month); }} style={{ cursor: 'pointer' }}>

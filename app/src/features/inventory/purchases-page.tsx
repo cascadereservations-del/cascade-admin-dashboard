@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDate, formatDateTime, todayManila } from '@/lib/dates';
@@ -9,13 +10,14 @@ import { newIdempotencyKey } from '@/lib/idempotency';
 import { useUndoToast } from '@/lib/undo';
 import { latestAuditId } from '@/features/operations/api';
 import { PageHeader, Section } from '@/components/data/page-header';
+import { DataTable } from '@/components/data/data-table';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge, type Tone } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchCatalogue, fetchPurchases, fetchShoppingList, recordReceipt, saveShoppingItem } from './api';
+import { fetchCatalogue, fetchPurchases, fetchShoppingList, recordReceipt, saveShoppingItem, type Purchase } from './api';
 
 // INV04: proposed shopping list → approval → receipt (stock movement) →
 // financial treatment (separately, in Finance). Three distinct actions.
@@ -37,6 +39,16 @@ export default function PurchasesPage() {
     void qc.invalidateQueries({ queryKey: ['purchases'] });
     void qc.invalidateQueries({ queryKey: ['catalogue'] });
   };
+
+  const names = purchases.data?.names ?? new Map<string, string>();
+  const purchaseColumns = useMemo<ColumnDef<Purchase, unknown>[]>(() => [
+    { id: 'date', header: 'Date', accessorFn: (r) => r.purchased_at, cell: ({ row }) => <span className="tabular">{formatDate(row.original.purchased_at, 'long')}</span> },
+    { id: 'item', header: 'Item', accessorFn: (r) => names.get(r.item_id ?? '') ?? 'unknown item', cell: ({ row }) => names.get(row.original.item_id ?? '') ?? 'unknown item' },
+    { id: 'supplier', header: 'Supplier', accessorFn: (r) => r.supplier ?? '', cell: ({ row }) => row.original.supplier ?? '—' },
+    { id: 'qty', header: 'Qty', accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)}</span> },
+    { id: 'unitCost', header: 'Unit price', accessorFn: (r) => Number(r.unit_cost ?? 0), cell: ({ row }) => <span className="tabular">{canFinance && row.original.unit_cost !== null ? formatPHP(row.original.unit_cost) : '—'}</span> },
+    { id: 'total', header: 'Total price', accessorFn: (r) => Number(r.total_cost ?? 0), cell: ({ row }) => <span className="tabular">{canFinance && row.original.total_cost !== null ? formatPHP(row.original.total_cost) : '—'}</span> },
+  ], [names, canFinance]);
 
   const undoToast = useUndoToast();
   const propose = useMutation({
@@ -107,9 +119,7 @@ export default function PurchasesPage() {
         <Section title="Recorded purchases">
           <QueryState query={purchases}>
             {(d) => d.rows.length === 0 ? <EmptyState title="No purchases recorded" /> : (
-              <ul className="divide-y rounded-lg border text-sm">
-                {d.rows.map((p) => <li key={p.id} className="flex flex-wrap gap-2 px-3 py-2"><span className="tabular w-24">{formatDate(p.purchased_at, 'long')}</span><span className="min-w-0 flex-1">{d.names.get(p.item_id ?? '') ?? 'unknown item'} · {formatNumber(p.qty, 2)} units{p.supplier ? ` · ${p.supplier}` : ''}</span>{canFinance && <span className="tabular">{formatPHP(p.total_cost)}</span>}</li>)}
-              </ul>
+              <DataTable columns={purchaseColumns} rows={d.rows} caption="Recorded purchases" getRowId={(r) => r.id} />
             )}
           </QueryState>
         </Section>

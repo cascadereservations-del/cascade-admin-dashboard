@@ -53,8 +53,35 @@ export type CleaningDetail = {
   meters: Array<{ id: string; electric_prev: string | null; electric_curr: string | null; electric_delta: string | null; water_prev: string | null; water_curr: string | null; water_delta: string | null; kwh_per_night: string | null; m3_per_night: string | null; meter_flag: string | null; meter_override_note: string | null; recorded_at: string }>;
   evidence: Array<{ id: string; evidence_kind: string; advisory_result: string | null; advisory_reason_codes: string[] | null; created_at: string; reviews: Array<{ id: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }> }>;
   readiness: Array<{ id: string; for_checkin_date: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }>;
-  photos: Array<{ name: string; created_at: string | null; size: number | null }> | 'unavailable';
+  photos: Array<{ name: string; created_at: string | null; size: number | null; url: string | null; section: 'before' | 'after' | 'meter' | 'other' }> | 'unavailable';
 };
+
+// Photos upload under {propertyId}/{uploaderUserId}/{submissionId}/... (see
+// upload-photo/index.ts) but cleaning_sessions doesn't reliably record the
+// uploader (employee_id is null on 38/39 sessions). Staff are few, so probe
+// each property-level subfolder for one holding this submission's id.
+async function findPhotoFolder(propertyId: string, submissionId: string): Promise<string | null> {
+  const { data: dirs } = await supabase.storage.from('cleaning-photos').list(propertyId, { limit: 100 });
+  for (const dir of dirs ?? []) {
+    if (dir.id) continue; // a file, not a subfolder
+    const path = `${propertyId}/${dir.name}/${submissionId}`;
+    const { data } = await supabase.storage.from('cleaning-photos').list(path, { limit: 1 });
+    if (data && data.length > 0) return path;
+  }
+  return null;
+}
+
+// ponytail: filenames carry a readable keyword (e.g. "afterclean_2026-...",
+// "kitchen_2026-...") but not the exact section_* key submit-cleaning grouped
+// them under. A substring match is enough to tell meter photos apart from the
+// rest, which is the only distinction the Meters review UI actually needs.
+function classifyPhoto(name: string): 'before' | 'after' | 'meter' | 'other' {
+  const n = name.toLowerCase();
+  if (n.includes('meter')) return 'meter';
+  if (n.includes('afterclean')) return 'after';
+  if (n.includes('preclean') || n.includes('before')) return 'before';
+  return 'other';
+}
 
 export async function fetchCleaningDetail(propertyId: string, id: string, canFees: boolean): Promise<CleaningDetail> {
   const { data: session, error } = await supabase.from('cleaning_sessions').select('*').eq('id', id).eq('property_id', propertyId).single();
@@ -70,11 +97,28 @@ export async function fetchCleaningDetail(propertyId: string, id: string, canFee
     supabase.from('cleaning_verification_evidence').select('id, evidence_kind, advisory_result, advisory_reason_codes, created_at, reviews:cleaning_verification_reviews(id, outcome, reason, reviewed_at, reviewer_user_id)').eq('cleaning_session_id', id).order('created_at', { ascending: false }),
     supabase.from('readiness_reviews').select('id, for_checkin_date, outcome, reason, reviewed_at, reviewer_user_id').eq('cleaning_session_id', id).order('reviewed_at', { ascending: false }),
   ]);
-  // Photos are linked by submission identity (storage folder = submission_id), never by date.
+  // Photos are linked by submission identity, never by date. The real folder
+  // is {propertyId}/{uploaderUserId}/{submissionId} (see findPhotoFolder).
   let photos: CleaningDetail['photos'] = 'unavailable';
   try {
-    const { data } = await supabase.storage.from('cleaning-photos').list(sess.submission_id, { limit: 100 });
-    if (data) photos = data.map((o) => ({ name: o.name, created_at: o.created_at ?? null, size: (o.metadata as { size?: number } | null)?.size ?? null }));
+    const folder = await findPhotoFolder(propertyId, sess.submission_id);
+    if (folder) {
+      const { data } = await supabase.storage.from('cleaning-photos').list(folder, { limit: 200 });
+      if (data) {
+        const paths = data.map((o) => `${folder}/${o.name}`);
+        const { data: signed } = await supabase.storage.from('cleaning-photos').createSignedUrls(paths, 900);
+        const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+        photos = data.map((o) => ({
+          name: o.name,
+          created_at: o.created_at ?? null,
+          size: (o.metadata as { size?: number } | null)?.size ?? null,
+          url: urlByPath.get(`${folder}/${o.name}`) ?? null,
+          section: classifyPhoto(o.name),
+        }));
+      } else photos = [];
+    } else {
+      photos = [];
+    }
   } catch {
     photos = 'unavailable';
   }

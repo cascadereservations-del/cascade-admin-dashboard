@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { fetchCatalogue, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
+import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
 
 // INV01/INV02/INV05: catalogue with attention filters, advisory coverage
 // ("Not enough usage history" when < 14 usage days), and movement history.
@@ -36,6 +36,7 @@ export default function InventoryPage() {
   const query = useQuery({ queryKey: ['catalogue', s.propertyId], queryFn: () => fetchCatalogue(s.propertyId) });
   const selected = query.data?.items.find((i) => i.id === state.item) ?? null;
   const moves = useQuery({ queryKey: ['movements', state.item], queryFn: () => fetchMovements(state.item), enabled: !!state.item });
+  const itemPurchases = useQuery({ queryKey: ['item-purchases', state.item], queryFn: () => fetchItemPurchases(state.item), enabled: !!state.item });
   const [receipt, setReceipt] = useState({ packs: '', unitCost: '', supplier: '', date: todayManila() });
   const [adjust, setAdjust] = useState({ delta: '', reason: '' });
   const [rKey, setRKey] = useState(() => newIdempotencyKey('receipt'));
@@ -120,7 +121,12 @@ export default function InventoryPage() {
               <Field label="Reorder below">{selected.reorderBelow ?? 'not set'}</Field>
               <Field label="Purchase unit">{selected.purchaseUnit ? `${selected.purchaseUnit} = ${selected.unitsPerPurchase} ${selected.unit}` : 'same as base unit'}</Field>
               <Field label="Unit cost">{selected.unitCost !== null ? formatPHP(selected.unitCost) : s.caps.can('read_finance') ? 'not recorded' : 'restricted'}</Field>
-              <Field label="Usage (30d)">{selected.usageDays && selected.usageDays >= 14 ? `${formatNumber(selected.usage30d, 2)} over ${selected.usageDays} days · ${selected.avgDaily}/day` : `Not enough usage history (${selected.usageDays ?? 0} days recorded)`}</Field>
+              <Field label="Usage (30d)">
+                <div>
+                  <div>{selected.usageDays && selected.usageDays >= 14 ? `${formatNumber(selected.usage30d, 2)} over ${selected.usageDays} days · ${selected.avgDaily}/day` : `Not enough usage history (${selected.usageDays ?? 0} days recorded)`}</div>
+                  <div className="text-xs text-muted-foreground">Sum of recorded consumption in the last 30 days; needs at least 14 distinct days with a usage entry before it's shown.</div>
+                </div>
+              </Field>
               <Field label="Stock control">{selected.movementControlled ? `Movement ledger${selected.baselineNote ? ` · baseline: ${selected.baselineNote}` : ''}` : 'Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.'}</Field>
             </dl>
             {canManage && (
@@ -147,6 +153,27 @@ export default function InventoryPage() {
               {moves.isPending ? <p className="text-xs text-muted-foreground">Loading…</p> : moves.isError ? <p className="text-xs text-destructive">{toAppError(moves.error).message}</p> : moves.data.rows.length === 0 ? <p className="text-xs text-muted-foreground">No movements. An empty ledger is not zero stock; the quantity above comes from the item record.</p> : (
                 <ul className="max-h-64 divide-y overflow-auto rounded-lg border text-xs">
                   {moves.data.rows.map((m) => <li key={m.id} className="flex gap-2 px-2 py-1"><span className="tabular w-32 shrink-0 text-muted-foreground">{formatDateTime(m.created_at)}</span><span className="w-20 shrink-0 capitalize">{m.kind}</span><span className="tabular w-24 shrink-0">{m.quantity_before} → {m.quantity_after}</span><span className="min-w-0 truncate">{m.reason}</span></li>)}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="mb-1 text-sm font-medium">Purchase history by supplier</p>
+              {itemPurchases.isPending ? <p className="text-xs text-muted-foreground">Loading…</p> : itemPurchases.isError ? <p className="text-xs text-destructive">{toAppError(itemPurchases.error).message}</p> : itemPurchases.data.rows.length === 0 ? <p className="text-xs text-muted-foreground">No recorded purchases for this item.</p> : (
+                <ul className="max-h-64 divide-y overflow-auto rounded-lg border text-xs">
+                  {itemPurchases.data.rows.map((p, i) => {
+                    const prior = itemPurchases.data.rows[i + 1];
+                    const change = p.unit_cost && prior?.unit_cost && Number(prior.unit_cost) > 0 ? ((Number(p.unit_cost) - Number(prior.unit_cost)) / Number(prior.unit_cost)) * 100 : null;
+                    return (
+                      <li key={p.id} className="flex flex-wrap gap-2 px-2 py-1">
+                        <span className="tabular w-24 shrink-0 text-muted-foreground">{formatDateTime(p.purchased_at).slice(0, 10)}</span>
+                        <span className="w-28 shrink-0 truncate">{p.supplier ?? 'no supplier'}</span>
+                        <span className="tabular w-16 shrink-0">{formatNumber(p.qty, 2)}</span>
+                        <span className="tabular w-20 shrink-0">{p.unit_cost !== null && s.caps.can('read_finance') ? formatPHP(p.unit_cost) : '—'}/unit</span>
+                        <span className="tabular w-20 shrink-0">{p.total_cost !== null && s.caps.can('read_finance') ? formatPHP(p.total_cost) : '—'}</span>
+                        {change !== null && s.caps.can('read_finance') && <span className={change > 0 ? 'tabular text-destructive' : change < 0 ? 'tabular text-emerald-600' : 'tabular text-muted-foreground'}>{change > 0 ? '▲' : change < 0 ? '▼' : '='} {Math.abs(change).toFixed(0)}% vs prior</span>}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
