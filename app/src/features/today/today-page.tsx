@@ -45,7 +45,7 @@ function ReadinessCard({ r }: { r: Overview['readiness'] }) {
           {r.review ? `Reviewed ${r.review.outcome.replace('_', ' ')} ${formatDateTime(r.review.reviewedAt)}${r.review.reason ? `: ${r.review.reason}` : ''}.` : 'No human readiness review for the next arrival yet.'}
         </p>
         {r.blockingWorkOrders > 0 && <p className="font-medium">{r.blockingWorkOrders} work order{r.blockingWorkOrders > 1 ? 's' : ''} block the next arrival.</p>}
-        <Button size="sm" variant="outline" asChild><Link to="/operations">Open cleaning log <ArrowRight className="size-3.5" aria-hidden /></Link></Button>
+        <Button size="sm" variant="outline" asChild><Link to={lc ? `/operations/cleaning/${lc.id}` : '/operations'}>{lc ? 'Open this cleaning report' : 'Open cleaning log'} <ArrowRight className="size-3.5" aria-hidden /></Link></Button>
       </CardContent>
     </Card>
   );
@@ -204,7 +204,7 @@ export default function TodayPage() {
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {o.followUps.map((f) => <li key={f.id}><Link to={`/guests/${f.guestId ?? ''}?task=${f.id}`} className="hover:underline">{f.title}</Link> · {f.purpose.replaceAll('_', ' ')}</li>)}
-                    {o.handoffs?.map((h) => <li key={h.id}><Link to="/guests?handoffs=1" className="hover:underline">Messenger: {h.guest ?? 'guest'}</Link> · {h.risk ?? 'risk unknown'} · {formatDateTime(h.createdAt)}</li>)}
+                    {o.handoffs?.map((h) => <li key={h.id}><Link to="/guests?tab=handoffs" className="hover:underline">Messenger: {h.guest ?? 'guest'}</Link> · {h.risk ?? 'risk unknown'} · {formatDateTime(h.createdAt)}</li>)}
                   </ul>
                 )}
               </Section>
