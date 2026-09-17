@@ -20,7 +20,7 @@ const LABEL: Record<MutationModule, string> = {
 
 // Every mutating RPC the admin calls, by module. A read RPC is absent and passes.
 export const RPC_MODULE: Record<string, MutationModule> = {
-  decide_direct_booking: 'bookings',
+  staff_decide_direct_booking_v1: 'bookings',
   record_booking_lifecycle_action: 'bookings',
   authorize_booking_refund: 'bookings',
   save_work_order_v1: 'operations',

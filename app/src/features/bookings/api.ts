@@ -111,7 +111,8 @@ export async function decideDirectBooking(bookingId: string, action: 'confirm' |
   if (!review) {
     throw new AppError('validation', `No ${wanted} Finance review of this booking's payment yet. Review it in Finance → Payment queue first.`);
   }
-  return rpc<Record<string, unknown>>('decide_direct_booking', { p_booking_id: bookingId, p_action: action, p_idempotency_key: idempotencyKey, p_finance_review_id: review.id });
+  // D-171: decide_direct_booking is service_role only, so the direct call could never succeed; this is its staff-session gate (approve_payment).
+  return rpc<Record<string, unknown>>('staff_decide_direct_booking_v1', { p_booking_id: bookingId, p_action: action, p_idempotency_key: idempotencyKey, p_finance_review_id: review.id });
 }
 
 // BKG04: cancellation and amendment update the lifecycle only; refunds are a
