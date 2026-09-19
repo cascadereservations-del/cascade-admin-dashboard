@@ -223,7 +223,7 @@ export default function CleaningDetailPage() {
                               <p className="mb-1 text-xs font-medium capitalize text-muted-foreground">{section} ({shots.length})</p>
                               <div className="flex flex-wrap gap-1.5">
                                 {shots.map((p) => p.url ? (
-                                  <a key={p.name} href={p.url} target="_blank" rel="noreferrer" title={p.name}>
+                                  <a key={p.href ?? p.name} href={p.href ?? p.url} target="_blank" rel="noreferrer" title={p.name}>
                                     <img src={p.url} alt="" loading="lazy" className="size-16 rounded border object-cover" />
                                   </a>
                                 ) : (

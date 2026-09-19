@@ -49,11 +49,11 @@ export async function fetchCleanings(propertyId: string, f: CleaningFilters, can
 }
 
 export type CleaningDetail = {
-  session: CleaningRow & { checklist_details: unknown; preclean_photo_count: number | null; afterclean_photo_count: number | null; other_photo_count: number | null };
+  session: CleaningRow & { checklist_details: unknown; preclean_photo_count: number | null; afterclean_photo_count: number | null; other_photo_count: number | null; drive_files?: Array<{ section: string; name: string; fileId: string; url: string }> | null };
   meters: Array<{ id: string; electric_prev: string | null; electric_curr: string | null; electric_delta: string | null; water_prev: string | null; water_curr: string | null; water_delta: string | null; kwh_per_night: string | null; m3_per_night: string | null; meter_flag: string | null; meter_override_note: string | null; recorded_at: string }>;
   evidence: Array<{ id: string; evidence_kind: string; advisory_result: string | null; advisory_reason_codes: string[] | null; created_at: string; reviews: Array<{ id: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }> }>;
   readiness: Array<{ id: string; for_checkin_date: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }>;
-  photos: Array<{ name: string; created_at: string | null; size: number | null; url: string | null; section: 'before' | 'after' | 'meter' | 'other' }> | 'unavailable';
+  photos: Array<{ name: string; created_at: string | null; size: number | null; url: string | null; href?: string; section: 'before' | 'after' | 'meter' | 'other' }> | 'unavailable';
 };
 
 // Photos upload under {propertyId}/{uploaderUserId}/{submissionId}/... (see
@@ -100,6 +100,22 @@ export async function fetchCleaningDetail(propertyId: string, id: string, canFee
   // Photos are linked by submission identity, never by date. The real folder
   // is {propertyId}/{uploaderUserId}/{submissionId} (see findPhotoFolder).
   let photos: CleaningDetail['photos'] = 'unavailable';
+  // SPEC-15 phase 1: the Drive archive first, so a session still shows its photos once the Supabase
+  // copy is gone. Code.gs shares every file "anyone with the link", so the thumbnail needs no sign-in.
+  const drive = (sess.drive_files ?? []).filter((f) => f?.fileId);
+  if (drive.length) {
+    return {
+      session: sess,
+      meters: (m.data ?? []) as CleaningDetail['meters'],
+      evidence: (e.data ?? []) as unknown as CleaningDetail['evidence'],
+      readiness: (r.error ? [] : (r.data ?? [])) as CleaningDetail['readiness'],
+      photos: drive.map((f) => ({
+        name: f.name, created_at: null, size: null,
+        url: `https://drive.google.com/thumbnail?id=${encodeURIComponent(f.fileId)}&sz=w400`,
+        href: f.url, section: classifyPhoto(`${f.section} ${f.name}`),
+      })),
+    };
+  }
   try {
     const folder = await findPhotoFolder(propertyId, sess.submission_id);
     if (folder) {
