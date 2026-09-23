@@ -657,9 +657,6 @@
     .inv-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; min-height: 32px; }
     .inv-card-name { font-size: 0.8125rem; font-weight: 600; color: var(--color-ink); line-height: 1.35; }
     .inv-card-qty { display: flex; align-items: center; gap: 6px; }
-    .inv-stepper-btn { width: 28px; height: 28px; border: 1.5px solid var(--border-color); background: var(--color-surface-2); border-radius: var(--radius-xs); font-size: 1.125rem; font-weight: 700; color: var(--color-ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 120ms ease, color 120ms ease, border-color 120ms ease, opacity 120ms ease; flex-shrink: 0; line-height: 1; padding: 0; }
-    .inv-stepper-btn:hover { background: var(--color-amber-bg); border-color: var(--color-amber); color: var(--color-amber); }
-    .inv-stepper-btn:active { transform: scale(0.92); }
     .inv-qty-val { font-size: 1.125rem; font-weight: 700; color: var(--color-ink); min-width: 28px; text-align: center; }
     .inv-unit { font-size: 0.6875rem; color: var(--color-ink-3); }
     .inv-edit-btn { padding: 4px 12px; background: var(--color-surface-2); border: 1px solid var(--border-color); border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; color: var(--color-ink-2); cursor: pointer; transition: background 120ms ease, color 120ms ease, border-color 120ms ease, opacity 120ms ease; align-self: flex-start; font-family: var(--font-sans); }
@@ -3101,10 +3098,8 @@ function renderInventoryGrid() {
             (isLow ? '<span class="pill pill-red" style="font-size:0.5625rem;white-space:nowrap;">Low</span>' : '') +
           '</div>' +
           '<div class="inv-card-qty">' +
-            '<button class="inv-stepper-btn" onclick="adjustQty(\'' + item.id + '\',-1,event)">−</button>' +
             '<span class="inv-qty-val" id="iqv-' + item.id + '">' + qty.toLocaleString('en-PH', { maximumFractionDigits: 1 }) + '</span>' +
             '<span class="inv-unit">' + escHtml(item.unit || '') + '</span>' +
-            '<button class="inv-stepper-btn" onclick="adjustQty(\'' + item.id + '\',1,event)">+</button>' +
           '</div>' +
           '<button class="inv-edit-btn admin-only" onclick="openItemModal(\'' + item.id + '\',event)">Edit</button>' +
         '</div>';
@@ -3116,21 +3111,6 @@ function renderInventoryGrid() {
   applyRoleVisibility(currentRole);
 }
 
-async function adjustQty(itemId, delta, evt) {
-  if (evt) evt.stopPropagation();
-  var item = allInventory.find(function(x) { return x.id === itemId; });
-  if (!item) return;
-  var newQty = Math.max(0, (parseFloat(item.qty_on_hand) || 0) + delta);
-  const { error } = await db.from('inventory_items').update({ qty_on_hand: newQty }).eq('id', itemId);
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  item.qty_on_hand = newQty;
-  /* update qty display in-place */
-  var qEl = document.getElementById('iqv-' + itemId);
-  if (qEl) qEl.textContent = newQty.toLocaleString('en-PH', { maximumFractionDigits: 1 });
-  /* refresh grid to re-evaluate low-stock badge */
-  renderInventoryGrid();
-}
-
 function openItemModal(itemId, evt) {
   if (evt) evt.stopPropagation();
   editingItemId = itemId || null;
@@ -3140,6 +3120,8 @@ function openItemModal(itemId, evt) {
   document.getElementById('item-category').value = item ? (item.category || '') : '';
   document.getElementById('item-unit').value     = item ? (item.unit || '') : '';
   document.getElementById('item-qty').value      = item ? (parseFloat(item.qty_on_hand) || 0) : '';
+  // Session 46: stock changes go through a count or a purchase, not a direct edit that no ledger or audit sees.
+  document.getElementById('item-qty').disabled   = !!item;
   document.getElementById('item-reorder').value  = (item && item.reorder_below != null) ? parseFloat(item.reorder_below) : '';
   document.getElementById('item-active').checked = item ? !!item.is_active : true;
   var btn = document.getElementById('item-submit-btn');
@@ -3172,6 +3154,7 @@ async function submitItem() {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   var payload = { name: name, category: category, unit: unit, qty_on_hand: qty, reorder_below: reorder, is_active: isActive };
+  if (editingItemId) delete payload.qty_on_hand;
   var result;
   if (editingItemId) {
     result = await db.from('inventory_items').update(payload).eq('id', editingItemId);
@@ -3830,10 +3813,8 @@ renderInventoryGrid = function() {
         '<div class="inv-card-top"><div class="inv-card-name">' + escHtml(item.name) + '</div>' +
         (isLow ? '<span class="pill pill-red" style="font-size:0.5625rem;white-space:nowrap;">Low</span>' : '') + '</div>' +
         '<div class="inv-card-qty">' +
-          '<button class="inv-stepper-btn" onclick="adjustQty(\'' + item.id + '\',-1,event)">−</button>' +
           '<span class="inv-qty-val" id="iqv-' + item.id + '">' + qty.toLocaleString('en-PH',{maximumFractionDigits:1}) + '</span>' +
           '<span class="inv-unit">' + escHtml(item.unit||'') + '</span>' +
-          '<button class="inv-stepper-btn" onclick="adjustQty(\'' + item.id + '\',1,event)">+</button>' +
         '</div>' +
         '<button class="inv-edit-btn admin-only" onclick="openItemModal(\'' + item.id + '\',event)">Edit</button>' +
       '</div>';
