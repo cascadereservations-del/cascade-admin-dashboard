@@ -80,3 +80,16 @@ export async function fetchHealthRuns(propertyId: string) {
 export function runHealthChecks(propertyId: string) {
   return rpc<{ ranAt: string; checks: HealthCheck[] }>('run_health_checks_v1', { p_property_id: propertyId });
 }
+
+// SPEC-25 (D-226): the system verifier's open and acknowledged findings, and the dashboard's own
+// "Known, stop reminding". The read goes through the verifier_findings read_operations policy; the
+// ack RPC is owner/admin only on the server (42501 otherwise) and stamps who and when.
+export type VerifierFinding = { key: string; check_id: string; severity: 'red' | 'yellow'; title: string; status: 'open' | 'acknowledged'; first_seen: string; last_alerted_at: string | null; acknowledged_at: string | null; acknowledged_by: string | null };
+export async function fetchVerifierFindings() {
+  return unwrapList<VerifierFinding>(await supabase.from('verifier_findings')
+    .select('key,check_id,severity,title,status,first_seen,last_alerted_at,acknowledged_at,acknowledged_by')
+    .neq('status', 'resolved').order('severity').order('first_seen'));
+}
+export function ackVerifierFinding(key: string) {
+  return rpc<{ ok: boolean; outcome: 'acknowledged' | 'not_open' }>('ack_verifier_finding_v1', { p_key: key });
+}

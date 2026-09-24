@@ -26,6 +26,7 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   save_work_order_v1: 'operations',
   admin_soft_delete_v1: 'operations',
   admin_undo_v1: 'operations',
+  ack_verifier_finding_v1: 'operations',
   review_meter_reading_v1: 'readiness',
   review_cleaning_verification: 'readiness',
   review_property_readiness_v1: 'readiness',

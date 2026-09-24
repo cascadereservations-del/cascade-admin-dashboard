@@ -7,7 +7,7 @@ import { PageHeader, Section } from '@/components/data/page-header';
 import { QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
-import { fetchHealth, fetchHealthRuns, runHealthChecks } from './api';
+import { ackVerifierFinding, fetchHealth, fetchHealthRuns, fetchVerifierFindings, runHealthChecks } from './api';
 
 // Cross-tab checks (session 12): ledger vs reservations vs payouts vs cleaning
 // log vs meters vs inventory. Each is a read-only query on the server; the
@@ -47,6 +47,47 @@ function ChecksSection() {
   );
 }
 
+// SPEC-25 (D-226): what the hourly and 07:45 verifier found and has not seen resolved. The same
+// "Known, stop reminding" as the Telegram card; owner/admin only (the server decides, the button just
+// is not offered to anyone else). An acknowledgement holds until the finding's detail changes (D-217.2).
+function FindingsSection() {
+  const s = useSession();
+  const qc = useQueryClient();
+  const me = s.session?.user.id ?? '';
+  const canAck = s.caps.can('manage_staff');
+  const q = useQuery({ queryKey: ['verifier-findings'], queryFn: fetchVerifierFindings, refetchInterval: 60_000 });
+  const ack = useMutation({
+    mutationFn: (key: string) => ackVerifierFinding(key),
+    onSuccess: (r) => {
+      toast.success(r.outcome === 'not_open' ? 'Already handled.' : 'Acknowledged. It will not remind you again unless it changes.');
+      void qc.invalidateQueries({ queryKey: ['verifier-findings'] });
+    },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  return (
+    <Section title="System verifier findings">
+      {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.rows.length === 0 ? <p className="text-sm text-muted-foreground">Nothing open. The verifier runs hourly and at 07:45.</p> : (
+        <ul className="divide-y rounded-lg border text-sm">
+          {q.data.rows.map((f) => (
+            <li key={f.key} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <StatusBadge tone={f.severity === 'red' ? 'bad' : 'warn'}>{f.severity}</StatusBadge>
+              <span className="font-medium">{f.title}</span>
+              <span className="text-xs text-muted-foreground">first seen {formatDateTime(f.first_seen)}{f.last_alerted_at ? ` · last reminded ${formatDateTime(f.last_alerted_at)}` : ''}</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {f.status === 'acknowledged'
+                  ? `Acknowledged${f.acknowledged_by ? ` by ${f.acknowledged_by === me ? 'you' : 'an admin'}` : ''}${f.acknowledged_at ? ` on ${formatDateTime(f.acknowledged_at)}` : ''}`
+                  : canAck
+                    ? <Button size="sm" variant="outline" onClick={() => ack.mutate(f.key)} disabled={ack.isPending}>Known, stop reminding</Button>
+                    : 'Open'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 // OPS04: "No records received" is distinct from "healthy"; a section that
 // cannot be read says so. No secret values are shown.
 
@@ -65,6 +106,7 @@ export default function HealthPage() {
         {(d) => (
           <div className="space-y-6">
             <ChecksSection />
+            <FindingsSection />
             <Section title="Job heartbeats">
               {'error' in d.heartbeats ? <p className="text-sm text-destructive">Cannot read heartbeats: {d.heartbeats.error}</p> : d.heartbeats.rows.length === 0 ? <p className="text-sm text-muted-foreground">No heartbeat rows exist. That means no job has reported, not that jobs are healthy.</p> : (
                 <ul className="divide-y rounded-lg border text-sm">{d.heartbeats.rows.map((h) => <li key={h.job_name} className="flex flex-wrap items-center gap-2 px-3 py-1.5"><span className="font-medium">{h.job_name}</span><StatusBadge tone={h.ops_risk || stale(h) ? 'bad' : h.consecutive_failures > 0 ? 'warn' : 'good'}>{h.ops_risk ? 'ops risk' : stale(h) ? 'stale' : h.consecutive_failures > 0 ? `${h.consecutive_failures} failures` : 'on time'}</StatusBadge><span className="ml-auto text-xs text-muted-foreground">last success {h.last_succeeded_at ? formatDateTime(h.last_succeeded_at) : 'never'} · every {Math.round(h.expected_interval_seconds / 60)} min{h.last_error_code ? ` · ${h.last_error_code}` : ''}</span></li>)}</ul>
