@@ -21,7 +21,7 @@ export async function fetchStays(propertyId: string): Promise<StaysResult> {
       .limit(1000),
     supabase
       .from('booking_inquiries')
-      .select('id, guest_name, guest_email, guest_phone, checkin_date, checkout_date, pax, total_amount, deposit_amount, status, source, submitted_at, guest_id')
+      .select('id, guest_name, guest_email, guest_phone, checkin_date, checkout_date, pax, total_amount, deposit_amount, status, source, submitted_at, guest_id, receipt_image_path')
       .eq('property_id', propertyId)
       .order('checkin_date', { ascending: false })
       .limit(500),

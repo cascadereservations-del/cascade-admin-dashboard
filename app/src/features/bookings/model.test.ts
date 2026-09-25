@@ -13,7 +13,7 @@ const cal = (o: Partial<CalendarRow>): CalendarRow => ({
 });
 const inq = (o: Partial<InquiryRow>): InquiryRow => ({
   id: 'i1', guest_name: 'Ben', guest_email: null, guest_phone: null, checkin_date: '2026-10-01', checkout_date: '2026-10-03', pax: 2,
-  total_amount: '4000.00', deposit_amount: null, status: 'pending', source: 'direct', submitted_at: '2026-09-10T00:00:00Z', guest_id: null, ...o,
+  total_amount: '4000.00', deposit_amount: null, status: 'pending', source: 'direct', submitted_at: '2026-09-10T00:00:00Z', guest_id: null, receipt_image_path: null, ...o,
 });
 
 describe('mergeStays', () => {
@@ -49,6 +49,12 @@ describe('mergeStays', () => {
     expect(s!.bookingState).toBe('inquiry');
     expect(s!.paymentState).toBe('not_recorded');
     expect(s!.payoutState).toBe('not_applicable');
+  });
+  it('a fee due is not a payment: only a receipt or a confirmation records the deposit', () => {
+    const due = { total_amount: '3560.00', deposit_amount: '1780.00' };
+    expect(mergeStays([], [inq(due)], [], '2026-09-13')[0]!.paymentState).toBe('not_recorded');
+    expect(mergeStays([], [inq({ ...due, receipt_image_path: 'r.jpg' })], [], '2026-09-13')[0]!.paymentState).toBe('deposit_recorded');
+    expect(mergeStays([], [inq({ ...due, status: 'confirmed' })], [], '2026-09-13')[0]!.paymentState).toBe('deposit_recorded');
   });
   it('quick views filter arrivals, pending and unpaid', () => {
     const stays = mergeStays([res({})], [inq({})], [], '2026-09-13');

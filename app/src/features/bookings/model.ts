@@ -40,6 +40,7 @@ export type InquiryRow = {
   source: string | null;
   submitted_at: string | null;
   guest_id: string | null;
+  receipt_image_path: string | null;
 };
 
 export type CalendarRow = {
@@ -172,7 +173,9 @@ export function mergeStays(res: ReservationRow[], inq: InquiryRow[], cal: Calend
       checkout: i.checkout_date,
       nights: nightsBetween(i.checkin_date, i.checkout_date),
       bookingState,
-      paymentState: i.deposit_amount !== null && Number(i.deposit_amount) > 0 ? 'deposit_recorded' : 'not_recorded',
+      // deposit_amount is the 50% reservation fee DUE, set on every request; only an uploaded receipt or a
+      // confirmation (which needs a Finance-approved payment review) means money arrived.
+      paymentState: i.receipt_image_path || state === 'confirmed' || state === 'completed' ? 'deposit_recorded' : 'not_recorded',
       payoutState: 'not_applicable',
       payoutDate: null,
       guestPaid: null,
