@@ -7,7 +7,7 @@ import { PageHeader, Section } from '@/components/data/page-header';
 import { QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
-import { ackVerifierFinding, fetchHealth, fetchHealthRuns, fetchVerifierFindings, runHealthChecks } from './api';
+import { ackVerifierFinding, fetchClientErrors, fetchHealth, fetchHealthRuns, fetchVerifierFindings, runHealthChecks } from './api';
 
 // Cross-tab checks (session 12): ledger vs reservations vs payouts vs cleaning
 // log vs meters vs inventory. Each is a read-only query on the server; the
@@ -88,6 +88,28 @@ function FindingsSection() {
   );
 }
 
+// D-240: what the checklist PWA and the booking site reported to the error monitor, newest first.
+// Read-only; the monitor's own dedupe and Telegram alert decide what gets escalated.
+function ClientErrorsSection() {
+  const q = useQuery({ queryKey: ['client-errors'], queryFn: fetchClientErrors, refetchInterval: 60_000 });
+  return (
+    <Section title="Client errors">
+      {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.rows.length === 0 ? <p className="text-sm text-muted-foreground">No client errors recorded.</p> : (
+        <ul className="divide-y rounded-lg border text-sm">
+          {q.data.rows.map((e) => (
+            <li key={e.fingerprint} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <StatusBadge tone="neutral" className="normal-case">{e.app}</StatusBadge>
+              <span className="min-w-0 break-words font-medium">{e.message}</span>
+              <span className="tabular text-xs text-muted-foreground">{e.count}×</span>
+              <span className="ml-auto text-xs text-muted-foreground">first seen {formatDateTime(e.first_seen)} · last seen {formatDateTime(e.last_seen)} · {e.last_alerted_at ? `alerted ${formatDateTime(e.last_alerted_at)}` : 'not alerted'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 // OPS04: "No records received" is distinct from "healthy"; a section that
 // cannot be read says so. No secret values are shown.
 
@@ -107,6 +129,7 @@ export default function HealthPage() {
           <div className="space-y-6">
             <ChecksSection />
             <FindingsSection />
+            <ClientErrorsSection />
             <Section title="Job heartbeats">
               {'error' in d.heartbeats ? <p className="text-sm text-destructive">Cannot read heartbeats: {d.heartbeats.error}</p> : d.heartbeats.rows.length === 0 ? <p className="text-sm text-muted-foreground">No heartbeat rows exist. That means no job has reported, not that jobs are healthy.</p> : (
                 <ul className="divide-y rounded-lg border text-sm">{d.heartbeats.rows.map((h) => <li key={h.job_name} className="flex flex-wrap items-center gap-2 px-3 py-1.5"><span className="font-medium">{h.job_name}</span><StatusBadge tone={stale(h) ? 'bad' : h.consecutive_failures > 0 ? 'warn' : 'good'}>{stale(h) ? 'stale' : h.consecutive_failures > 0 ? `${h.consecutive_failures} failures` : 'on time'}</StatusBadge>{h.ops_risk && <StatusBadge tone="neutral" className="normal-case">ops-critical</StatusBadge>}<span className="ml-auto text-xs text-muted-foreground">last success {h.last_succeeded_at ? formatDateTime(h.last_succeeded_at) : 'never'} · every {Math.round(h.expected_interval_seconds / 60)} min{h.last_error_code ? ` · ${h.last_error_code}` : ''}</span></li>)}</ul>

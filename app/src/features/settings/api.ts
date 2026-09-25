@@ -93,3 +93,12 @@ export async function fetchVerifierFindings() {
 export function ackVerifierFinding(key: string) {
   return rpc<{ ok: boolean; outcome: 'acknowledged' | 'not_open' }>('ack_verifier_finding_v1', { p_key: key });
 }
+
+// D-240: the client error monitor (checklist PWA and booking site), newest first. Read-only through
+// the client_errors staff read policy (owner/admin); the dashboard never writes it.
+export type ClientError = { fingerprint: string; app: string; kind: string; message: string; detail: Record<string, unknown> | null; first_seen: string; last_seen: string; count: number; last_alerted_at: string | null };
+export async function fetchClientErrors() {
+  return unwrapList<ClientError>(await supabase.from('client_errors')
+    .select('fingerprint,app,kind,message,detail,first_seen,last_seen,count,last_alerted_at')
+    .order('last_seen', { ascending: false }).limit(20));
+}
