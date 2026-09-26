@@ -22,8 +22,9 @@ import {
 // submit-booking all read it through get_rate_card_v1 / the rate-card function (a change reaches them within a minute).
 // The price advisor (SPEC-35) is a separate module; it never writes here.
 
-const REASON_MIN = 3;
 const num = (v: string) => (v.trim() === '' ? NaN : Number(v));
+/** The SQL functions take a reason of 3 to 2000 characters (review 2026-09-26: check both ends here). */
+const reasonProblem = (r: string) => (r.trim().length < 3 ? 'Say why (a few words), for the audit history.' : r.trim().length > 2000 ? 'Keep the reason under 2,000 characters.' : null);
 
 export default function PricingPage() {
   const s = useSession();
@@ -52,14 +53,17 @@ function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId
   const [base, setBase] = useState(String(card.base));
   const [fee, setFee] = useState(String(card.deposit_pct));
   const [tiers, setTiers] = useState<Array<{ min: string; pct: string }>>(card.tiers.map((t) => ({ min: String(t.min_nights), pct: String(t.pct) })));
-  const [from, setFrom] = useState(todayManila());
+  // ponytail: a card starts TODAY. get_rate_card_v1 picks the card in force today, not on the stay's dates, so a card
+  // scheduled ahead would not price stays after its start until that day came (review 2026-09-26). Scheduling needs
+  // get_rate_card_v1 to take the check-in date (a later contract release); publish on the day until then.
+  const from = todayManila();
   const [reason, setReason] = useState('');
   const [key, setKey] = useState(() => newIdempotencyKey('rate-card'));
   const parsed: Tier[] = tiers.map((t) => ({ min_nights: num(t.min), pct: num(t.pct) }));
   const b = num(base), f = num(fee);
   const problem = !(b > 0 && b < 100000) ? 'The standard rate must be a price above zero.'
     : !(f > 0 && f <= 100) ? 'The reservation fee is between 1% and 100%.'
-    : tierProblem(parsed) ?? (from < todayManila() ? 'A new card starts today or later.' : reason.trim().length < REASON_MIN ? 'Say why (a few words), for the audit history.' : null);
+    : tierProblem(parsed) ?? reasonProblem(reason);
   const publish = useMutation({
     mutationFn: () => publishCard({ base: b, tiers: parsed, depositPct: f, effectiveFrom: from, reason: reason.trim(), key }),
     onSuccess: () => { toast.success(`Rate card published from ${from}`); setEditing(false); setReason(''); setKey(newIdempotencyKey('rate-card')); onDone(); },
@@ -85,7 +89,7 @@ function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId
           <div className="flex flex-wrap gap-4">
             <div><Label htmlFor="rc-base">Standard rate per night (PHP)</Label><Input id="rc-base" inputMode="numeric" className="w-36 text-base sm:text-sm" value={base} onChange={(e) => setBase(e.target.value)} /></div>
             <div><Label htmlFor="rc-fee">Reservation fee (%)</Label><Input id="rc-fee" inputMode="numeric" className="w-24 text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
-            <div><Label htmlFor="rc-from">Starts on</Label><Input id="rc-from" type="date" min={todayManila()} className="w-44 text-base sm:text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+            <p className="self-end pb-2 text-muted-foreground">Starts today ({from}) for every new quote. Bookings already made keep their price.</p>
           </div>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Discounts by length of stay (the whole stay gets the rate of its length)</p>
@@ -105,7 +109,7 @@ function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId
           {b > 0 && b !== 1780 && <p className="text-xs text-muted-foreground">The booking site's search-engine text (the page description Google shows) still says ₱1,780: ask for it to be updated when this card starts.</p>}
           {problem && <p role="alert" className="text-sm text-destructive">{problem}</p>}
           <div className="flex gap-2">
-            <Button disabled={!!problem || publish.isPending} onClick={() => publish.mutate()}>{publish.isPending ? 'Publishing…' : `Publish from ${from}`}</Button>
+            <Button disabled={!!problem || publish.isPending} onClick={() => publish.mutate()}>{publish.isPending ? 'Publishing…' : 'Publish now'}</Button>
             <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
           </div>
         </div>
@@ -170,13 +174,13 @@ function PromotionForm({ card, row, onClose, onDone }: { card: RateCard; row: Pr
   const [reason, setReason] = useState('');
   const v = num(value);
   const price = mode === 'price' ? v : v > 0 && v < 100 ? pctToPrice(card.base, v) : NaN;
-  const problem = name.trim().length < 3 ? 'Give it a name guests will read (3+ characters).'
+  const problem = name.trim().length < 3 || name.trim().length > 80 ? 'Give it a name guests will read (3 to 80 characters).'
     : !first || !last ? 'Pick the first and the last NIGHT of the promotion.'
     : last < first ? 'The last night comes after the first.'
     : last < todayManila() ? 'That promotion would already be over.'
     : !(price > 0 && price < 100000) ? (mode === 'pct' ? 'A percentage between 0 and 100.' : 'A price above zero.')
     : price >= card.base ? `The promotion price should be under the standard ${formatPHP(card.base, { whole: true })}.`
-    : reason.trim().length < REASON_MIN ? 'Say why (a few words), for the audit history.' : null;
+    : reasonProblem(reason);
   const save = useMutation({
     mutationFn: () => savePromotion({ id: row?.id ?? null, name: name.trim(), firstNight: first, lastNight: last, nightlyRate: price, reason: reason.trim() }),
     onSuccess: () => { toast.success(row ? 'Promotion updated' : 'Promotion saved', { description: 'The site and the concierge quote it within a minute.' }); onClose(); onDone(); },

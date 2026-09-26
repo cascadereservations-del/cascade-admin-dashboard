@@ -332,7 +332,9 @@ function ForwardProjection({ fallbackAdr }: { fallbackAdr: number }) {
   const pending = q.isPending || (adr === 0 && card.isPending);
   return (
     <Section title="Forward projection">
-      {pending ? <CardSkeleton /> : totalNights === 0 ? (
+      {pending ? <CardSkeleton /> : !(adr > 0) ? (
+        <p className="text-sm text-muted-foreground">No ADR for this period yet and the standard rate could not be read, so no projection is drawn. Reload to try again.</p>
+      ) : totalNights === 0 ? (
         <p className="text-sm text-muted-foreground">No confirmed bookings on the calendar past this month yet.</p>
       ) : (
         <div className="rounded-lg border bg-card p-3">
