@@ -9,7 +9,9 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 
 export type Tier = { min_nights: number; pct: number };
 export type Promotion = { name: string; first_night: string; last_night: string; nightly_rate: number };
-export type RateCard = { base: number; currency: string; deposit_pct: number; tiers: Tier[]; version_id: string; effective_from: string; promotions: Promotion[] };
+export type RateCard = { base: number; currency: string; deposit_pct: number; tiers: Tier[]; version_id: string; effective_from: string; promotions: Promotion[];
+  /** Cards published to start after today (release rate_card_upcoming_20260926). */
+  upcoming?: Array<{ effective_from: string; base: number; deposit_pct: number; tiers: Tier[]; version_id: string }> };
 export type CardVersion = { id: string; effective_from: string; effective_to: string | null; nightly_rate: string; terms: { tiers?: Tier[]; deposit_pct?: number }; approved_at: string };
 export type PromotionRow = Promotion & { id: string; active: boolean; created_at: string; updated_at: string };
 export type QuoteNight = { date: string; rate: number; source: 'promo' | 'tier'; promo?: string };
