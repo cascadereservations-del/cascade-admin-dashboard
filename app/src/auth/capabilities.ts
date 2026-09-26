@@ -14,7 +14,8 @@ export type Action =
   | 'inspect_cleaning'
   | 'submit_cleaning'
   | 'manage_inventory'
-  | 'manage_maintenance';
+  | 'manage_maintenance'
+  | 'publish_rate_policy'; // SPEC-34: the Pricing tab (owner/admin, as staff_access_allowed decides)
 
 // D-094 (2026-09-13): no action needs a two-factor session any more. The server
 // ignores aal in staff_access_allowed; this list stays so the gate can be
@@ -22,8 +23,8 @@ export type Action =
 const MFA_ACTIONS: Action[] = [];
 
 const ROLE_ACTIONS: Record<StaffRole, Action[]> = {
-  owner: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance'],
-  admin: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance'],
+  owner: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'],
+  admin: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'],
   finance: ['approve_payment', 'read_finance', 'read_operations'],
   inspector: ['read_operations', 'inspect_cleaning', 'submit_cleaning'],
   cleaner: ['read_operations', 'submit_cleaning'],

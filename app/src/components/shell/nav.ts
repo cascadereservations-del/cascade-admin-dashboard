@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Package,
   Settings,
+  Tag,
   Users,
   Wallet,
   type LucideIcon,
@@ -73,6 +74,7 @@ export const NAV: NavItem[] = [
     ],
   },
   { to: '/insights', label: 'KPIs & Analytics', icon: BarChart3, action: 'read_finance' },
+  { to: '/pricing', label: 'Pricing', icon: Tag, action: 'publish_rate_policy' }, // SPEC-34 (D-259)
   {
     to: '/settings',
     label: 'Settings',

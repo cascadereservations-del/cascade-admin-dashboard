@@ -5,9 +5,9 @@ import { AppError } from './errors';
 // is a one-line change here, `npm run check`, then republish `next/`.
 // Reads are never gated; server-side capability checks still apply to every call.
 
-export type MutationModule = 'bookings' | 'operations' | 'readiness' | 'inventory' | 'follow_ups' | 'finance';
+export type MutationModule = 'bookings' | 'operations' | 'readiness' | 'inventory' | 'follow_ups' | 'finance' | 'pricing';
 
-export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings', 'operations', 'readiness', 'inventory', 'follow_ups', 'finance']; // all six enabled in order 2026-09-13 on Lloyd's word (rollout step 5 complete)
+export const ENABLED_MUTATION_MODULES: readonly MutationModule[] = ['bookings', 'operations', 'readiness', 'inventory', 'follow_ups', 'finance', 'pricing']; // pricing added 2026-09-26 (SPEC-34); all six enabled in order 2026-09-13 on Lloyd's word (rollout step 5 complete)
 
 const LABEL: Record<MutationModule, string> = {
   bookings: 'booking decisions and cancellations',
@@ -16,6 +16,7 @@ const LABEL: Record<MutationModule, string> = {
   inventory: 'inventory counts and receipts',
   follow_ups: 'guest profiles and follow-ups',
   finance: 'finance',
+  pricing: 'the rate card and promotions',
 };
 
 // Every mutating RPC the admin calls, by module. A read RPC is absent and passes.
@@ -46,6 +47,9 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   approve_opening_balances_v1: 'finance',
   close_accounting_period_v1: 'finance',
   reopen_accounting_period_v1: 'finance',
+  publish_rate_card_v1: 'pricing',
+  save_rate_promotion_v1: 'pricing',
+  end_rate_promotion_v1: 'pricing',
 };
 
 export function mutationsEnabled(module: MutationModule): boolean {

@@ -31,6 +31,7 @@ const JournalsPage = lazy(() => import('@/features/finance/journals-page'));
 const StatementsPage = lazy(() => import('@/features/finance/statements-page'));
 const AccountingSetupPage = lazy(() => import('@/features/finance/setup-page'));
 const InsightsPage = lazy(() => import('@/features/insights/insights-page'));
+const PricingPage = lazy(() => import('@/features/pricing/pricing-page'));
 const StaffPage = lazy(() => import('@/features/settings/staff-page'));
 const HealthPage = lazy(() => import('@/features/settings/health-page'));
 const AuditPage = lazy(() => import('@/features/settings/audit-page'));
@@ -76,6 +77,7 @@ export const router = createHashRouter([
       { path: 'finance/statements', element: guard('read_finance', <StatementsPage />) },
       { path: 'finance/setup', element: guard('read_finance', <AccountingSetupPage />) },
       { path: 'insights', element: guard('read_finance', <InsightsPage />) },
+      { path: 'pricing', element: guard('publish_rate_policy', <PricingPage />) }, // SPEC-34 (D-259): the one rate card
       { path: 'settings', element: guard('manage_staff', <StaffPage />) },
       { path: 'settings/health', element: guard('read_operations', <HealthPage />) },
       { path: 'settings/audit', element: guard('manage_staff', <AuditPage />) },

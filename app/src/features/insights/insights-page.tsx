@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import type { MetricResult } from '@/types/contracts';
 import { fetchDrilldown, fetchFutureStays, fetchMetrics, fetchUtilityMonths, isConsumptionReading } from './api';
+import { fetchCard } from '@/features/pricing/api';
 
 // INS01/INS03/INS05: server-calculated hospitality metrics with an
 // equivalent-elapsed comparison period and deterministic plain-language
@@ -320,13 +321,15 @@ function ForwardProjection({ fallbackAdr }: { fallbackAdr: number }) {
   const windowStart = monthBounds(shiftMonthKey(thisMonth, 1)).start;
   const windowEnd = monthBounds(shiftMonthKey(thisMonth, 3)).endExclusive;
   const q = useQuery({ queryKey: ['future-stays', s.propertyId, windowStart, windowEnd], queryFn: () => fetchFutureStays(s.propertyId, windowStart, windowEnd), staleTime: 300_000 });
-  const adr = Number.isFinite(fallbackAdr) && fallbackAdr > 0 ? fallbackAdr : 1780;
+  // SPEC-34: the fallback is the stored rate card's standard rate, not a copy of it.
+  const card = useQuery({ queryKey: ['rate-card'], queryFn: fetchCard, staleTime: 300_000 });
+  const adr = Number.isFinite(fallbackAdr) && fallbackAdr > 0 ? fallbackAdr : (card.data?.base ?? 0);
   const data = months.map((m) => {
     const nights = (q.data ?? []).reduce((a, r) => a + nightsInPeriod(r.checkin_date, r.checkout_date, m.start, m.endExclusive), 0);
     return { label: m.label, nights, projected: Math.round(nights * adr) };
   });
   const totalNights = data.reduce((a, d) => a + d.nights, 0);
-  const pending = q.isPending;
+  const pending = q.isPending || (adr === 0 && card.isPending);
   return (
     <Section title="Forward projection">
       {pending ? <CardSkeleton /> : totalNights === 0 ? (
