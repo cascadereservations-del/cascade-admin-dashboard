@@ -62,7 +62,9 @@ function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId
   const b = num(base), f = num(fee);
   const problem = !(b > 0 && b < 100000) ? 'The standard rate must be a price above zero.'
     : !(f > 0 && f <= 100) ? 'The reservation fee is between 1% and 100%.'
-    : tierProblem(parsed) ?? (from < todayManila() ? 'A new card starts today or later.' : reasonProblem(reason));
+    : tierProblem(parsed) ?? (from < todayManila() ? 'A new card starts today or later.'
+      : (card.upcoming ?? []).some((u) => u.effective_from > from) ? `A card is already scheduled from ${(card.upcoming ?? []).map((u) => u.effective_from).sort().pop()}: pick that date to correct it, or a later one.`
+      : reasonProblem(reason));
   const publish = useMutation({
     mutationFn: () => publishCard({ base: b, tiers: parsed, depositPct: f, effectiveFrom: from, reason: reason.trim(), key }),
     onSuccess: () => { toast.success(`Rate card published from ${from}`); setEditing(false); setReason(''); setKey(newIdempotencyKey('rate-card')); onDone(); },
