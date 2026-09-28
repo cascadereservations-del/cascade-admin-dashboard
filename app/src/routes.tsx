@@ -35,6 +35,7 @@ const PricingPage = lazy(() => import('@/features/pricing/pricing-page'));
 const StaffPage = lazy(() => import('@/features/settings/staff-page'));
 const HealthPage = lazy(() => import('@/features/settings/health-page'));
 const AuditPage = lazy(() => import('@/features/settings/audit-page'));
+const GuestContactPage = lazy(() => import('@/features/settings/guest-contact-page'));
 
 function guard(action: Action, el: ReactNode) {
   return (
@@ -81,6 +82,7 @@ export const router = createHashRouter([
       { path: 'settings', element: guard('manage_staff', <StaffPage />) },
       { path: 'settings/health', element: guard('read_operations', <HealthPage />) },
       { path: 'settings/audit', element: guard('manage_staff', <AuditPage />) },
+      { path: 'settings/guest-contact', element: guard('manage_staff', <GuestContactPage />) },
       { path: '*', element: <Navigate to="/today" replace /> },
     ],
   },

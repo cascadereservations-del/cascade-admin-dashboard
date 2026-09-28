@@ -84,6 +84,7 @@ export const NAV: NavItem[] = [
       { to: '/settings', label: 'Staff', action: 'manage_staff' },
       { to: '/settings/health', label: 'System health' },
       { to: '/settings/audit', label: 'Audit history', action: 'manage_staff' },
+      { to: '/settings/guest-contact', label: 'Guest contact', action: 'manage_staff' },
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
+import type { GuestContact } from './guest-contact';
 
 // Settings adapter (P29). Staff management keeps the deployed staff-users
 // Edge Function contract (owner/admin only, MFA on the server). Health reads
@@ -92,6 +93,22 @@ export async function fetchVerifierFindings() {
 }
 export function ackVerifierFinding(key: string) {
   return rpc<{ ok: boolean; outcome: 'acknowledged' | 'not_open' }>('ack_verifier_finding_v1', { p_key: key });
+}
+
+// Guest contact (session 59): app_settings onground_name / onground_phone. Write needs manage_staff
+// (RLS app_settings_admin_write); readers cache for 60 s, so a save reaches guests within a minute.
+export async function fetchGuestContact(): Promise<Partial<GuestContact>> {
+  const { rows } = unwrapList<{ key: string; value: unknown }>(await supabase.from('app_settings').select('key,value').in('key', ['onground_name', 'onground_phone']));
+  const get = (k: string) => { const v = rows.find((r) => r.key === k)?.value; return typeof v === 'string' ? v : undefined; };
+  return { name: get('onground_name'), phone: get('onground_phone') };
+}
+export async function saveGuestContact(c: GuestContact) {
+  const at = new Date().toISOString();
+  const { error } = await supabase.from('app_settings').upsert([
+    { key: 'onground_name', value: c.name, updated_at: at },
+    { key: 'onground_phone', value: c.phone, updated_at: at },
+  ]);
+  if (error) throw error;
 }
 
 // D-240: the client error monitor (checklist PWA and booking site), newest first. Read-only through
