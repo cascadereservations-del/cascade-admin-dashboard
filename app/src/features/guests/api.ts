@@ -138,6 +138,15 @@ export async function uploadCompanionIdPhoto(companionId: string, file: File) {
   if (error) throw error;
   return path;
 }
+// One signed URL per path (null when the stored file cannot be signed, i.e. the object is missing).
+export async function companionIdPhotoUrls(paths: string[]) {
+  const out = new Map<string, string | null>();
+  if (paths.length === 0) return out;
+  const { data, error } = await supabase.storage.from('guest-id-photos').createSignedUrls(paths, 900);
+  if (error) throw error;
+  for (const d of data ?? []) if (d.path) out.set(d.path, d.error ? null : d.signedUrl);
+  return out;
+}
 export async function companionIdPhotoUrl(path: string) {
   const { data, error } = await supabase.storage.from('guest-id-photos').createSignedUrl(path, 300);
   if (error) throw error;

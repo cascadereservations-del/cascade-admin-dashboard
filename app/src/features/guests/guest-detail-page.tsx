@@ -22,7 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FollowUpForm } from './follow-up-form';
 import { ImportantNotes, ProfileExtraFields, PrivateGuestDetails, isPlausiblePHMobile, phNetworkHint } from './profile-extras';
 import { safeMessengerUrl, validateIdPhoto } from './local-records';
-import { companionIdPhotoUrl, deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
+import { GuestIdPhotoControl, IdPhotoProvider, IdPhotoThumb } from './id-photos';
+import { findSelfCompanion } from './id-photo';
+import { deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion, type ProfileDetails } from './api';
 
 // CRM01-CRM06. Profile fields are optional and carry provenance; the timeline
 // is server-filtered by permission; merge requires a server preview, a
@@ -42,7 +44,7 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['companions', guestId] });
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['companions', guestId] }); void qc.invalidateQueries({ queryKey: ['id-photo-urls', guestId] }); };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -69,10 +71,6 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
     onSuccess: () => { toast.success('Companion removed'); setConfirmDelete(null); setReason(''); refresh(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
-  const openPhoto = async (path: string) => {
-    try { window.open(await companionIdPhotoUrl(path), '_blank', 'noopener'); }
-    catch (e) { toast.error(toAppError(e).message); }
-  };
   const open = (c?: Companion) => { setFile(null); setUploadedPath(null); setReason(''); setDraft(c ? { id: c.id, name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', version: c.version } : { name: '', contact_number: '', id_type: '', id_number: '', notes: '' }); };
 
   return (
@@ -83,10 +81,10 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
           <ul className="divide-y rounded-lg border text-sm">
             {rows.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                {c.id_photo_path && <IdPhotoThumb companionId={c.id} path={c.id_photo_path} name={c.name} />}
                 <button type="button" className="text-left font-medium hover:underline" onClick={() => open(c)}>{c.name}</button>
                 {c.contact_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{c.contact_number}<CopyButton value={c.contact_number} /></span>}
                 {c.id_type && <StatusBadge tone="info">{c.id_type.replace('_', ' ')}</StatusBadge>}
-                {c.id_photo_path && <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={() => openPhoto(c.id_photo_path!)}>View ID photo</Button>}
                 <div className="ml-auto flex gap-1">
                   <Button size="sm" variant="outline" onClick={() => open(c)}>Edit</Button>
                   {confirmDelete === c.id ? <div className="flex flex-wrap gap-2"><Input aria-label="Reason for removing companion" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} /><Button size="sm" variant="destructive" disabled={remove.isPending || reason.trim().length < 3} onClick={() => remove.mutate(c.id)}>Confirm removal</Button><Button size="sm" variant="ghost" onClick={() => { setConfirmDelete(null); setReason(''); }}>Keep companion</Button></div> : <Button size="sm" variant="outline" onClick={() => { setConfirmDelete(c.id); setReason(''); }}>Remove</Button>}
@@ -108,7 +106,7 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
             <div>
               <Label htmlFor="cp-photo">ID photo</Label>
               <Input id="cp-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={save.isPending} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setUploadedPath(null); }} className="text-base" />
-              <p className="mt-1 text-xs text-muted-foreground">JPEG, PNG or WebP, up to 10 MB. Uploads to Cascade's private storage when you save.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{companions.data?.find((c) => c.id === draft.id)?.id_photo_path ? 'A photo is on file; choosing a new file replaces it. ' : ''}JPEG, PNG or WebP, up to 10 MB. Uploads to Cascade's private storage when you save.</p>
             </div>
             <div><Label htmlFor="cp-notes">Notes</Label><Textarea id="cp-notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} className="text-base" /></div>
             <div><Label htmlFor="cp-reason">Reason for change</Label><Input id="cp-reason" required minLength={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
@@ -124,12 +122,16 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
 // The primary guest has no id_photo_path column of their own (2026-09-15
 // decision: reuse the companion mechanism rather than a new migration) -- a
 // companion row named after the guest holds their own ID photo when collected.
-function PrimaryIdPhoto({ guestId, guestName }: { guestId: string; guestName: string }) {
+// The button below creates or updates that row through the audited companion save.
+function PrimaryIdPhoto({ guestId, guestName, details }: { guestId: string; guestName: string; details: ProfileDetails | null }) {
   const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
-  const self = companions.data?.find((c) => c.name.trim().toLowerCase() === guestName.trim().toLowerCase() && c.id_photo_path);
-  const open = async () => { try { window.open(await companionIdPhotoUrl(self!.id_photo_path!), '_blank', 'noopener'); } catch (e) { toast.error(toAppError(e).message); } };
-  if (!self) return <p className="text-xs text-muted-foreground">No ID photo on file. Add one as a companion record named "{guestName}" below.</p>;
-  return <Button size="sm" variant="outline" onClick={open}>View ID photo</Button>;
+  const self = findSelfCompanion(companions.data, guestName);
+  return (
+    <>
+      {self?.id_photo_path ? <IdPhotoThumb companionId={self.id} path={self.id_photo_path} name={guestName} size="size-20" /> : <p className="max-w-24 text-center text-[11px] leading-tight text-muted-foreground">No ID photo on file</p>}
+      <GuestIdPhotoControl guestId={guestId} guestName={guestName} details={details} />
+    </>
+  );
 }
 
 export default function GuestDetailPage() {
@@ -173,6 +175,7 @@ export default function GuestDetailPage() {
       <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => nav(-1)}><ArrowLeft className="size-4" aria-hidden /> Back</Button>
       <QueryState query={guest}>
         {({ guest: g, details: d, detailsError }) => (
+          <IdPhotoProvider guestId={id} guestName={g.name}>
           <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
               <div className="flex items-start gap-4">
@@ -180,7 +183,7 @@ export default function GuestDetailPage() {
                   <div aria-hidden className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
                     {(d?.display_name ?? g.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
                   </div>
-                  <PrimaryIdPhoto guestId={id} guestName={g.name} />
+                  <PrimaryIdPhoto guestId={id} guestName={g.name} details={d} />
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -310,6 +313,7 @@ export default function GuestDetailPage() {
               <FollowUpForm guestId={id} existing={editingTask} onDone={() => { setNewTask(false); set({ task: '' }); }} />
             </DetailSheet>
           </div>
+          </IdPhotoProvider>
         )}
       </QueryState>
     </div>
