@@ -18,8 +18,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUndoToast } from '@/lib/undo';
-import { Input } from '@/components/ui/input';
-import { METER_FLAGS, fetchCleaningDetail, reviewEvidence, reviewMeterReading, reviewReadiness } from './api';
+import { PhotoLightbox } from '@/components/data/photo-lightbox';
+import { photoLabel } from '@/lib/lightbox';
+import { MeterReadingBlock } from './meter-reading';
+import { baselineFrom } from './meter-context';
+import { fetchCleaningDetail, fetchMeterBaseline, reviewEvidence, reviewMeterReading, reviewReadiness } from './api';
 
 // CLN02-CLN05. Evidence is linked by submission identity; advisory findings
 // are shown as advisory; readiness needs a human decision with a reason for
@@ -97,8 +100,9 @@ export default function CleaningDetailPage() {
   const [outcome, setOutcome] = useState<'ready' | 'not_ready' | 'override_ready'>('ready');
   const [reason, setReason] = useState('');
   const [evReason, setEvReason] = useState('');
-  const [meterFlag, setMeterFlag] = useState<Record<string, string>>({});
-  const [meterReason, setMeterReason] = useState<Record<string, string>>({});
+  const [viewer, setViewer] = useState<number | null>(null);
+  const history = useQuery({ queryKey: ['meter-baseline', s.propertyId], queryFn: () => fetchMeterBaseline(s.propertyId), staleTime: 5 * 60_000 });
+  const baseline = baselineFrom(history.data ?? [], id);
   const undoToast = useUndoToast();
   const meterReview = useMutation({
     mutationFn: (p: { id: string; flag: string | null; reason: string }) => reviewMeterReading(p.id, p.flag, p.reason),
@@ -189,22 +193,7 @@ export default function CleaningDetailPage() {
                   <CardHeader><CardTitle className="flex items-center gap-2"><Gauge className="size-4 text-muted-foreground" aria-hidden /> Meters</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     {d.meters.length === 0 ? <p className="text-muted-foreground">No meter readings on this submission.</p> : d.meters.map((m) => (
-                      <div key={m.id} className="space-y-1">
-                        <p className="tabular">Electric {m.electric_prev ?? '—'} → {m.electric_curr ?? '—'} (Δ {m.electric_delta ?? '—'} kWh, {m.kwh_per_night ?? '—'}/night)</p>
-                        <p className="tabular">Water {m.water_prev ?? '—'} → {m.water_curr ?? '—'} (Δ {m.water_delta ?? '—'} m³, {m.m3_per_night ?? '—'}/night)</p>
-                        {m.meter_flag && <StatusBadge tone="warn">flag: {m.meter_flag.replaceAll('_', ' ')}</StatusBadge>}
-                        {m.meter_override_note && <p className="text-muted-foreground">Note: {m.meter_override_note}</p>}
-                        {canInspect && (
-                          <div className="flex flex-wrap items-end gap-1.5">
-                            <Select value={meterFlag[m.id] ?? m.meter_flag ?? 'none'} onValueChange={(v) => setMeterFlag({ ...meterFlag, [m.id]: v })}>
-                              <SelectTrigger className="h-8 w-40 text-xs" aria-label="Meter flag"><SelectValue /></SelectTrigger>
-                              <SelectContent><SelectItem value="none">no flag</SelectItem>{METER_FLAGS.map((f) => <SelectItem key={f} value={f}>{f.replaceAll('_', ' ')}</SelectItem>)}</SelectContent>
-                            </Select>
-                            <Input aria-label="Meter review reason" placeholder="Reason" className="h-8 w-44 text-xs" value={meterReason[m.id] ?? ''} onChange={(e) => setMeterReason({ ...meterReason, [m.id]: e.target.value })} />
-                            <Button size="sm" variant="outline" className="h-8" disabled={(meterReason[m.id] ?? '').trim().length < 3 || meterReview.isPending} onClick={() => meterReview.mutate({ id: m.id, flag: (meterFlag[m.id] ?? m.meter_flag ?? 'none') === 'none' ? null : (meterFlag[m.id] ?? m.meter_flag!), reason: meterReason[m.id] ?? '' })}>Review</Button>
-                          </div>
-                        )}
-                      </div>
+                      <MeterReadingBlock key={m.id} m={m} stay={c} baseline={baseline} canInspect={canInspect} pending={meterReview.isPending} onReview={(p) => meterReview.mutate(p)} />
                     ))}
                     <p className="text-xs text-muted-foreground">Arithmetic and vision checks are advisory. They never block a submission.</p>
                   </CardContent>
@@ -213,28 +202,36 @@ export default function CleaningDetailPage() {
                   <CardHeader><CardTitle className="flex items-center gap-2"><Camera className="size-4 text-muted-foreground" aria-hidden /> Photos</CardTitle></CardHeader>
                   <CardContent className="text-sm">
                     <p className="text-muted-foreground">Counts from the submission: {c.preclean_photo_count ?? 0} before · {c.afterclean_photo_count ?? 0} after · {c.meter_photo_count ?? 0} meter · {c.other_photo_count ?? 0} other.</p>
-                    {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No photo objects found for this submission.</p> : (
-                      <div className="mt-2 max-h-64 space-y-3 overflow-auto">
-                        {(['meter', 'before', 'after', 'other'] as const).map((section) => {
-                          const shots = d.photos === 'unavailable' ? [] : d.photos.filter((p) => p.section === section);
-                          if (shots.length === 0) return null;
-                          return (
-                            <div key={section}>
-                              <p className="mb-1 text-xs font-medium capitalize text-muted-foreground">{section} ({shots.length})</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {shots.map((p) => p.url ? (
-                                  <a key={p.href ?? p.name} href={p.href ?? p.url} target="_blank" rel="noreferrer" title={p.name}>
-                                    <img src={p.url} alt="" loading="lazy" className="size-16 rounded border object-cover" />
-                                  </a>
-                                ) : (
-                                  <span key={p.name} className="max-w-24 truncate rounded border px-1.5 py-1 text-xs" title={p.name}>{p.name}</span>
-                                ))}
+                    {d.photos === 'unavailable' ? <p className="mt-2 text-muted-foreground">Storage listing unavailable for this session.</p> : d.photos.length === 0 ? <p className="mt-2 text-muted-foreground">No photo objects found for this submission.</p> : (() => {
+                      // One ordered list drives both the thumbnail grid and the viewer, so
+                      // "3 / 24" in the viewer is the same photo as the 3rd thumbnail.
+                      const grouped = (['meter', 'before', 'after', 'other'] as const).map((section) => ({ section, shots: d.photos === 'unavailable' ? [] : d.photos.filter((p) => p.section === section) })).filter((g) => g.shots.length > 0);
+                      const viewable = grouped.flatMap((g) => g.shots.filter((p) => p.url).map((p) => ({ p, section: g.section })));
+                      const items = viewable.map(({ p, section }) => ({ src: p.full ?? p.url!, thumb: p.url!, label: `${section[0]!.toUpperCase()}${section.slice(1)} · ${photoLabel(p.name)}`, sub: p.name, href: p.href }));
+                      const indexOf = (name: string) => viewable.findIndex((v) => v.p.name === name);
+                      return (
+                        <>
+                          {items.length > 0 && <Button size="sm" variant="outline" className="mt-2" onClick={() => setViewer(0)}>Review all {items.length} photos</Button>}
+                          <div className="mt-2 max-h-64 space-y-3 overflow-auto">
+                            {grouped.map(({ section, shots }) => (
+                              <div key={section}>
+                                <p className="mb-1 text-xs font-medium capitalize text-muted-foreground">{section} ({shots.length})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {shots.map((p) => p.url ? (
+                                    <button key={p.href ?? p.name} type="button" title={p.name} aria-label={`Open photo ${indexOf(p.name) + 1} of ${items.length}: ${p.name}`} onClick={() => setViewer(indexOf(p.name))} className="rounded focus-visible:outline-2 focus-visible:outline-ring">
+                                      <img src={p.url} alt="" loading="lazy" className="size-16 rounded border object-cover" />
+                                    </button>
+                                  ) : (
+                                    <span key={p.name} className="max-w-24 truncate rounded border px-1.5 py-1 text-xs" title={p.name}>{p.name}</span>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            ))}
+                          </div>
+                          <PhotoLightbox items={items} index={viewer} onIndexChange={setViewer} onClose={() => setViewer(null)} />
+                        </>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               </div>

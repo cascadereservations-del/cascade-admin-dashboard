@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { assertMutationEnabled } from '@/lib/rollout';
+import type { BaselineRow } from './meter-context';
 
 // Operations adapter (P13-P15). Cleaning reads use the RLS-protected
 // cleaning_sessions / meter_readings / cleaning_verification_evidence tables;
@@ -49,11 +50,11 @@ export async function fetchCleanings(propertyId: string, f: CleaningFilters, can
 }
 
 export type CleaningDetail = {
-  session: CleaningRow & { checklist_details: unknown; preclean_photo_count: number | null; afterclean_photo_count: number | null; other_photo_count: number | null; drive_files?: Array<{ section: string; name: string; fileId: string; url: string }> | null };
+  session: CleaningRow & { nights_stayed?: number | null; checklist_details: unknown; preclean_photo_count: number | null; afterclean_photo_count: number | null; other_photo_count: number | null; drive_files?: Array<{ section: string; name: string; fileId: string; url: string }> | null };
   meters: Array<{ id: string; electric_prev: string | null; electric_curr: string | null; electric_delta: string | null; water_prev: string | null; water_curr: string | null; water_delta: string | null; kwh_per_night: string | null; m3_per_night: string | null; meter_flag: string | null; meter_override_note: string | null; recorded_at: string }>;
   evidence: Array<{ id: string; evidence_kind: string; advisory_result: string | null; advisory_reason_codes: string[] | null; created_at: string; reviews: Array<{ id: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }> }>;
   readiness: Array<{ id: string; for_checkin_date: string; outcome: string; reason: string | null; reviewed_at: string; reviewer_user_id: string }>;
-  photos: Array<{ name: string; created_at: string | null; size: number | null; url: string | null; href?: string; section: 'before' | 'after' | 'meter' | 'other' }> | 'unavailable';
+  photos: Array<{ name: string; created_at: string | null; size: number | null; url: string | null; full?: string; href?: string; section: 'before' | 'after' | 'meter' | 'other' }> | 'unavailable';
 };
 
 // Photos upload under {propertyId}/{uploaderUserId}/{submissionId}/... (see
@@ -112,6 +113,7 @@ export async function fetchCleaningDetail(propertyId: string, id: string, canFee
       photos: drive.map((f) => ({
         name: f.name, created_at: null, size: null,
         url: `https://drive.google.com/thumbnail?id=${encodeURIComponent(f.fileId)}&sz=w400`,
+        full: `https://drive.google.com/thumbnail?id=${encodeURIComponent(f.fileId)}&sz=w1600`,
         href: f.url, section: classifyPhoto(`${f.section} ${f.name}`),
       })),
     };
@@ -145,6 +147,14 @@ export async function fetchCleaningDetail(propertyId: string, id: string, canFee
     readiness: (r.error ? [] : (r.data ?? [])) as CleaningDetail['readiness'],
     photos,
   };
+}
+
+// Recent readings for this property, newest first, so the Meters card can show what is normal here.
+// meter-context.baselineFrom() drops flagged, first-ever and zero-use rows and this session's own.
+export async function fetchMeterBaseline(propertyId: string) {
+  const { data, error } = await supabase.from('meter_readings').select('session_id, electric_prev, electric_curr, electric_delta, water_prev, water_curr, water_delta, kwh_per_night, m3_per_night, meter_flag').eq('property_id', propertyId).order('recorded_at', { ascending: false }).limit(60);
+  if (error) throw error;
+  return (data ?? []) as BaselineRow[];
 }
 
 // CLN04: human review of advisory evidence through the deployed RPC.
