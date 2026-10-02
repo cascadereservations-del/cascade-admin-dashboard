@@ -106,6 +106,8 @@ export function photoMime(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'imag
 export async function validateIdPhoto(file: Blob): Promise<'image/jpeg' | 'image/png' | 'image/webp'> {
   if (!file.size || file.size > MAX_PHOTO_BYTES) throw new Error('Choose an ID photo up to 10 MB.');
   const mime = photoMime(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
-  if (!mime || (file.type && file.type !== mime)) throw new Error('Choose a JPEG, PNG or WebP image.');
+  // The bytes decide among the three image types: a JPEG saved as .png (found 2026-10-03 in the Airbnb folder) uploads as a
+  // JPEG. A file that declares any other type (an SVG, a PDF) is still refused.
+  if (!mime || (file.type && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) throw new Error('Choose a JPEG, PNG or WebP image.');
   return mime;
 }

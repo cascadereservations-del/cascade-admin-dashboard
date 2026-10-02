@@ -51,6 +51,7 @@ describe('photo and CRM validation', () => {
     await expect(validateIdPhoto(file([60, 115, 118, 103]))).rejects.toThrow('JPEG, PNG or WebP');
     await expect(validateIdPhoto(file([255, 216, 255], 11 * 1024 * 1024))).rejects.toThrow('10 MB');
     await expect(validateIdPhoto(file([255, 216, 255], 100, 'image/svg+xml'))).rejects.toThrow('JPEG, PNG or WebP');
+    await expect(validateIdPhoto(file([255, 216, 255], 100, 'image/png'))).resolves.toBe('image/jpeg'); // a JPEG named .png
   });
   it('does not allow search text to inject filter syntax, preserves Unicode names and validates pages', () => {
     expect(guestSearchPattern('Montaño, Dela Cruz')).toBe('%Montaño%Dela%Cruz%');

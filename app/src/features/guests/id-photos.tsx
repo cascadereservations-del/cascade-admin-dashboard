@@ -70,7 +70,7 @@ export function GuestIdPanel({ guestId, guestName, details }: { guestId: string;
   const others = otherCompanions(companions.data, guestName).filter((c) => c.id_photo_path).length;
   const status = guestIdStatus(self, details, others);
   const size = 'w-full max-w-72 @2xl/main:max-w-none';
-  const text = { companion_photos: `No ID under the booking name. ${others} ID ${others === 1 ? 'photo' : 'photos'} of the people who stayed are under Companions.`, marked_no_photo: 'Marked “ID on file”, but no photo is saved yet', none: 'No ID photo yet' } as const;
+  const text = { companion_photos: `No ID under the booking name. ${others === 1 ? 'The ID photo of the person who stayed is' : `${others} ID photos of the people who stayed are`} under Companions.`, marked_no_photo: 'Marked “ID on file”, but no photo is saved yet', none: 'No ID photo yet' } as const;
   return (
     <div className="flex w-full shrink-0 flex-col gap-2 @2xl/main:w-60">
       <p className="text-xs font-medium text-muted-foreground">Guest ID</p>
