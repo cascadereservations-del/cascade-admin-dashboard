@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FollowUpForm } from './follow-up-form';
 import { LocalRecordsPanel } from './local-records-panel';
+import { displayContact, isMissingDetails } from './contact';
 import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
@@ -62,7 +63,7 @@ export default function GuestsPage() {
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
     { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${row.original.tier}` : ''}</div></div> },
-    { id: 'contact', header: 'Contact', accessorFn: (r) => r.phone ?? r.email ?? '', cell: ({ row }) => <span className="inline-flex items-center gap-1 text-xs">{row.original.phone ?? row.original.email ?? '—'}{(row.original.phone ?? row.original.email) && <CopyButton value={row.original.phone ?? row.original.email ?? ''} />}</span> },
+    { id: 'contact', header: 'Contact', accessorFn: (r) => displayContact(r) ?? '', cell: ({ row }) => { const c = displayContact(row.original); return <span className="inline-flex items-center gap-1 text-xs">{c ?? '—'}{c && <CopyButton value={c} />}</span>; } },
     { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
     { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{row.original.tier}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
@@ -73,7 +74,7 @@ export default function GuestsPage() {
         {r.id_on_file && <StatusBadge tone="good">ID on file</StatusBadge>}
         {soon && <StatusBadge tone="warn">Birthday soon</StatusBadge>}
         {r.has_companions && <StatusBadge tone="info">Companions</StatusBadge>}
-        {!r.id_on_file && !r.has_contact_number && <StatusBadge tone="neutral">Missing details</StatusBadge>}
+        {isMissingDetails(r) && <StatusBadge tone="neutral">Missing details</StatusBadge>}
       </div>;
     } },
   ], []);
