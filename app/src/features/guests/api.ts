@@ -3,11 +3,12 @@ import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { guestPage, guestSearchPattern, validateProfilePatch } from './validation';
 import { validateIdPhoto } from './local-records';
+import { isMissingDetails } from './contact';
 
 // Guests adapter (P19/P20). Profiles extend `guests` via guest_profile_details;
 // the timeline is server-assembled and permission-filtered.
 
-export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; has_contact_number?: boolean };
+export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; contact_number?: string | null };
 export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number; contact_number?: string | null; birthday?: string | null; address?: string | null; airbnb_profile_id?: string | null; id_on_file?: boolean; id_type?: string | null; id_number?: string | null; id_drive_url?: string | null; id_verified_at?: string | null };
 
 export type GuestFlag = 'id_on_file' | 'missing_details' | 'upcoming_birthday' | 'repeat' | 'has_companions';
@@ -32,11 +33,11 @@ async function guestIdsForFlag(propertyId: string, flag: GuestFlag): Promise<str
   if (flag === 'id_on_file' || flag === 'missing_details') {
     const { data, error } = await supabase.from('guest_profile_details').select('guest_id, id_on_file, contact_number');
     if (error) throw error;
-    const hasDetails = new Set((data ?? []).filter((r) => r.id_on_file || r.contact_number).map((r) => r.guest_id));
-    if (flag === 'id_on_file') return [...hasDetails];
-    const { data: all, error: e2 } = await supabase.from('guests').select('id').eq('property_id', propertyId).eq('is_active', true);
+    if (flag === 'id_on_file') return (data ?? []).filter((r) => r.id_on_file).map((r) => r.guest_id);
+    const contactById = new Map((data ?? []).map((r) => [r.guest_id, r]));
+    const { data: all, error: e2 } = await supabase.from('guests').select('id,phone,email').eq('property_id', propertyId).eq('is_active', true);
     if (e2) throw e2;
-    return (all ?? []).map((g) => g.id).filter((id) => !hasDetails.has(id));
+    return (all ?? []).filter((g) => isMissingDetails({ ...g, ...contactById.get(g.id) })).map((g) => g.id);
   }
   if (flag === 'upcoming_birthday') {
     const { data, error } = await supabase.from('guest_profile_details').select('guest_id, birthday').not('birthday', 'is', null);
@@ -73,7 +74,7 @@ export async function fetchGuests(propertyId: string, f: { q?: string; tier?: st
   const rows: GuestRow[] = ((res.data ?? []) as RawRow[]).map((r) => {
     const details = Array.isArray(r.guest_profile_details) ? r.guest_profile_details[0] : r.guest_profile_details;
     const { guest_profile_details: _drop, ...rest } = r;
-    return { ...rest, id_on_file: details?.id_on_file ?? false, birthday: details?.birthday ?? null, has_companions: companionIds.has(r.id), has_contact_number: !!details?.contact_number };
+    return { ...rest, id_on_file: details?.id_on_file ?? false, birthday: details?.birthday ?? null, has_companions: companionIds.has(r.id), contact_number: details?.contact_number ?? null };
   });
   return { rows, total: res.count ?? rows.length, page };
 }
