@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/data/status-badge';
 import { DetailSheet, Field } from '@/components/data/detail-sheet';
+import { PhotoLightbox } from '@/components/data/photo-lightbox';
 import { MAX_COLLECTION_BYTES, parseLocalCollection, validateIdPhoto, safeDriveUrl, type LocalCollection, type LocalField, type LocalPhoto, type LocalRecord } from './local-records';
 
 function SourceFields({ fields }: { fields: LocalField[] }) {
@@ -22,19 +23,22 @@ export function LocalRecordsPanel() {
   const [reveal, setReveal] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  // Verified local photos for the open record: an object URL, or the reason it cannot be shown.
+  const [thumbs, setThumbs] = useState<Map<string, string | Error>>(new Map());
+  const [viewer, setViewer] = useState<number | null>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
   const photoGeneration = useRef(0);
   useEffect(() => { folderInput.current?.setAttribute('webkitdirectory', ''); }, []);
   useEffect(() => () => { generation.current++; photoGeneration.current++; }, []);
-  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
+  useEffect(() => () => { for (const t of thumbs.values()) if (typeof t === 'string') URL.revokeObjectURL(t); }, [thumbs]);
+  const dropPhotos = () => { photoGeneration.current++; setThumbs(new Map()); setViewer(null); };
 
   const clear = () => {
     generation.current++; photoGeneration.current++;
-    setCollection(null); setFiles(new Map()); setSelected(null); setSearch(''); setFilter('all'); setReveal(false); setError(''); setBusy(false); setPhotoUrl(null);
+    setCollection(null); setFiles(new Map()); setSelected(null); setSearch(''); setFilter('all'); setReveal(false); setError(''); setBusy(false); setThumbs(new Map()); setViewer(null);
   };
-  const select = (key: string | null) => { photoGeneration.current++; setSelected(key); setReveal(false); setPhotoUrl(null); setError(''); };
+  const select = (key: string | null) => { dropPhotos(); setSelected(key); setReveal(false); setError(''); };
   const load = async (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     event.target.value = '';
@@ -42,7 +46,7 @@ export function LocalRecordsPanel() {
     const current = ++generation.current;
     photoGeneration.current++;
     // Clear old personal data even when the next selection fails validation.
-    setCollection(null); setFiles(new Map()); setSelected(null); setReveal(false); setPhotoUrl(null); setError(''); setBusy(true);
+    setCollection(null); setFiles(new Map()); setSelected(null); setReveal(false); setThumbs(new Map()); setViewer(null); setError(''); setBusy(true);
     try {
       const manifests = selectedFiles.filter((f) => f.name === 'guest-records.local.json');
       if (manifests.length !== 1) throw new Error('Choose the prepared folder containing one guest-records.local.json file, or choose that file directly.');
@@ -57,21 +61,28 @@ export function LocalRecordsPanel() {
     } catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : 'Could not open the local collection.'); }
     finally { if (generation.current === current) setBusy(false); }
   };
-  const openPhoto = async (photo: LocalPhoto) => {
+  // Each photo is checked against the prepared record (type, size, SHA-256) before it is shown.
+  const verifiedUrl = async (photo: LocalPhoto) => {
+    const file = files.get(photo.path);
+    if (!file) throw new Error('Choose the original folder to see this photo.');
+    const mime = await validateIdPhoto(file);
+    const bytes = await file.arrayBuffer();
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (b) => b.toString(16).padStart(2, '0')).join('');
+    if (file.size !== photo.bytes || digest !== photo.sha256) throw new Error('This photo differs from the prepared record. Prepare the collection again.');
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  };
+  const showPhotos = async (rec: LocalRecord) => {
     const current = ++photoGeneration.current;
-    setError(''); setPhotoUrl(null);
-    try {
-      const file = files.get(photo.path);
-      if (!file) throw new Error('Choose the original folder to view local ID photos.');
-      const mime = await validateIdPhoto(file);
-      const bytes = await file.arrayBuffer();
-      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (b) => b.toString(16).padStart(2, '0')).join('');
-      if (file.size !== photo.bytes || digest !== photo.sha256) throw new Error('This photo differs from the prepared record. Prepare the collection again before viewing it.');
-      if (photoGeneration.current === current) setPhotoUrl(URL.createObjectURL(new Blob([bytes], { type: mime })));
-    } catch (e) { if (photoGeneration.current === current) setError(e instanceof Error ? e.message : 'Could not open the photo.'); }
+    const out = new Map<string, string | Error>();
+    for (const p of rec.photos) {
+      try { out.set(p.path, await verifiedUrl(p)); } catch (e) { out.set(p.path, e instanceof Error ? e : new Error('Could not open the photo.')); }
+    }
+    if (photoGeneration.current === current) setThumbs(out);
+    else for (const t of out.values()) if (typeof t === 'string') URL.revokeObjectURL(t);
   };
   const rows = useMemo(() => (collection?.records ?? []).filter((r) => (filter === 'all' || (filter === 'photos' ? r.photos.length > 0 : r.kind === filter)) && `${r.displayName} ${r.stayDates ?? ''} ${r.contact ?? ''} ${r.notes.map((n) => n.value).join(' ')}`.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim())), [collection, filter, search]);
   const record: LocalRecord | undefined = collection?.records.find((r) => r.key === selected);
+  const viewable = (record?.photos ?? []).map((p) => p.path).filter((path) => typeof thumbs.get(path) === 'string');
   const total = collection?.records.length ?? 0;
   const documented = collection?.records.filter((r) => r.kind === 'documented').length ?? 0;
   const photoCount = collection?.records.reduce((n, r) => n + r.photos.length, 0) ?? 0;
@@ -112,13 +123,18 @@ export function LocalRecordsPanel() {
         <div className="rounded-lg bg-muted/50 p-3"><Field label="Stay dates">{record.stayDates ?? 'Not documented'}</Field><Field label="Guests">{record.guestCount ?? 'Not documented'}</Field><Field label="Contact">{record.contact ?? 'Not provided'}</Field></div>
         <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Heart className="size-4" aria-hidden />Requests & occasions</CardTitle></CardHeader><CardContent>{record.notes.length ? <SourceFields fields={record.notes} /> : <p className="text-sm text-muted-foreground">No requests or occasions documented.</p>}<p className="mt-4 text-xs text-muted-foreground">The original wording distinguishes a request from an agreed courtesy. “Not found” does not establish that no request was made.</p></CardContent></Card>
         <div><h3 className="mb-3 font-semibold">Guest & stay details</h3><SourceFields fields={record.fields} />{record.kind !== 'documented' && <p className="text-sm text-muted-foreground">Only the folder label is available. No booking, contact or guest identity has been inferred.</p>}</div>
-        <div className="rounded-lg border p-3"><div className="flex items-center gap-2"><ShieldCheck className="size-4" aria-hidden /><h3 className="font-semibold">Private documents</h3></div><p className="my-2 text-xs text-muted-foreground">{record.photos.length} photo files · An ID on file is not a completed identity check.</p><Button variant="outline" size="sm" onClick={() => { photoGeneration.current++; setReveal(!reveal); setPhotoUrl(null); }}>{reveal ? 'Hide private details' : 'Reveal private details'}</Button>
-          {reveal && <div className="mt-4 space-y-4"><SourceFields fields={record.identity} /><ul className="space-y-2">{record.photos.map((p, i) => <li key={p.path} className="flex flex-wrap items-center gap-2 text-sm"><span>ID photo {i + 1}</span>{files.has(p.path) && <Button size="sm" variant="outline" onClick={() => void openPhoto(p)}>View local photo {i + 1}</Button>}{safeDriveUrl(p.driveUrl) && <a href={safeDriveUrl(p.driveUrl)!} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="rounded border px-3 py-2 text-sm underline">Open Drive copy {i + 1}</a>}{!files.has(p.path) && !p.driveUrl && <span className="text-xs text-muted-foreground">Choose the original folder to view</span>}</li>)}</ul>
-          {photoUrl && <div><Button variant="ghost" size="sm" onClick={() => setPhotoUrl(null)}>Close photo</Button><img src={photoUrl} alt="Selected private guest ID document" className="mt-2 max-h-96 w-full rounded-lg border object-contain" /></div>}
+        <div className="rounded-lg border p-3"><div className="flex items-center gap-2"><ShieldCheck className="size-4" aria-hidden /><h3 className="font-semibold">Private documents</h3></div><p className="my-2 text-xs text-muted-foreground">{record.photos.length} photo files · An ID on file is not a completed identity check.</p><Button variant="outline" size="sm" onClick={() => { dropPhotos(); setReveal(!reveal); if (!reveal) void showPhotos(record); }}>{reveal ? 'Hide private details' : 'Reveal private details'}</Button>
+          {reveal && <div className="mt-4 space-y-4"><SourceFields fields={record.identity} />{record.photos.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">{record.photos.map((p, i) => { const t = thumbs.get(p.path); const drive = safeDriveUrl(p.driveUrl); return <li key={p.path} className="space-y-1">
+            {typeof t === 'string'
+              ? <button type="button" title="Open the full photo" aria-label={`Open ID photo ${i + 1}`} onClick={() => setViewer(viewable.indexOf(p.path))} className="block aspect-[4/3] w-full overflow-hidden rounded-lg border bg-muted focus-visible:outline-2 focus-visible:outline-ring"><img src={t} alt="" className="size-full object-contain" /></button>
+              : <div className="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-dashed bg-muted p-2 text-center text-xs text-muted-foreground">{t ? t.message : 'Loading…'}</div>}
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>ID photo {i + 1}</span>{drive && <a href={drive} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="underline">Drive copy</a>}</div>
+          </li>; })}</ul>}
           {record.sourceText && <details><summary className="cursor-pointer py-2 text-sm font-medium">Original source document</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-sans text-xs">{record.sourceText}</pre></details>}</div>}
         </div>
         <div className="break-all text-xs text-muted-foreground"><p>Source: {record.sourcePath ?? record.folder}</p>{record.sourceHash && <p className="mt-1">SHA-256: {record.sourceHash}</p>}</div>
       </div>}
+      <PhotoLightbox items={viewable.map((path) => ({ src: thumbs.get(path) as string, label: `${record?.displayName ?? 'Guest'} - ID photo ${(record?.photos.findIndex((p) => p.path === path) ?? 0) + 1}` }))} index={viewer} onIndexChange={setViewer} onClose={() => setViewer(null)} />
     </DetailSheet>
   </section>;
 }

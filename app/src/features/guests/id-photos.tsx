@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Eye, ImageOff } from 'lucide-react';
+import { ImageOff, Maximize2 } from 'lucide-react';
 import { toAppError } from '@/lib/errors';
 import { PhotoLightbox } from '@/components/data/photo-lightbox';
 import { Button } from '@/components/ui/button';
@@ -10,27 +10,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { companionIdPhotoUrls, listGuestCompanions, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type ProfileDetails } from './api';
-import { ID_TYPES, findSelfCompanion, idPhotoFormError, idPhotoLabel, idPhotoRefs, needsIdOnFile, selfCompanionPatch } from './id-photo';
+import { ID_TYPES, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
 import { validateIdPhoto } from './local-records';
 
-// ID photos on the guest page: small thumbnails that open one shared viewer stepping through the
-// guest's own photo and every companion's. Previews stay hidden until staff choose to reveal them
-// (the same toggle as "Reveal private details"); signed URLs are only requested after that.
+// ID photos on the guest page (Lloyd 2026-10-02: show the photo itself, full size on a click - not a
+// link or a "Show" button). Every photo is a tile in ID-card proportions with the whole card visible
+// (object-contain); a click opens one shared viewer that steps through the guest's own photo and every
+// companion's. Signed URLs last 15 minutes and are fetched once per page.
 
-type Ctx = { reveal: boolean; setReveal: (v: boolean) => void; urls: Map<string, string | null> | undefined; loading: boolean; open: (companionId: string) => void };
+type Ctx = { urls: Map<string, string | null> | undefined; loading: boolean; open: (companionId: string) => void };
 const IdPhotoContext = createContext<Ctx | null>(null);
-export const useIdPhotoReveal = () => useContext(IdPhotoContext);
 
 export function IdPhotoProvider({ guestId, guestName, children }: { guestId: string; guestName: string; children: ReactNode }) {
-  const [reveal, setReveal] = useState(false);
   const [viewer, setViewer] = useState<number | null>(null);
   const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
   const refs = useMemo(() => idPhotoRefs(companions.data, guestName), [companions.data, guestName]);
   const paths = refs.map((r) => r.path);
-  const urls = useQuery({ queryKey: ['id-photo-urls', guestId, paths.join('|')], queryFn: () => companionIdPhotoUrls(paths), enabled: reveal && paths.length > 0, staleTime: 10 * 60_000 });
+  // Links last 15 minutes; renew at 10 so a tile or the viewer opened later never holds a dead link.
+  const urls = useQuery({ queryKey: ['id-photo-urls', guestId, paths.join('|')], queryFn: () => companionIdPhotoUrls(paths), enabled: paths.length > 0, staleTime: 10 * 60_000, refetchInterval: 10 * 60_000 });
   const viewable = refs.filter((r) => urls.data?.get(r.path));
   const items = viewable.map((r) => ({ src: urls.data!.get(r.path)!, label: idPhotoLabel(r), sub: r.idType ? r.idType.replaceAll('_', ' ') : undefined }));
-  const ctx: Ctx = { reveal, setReveal, urls: urls.data, loading: reveal && paths.length > 0 && urls.isPending, open: (id) => { const k = viewable.findIndex((r) => r.companionId === id); if (k >= 0) setViewer(k); } };
+  const ctx: Ctx = { urls: urls.data, loading: paths.length > 0 && urls.isPending, open: (id) => { const k = viewable.findIndex((r) => r.companionId === id); if (k >= 0) setViewer(k); } };
   return (
     <IdPhotoContext.Provider value={ctx}>
       {children}
@@ -39,20 +39,46 @@ export function IdPhotoProvider({ guestId, guestName, children }: { guestId: str
   );
 }
 
-const tile = 'flex shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-lg border bg-muted text-center text-[11px] leading-tight text-muted-foreground';
+const tile = 'flex aspect-[4/3] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border bg-muted p-2 text-center text-xs leading-tight text-muted-foreground';
 
-export function IdPhotoThumb({ companionId, path, name, size = 'size-16' }: { companionId: string; path: string; name: string; size?: string }) {
+export function IdPhotoThumb({ companionId, path, name, className = 'w-28' }: { companionId: string; path: string; name: string; className?: string }) {
   const ctx = useContext(IdPhotoContext);
-  const [broken, setBroken] = useState(false);
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   if (!ctx) return null;
-  if (!ctx.reveal) return <button type="button" className={`${tile} ${size} hover:bg-accent`} onClick={() => ctx.setReveal(true)} aria-label={`Show ID photo preview for ${name}`}><Eye className="size-4" aria-hidden />Show</button>;
   const url = ctx.urls?.get(path);
-  if (ctx.loading) return <div className={`${tile} ${size} animate-pulse`} aria-label="Loading ID photo" />;
-  if (!url || broken) return <div className={`${tile} ${size} border-destructive/40`} title="A photo is recorded for this person but the file could not be loaded." role="img" aria-label={`ID photo for ${name} could not be loaded`}><ImageOff className="size-4" aria-hidden />Not found</div>;
+  if (ctx.loading) return <div className={`${tile} ${className} animate-pulse`} aria-label="Loading ID photo" />;
+  if (!url || brokenUrl === url) return <div className={`${tile} ${className} border-destructive/40`} title="A photo is recorded for this person but the file could not be loaded." role="img" aria-label={`ID photo for ${name} could not be loaded`}><ImageOff className="size-4" aria-hidden />Photo file not found</div>;
   return (
-    <button type="button" className={`${size} shrink-0 overflow-hidden rounded-lg border focus-visible:outline-2 focus-visible:outline-ring`} onClick={() => ctx.open(companionId)} aria-label={`Open ID photo of ${name}`}>
-      <img src={url} alt="" loading="lazy" className="size-full object-cover" onError={() => setBroken(true)} />
+    <button type="button" title="Open the full photo" className={`group relative aspect-[4/3] shrink-0 overflow-hidden rounded-lg border bg-muted ${className} focus-visible:outline-2 focus-visible:outline-ring`} onClick={() => ctx.open(companionId)} aria-label={`Open ID photo of ${name}`}>
+      <img src={url} alt="" loading="lazy" className="size-full object-contain" onError={() => setBrokenUrl(url)} />
+      <span aria-hidden className="absolute right-1 bottom-1 rounded bg-black/60 p-1 text-white opacity-70 group-hover:opacity-100"><Maximize2 className="size-3.5" /></span>
     </button>
+  );
+}
+
+/** The empty tile in the same place and size a photo would take, so missing IDs stand out instead of hiding. */
+export function NoIdPhotoTile({ text, warn = false, className = 'w-28', onClick }: { text: string; warn?: boolean; className?: string; onClick?: () => void }) {
+  const cls = `${tile} ${className} border-dashed ${warn ? 'border-amber-500/70 text-amber-700 dark:text-amber-400' : ''}`;
+  const body = <><ImageOff className="size-4" aria-hidden />{text}</>;
+  return onClick ? <button type="button" className={`${cls} hover:bg-accent`} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
+}
+
+/** The guest's own ID on the guest card: the photo, or a plain statement of what is missing, plus Add/Replace. */
+export function GuestIdPanel({ guestId, guestName, details }: { guestId: string; guestName: string; details: ProfileDetails | null }) {
+  const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
+  const self = findSelfCompanion(companions.data, guestName);
+  const others = otherCompanions(companions.data, guestName).filter((c) => c.id_photo_path).length;
+  const status = guestIdStatus(self, details, others);
+  const size = 'w-full max-w-72 @2xl/main:max-w-none';
+  const text = { companion_photos: `No ID under the booking name. ${others} ID ${others === 1 ? 'photo' : 'photos'} of the people who stayed are under Companions.`, marked_no_photo: 'Marked “ID on file”, but no photo is saved yet', none: 'No ID photo yet' } as const;
+  return (
+    <div className="flex w-full shrink-0 flex-col gap-2 @2xl/main:w-60">
+      <p className="text-xs font-medium text-muted-foreground">Guest ID</p>
+      {status === 'photo'
+        ? <IdPhotoThumb companionId={self!.id} path={self!.id_photo_path!} name={guestName} className={size} />
+        : <NoIdPhotoTile className={size} warn={status === 'marked_no_photo'} text={text[status]} />}
+      <div><GuestIdPhotoControl guestId={guestId} guestName={guestName} details={details} /></div>
+    </div>
   );
 }
 

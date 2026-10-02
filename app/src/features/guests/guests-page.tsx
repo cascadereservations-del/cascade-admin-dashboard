@@ -30,6 +30,7 @@ import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchIn
 const DEFAULTS = { tier: '', flag: '', page: '1', density: 'comfortable', tab: '', taskStatus: '' };
 const FLAG_OPTIONS = [
   { value: 'id_on_file', label: 'ID on file' },
+  { value: 'id_no_photo', label: 'ID marked, no photo' },
   { value: 'missing_details', label: 'Missing details' },
   { value: 'upcoming_birthday', label: 'Upcoming birthday' },
   { value: 'repeat', label: 'Repeat guest' },
@@ -71,7 +72,7 @@ export default function GuestsPage() {
       const r = row.original;
       const soon = r.birthday && daysToNextBirthday(r.birthday) <= 30;
       return <div className="flex flex-wrap gap-1">
-        {r.id_on_file && <StatusBadge tone="good">ID on file</StatusBadge>}
+        {r.has_id_photo ? <StatusBadge tone="good">ID photo</StatusBadge> : r.id_on_file && <StatusBadge tone="warn">ID marked · no photo</StatusBadge>}
         {soon && <StatusBadge tone="warn">Birthday soon</StatusBadge>}
         {r.has_companions && <StatusBadge tone="info">Companions</StatusBadge>}
         {isMissingDetails(r) && <StatusBadge tone="neutral">Missing details</StatusBadge>}

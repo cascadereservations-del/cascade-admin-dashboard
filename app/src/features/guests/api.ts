@@ -4,15 +4,16 @@ import { newIdempotencyKey } from '@/lib/idempotency';
 import { guestPage, guestSearchPattern, validateProfilePatch } from './validation';
 import { validateIdPhoto } from './local-records';
 import { isMissingDetails } from './contact';
+import { companionFlags } from './id-photo';
 
 // Guests adapter (P19/P20). Profiles extend `guests` via guest_profile_details;
 // the timeline is server-assembled and permission-filtered.
 
-export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; contact_number?: string | null };
+export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; has_id_photo?: boolean; contact_number?: string | null };
 export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number; contact_number?: string | null; birthday?: string | null; address?: string | null; airbnb_profile_id?: string | null; id_on_file?: boolean; id_type?: string | null; id_number?: string | null; id_drive_url?: string | null; id_verified_at?: string | null };
 
-export type GuestFlag = 'id_on_file' | 'missing_details' | 'upcoming_birthday' | 'repeat' | 'has_companions';
-const GUEST_FLAGS: readonly GuestFlag[] = ['id_on_file', 'missing_details', 'upcoming_birthday', 'repeat', 'has_companions'];
+export type GuestFlag = 'id_on_file' | 'id_no_photo' | 'missing_details' | 'upcoming_birthday' | 'repeat' | 'has_companions';
+const GUEST_FLAGS: readonly GuestFlag[] = ['id_on_file', 'id_no_photo', 'missing_details', 'upcoming_birthday', 'repeat', 'has_companions'];
 
 export function daysToNextBirthday(birthday: string, today = new Date()): number {
   const parts = birthday.split('-');
@@ -44,12 +45,25 @@ async function guestIdsForFlag(propertyId: string, flag: GuestFlag): Promise<str
     if (error) throw error;
     return (data ?? []).filter((r) => r.birthday && daysToNextBirthday(r.birthday) <= 30).map((r) => r.guest_id);
   }
-  if (flag === 'has_companions') {
-    const { data, error } = await supabase.from('guest_companions').select('guest_id');
+  if (flag === 'has_companions') return [...(await companionFlagSets()).companions];
+  if (flag === 'id_no_photo') {
+    const [{ data, error }, { photos }] = await Promise.all([supabase.from('guest_profile_details').select('guest_id').eq('id_on_file', true), companionFlagSets()]);
     if (error) throw error;
-    return [...new Set((data ?? []).map((r) => r.guest_id))];
+    return (data ?? []).map((r) => r.guest_id).filter((g) => !photos.has(g));
   }
   return null; // 'repeat' is a plain column filter on `guests`, no id-set needed
+}
+
+// One read of every companion row: who has real companions (not just the row holding their own ID,
+// D-129) and who has any ID photo at all. The list's flags must match what the guest page shows.
+// guest_companions has no foreign key to guests (checked 2026-10-02), so PostgREST cannot embed the
+// guest name - two plain reads instead. ponytail: unpaginated (91 rows today); page it past ~900.
+async function companionFlagSets() {
+  const [c, g] = await Promise.all([supabase.from('guest_companions').select('guest_id,name,id_photo_path'), supabase.from('guests').select('id,name')]);
+  if (c.error) throw c.error;
+  if (g.error) throw g.error;
+  const names = new Map((g.data ?? []).map((r) => [r.id as string, r.name as string]));
+  return companionFlags((c.data ?? []).map((r) => ({ ...r, guest_name: names.get(r.guest_id) ?? null })));
 }
 
 export async function fetchGuests(propertyId: string, f: { q?: string; tier?: string; page?: string; flag?: string }) {
@@ -68,13 +82,13 @@ export async function fetchGuests(propertyId: string, f: { q?: string; tier?: st
   }
   const res = await q.range((page - 1) * 25, page * 25 - 1);
   if (res.error) throw res.error;
-  const companionIds = new Set(await guestIdsForFlag(propertyId, 'has_companions'));
+  const { companions, photos } = await companionFlagSets();
   type Details = { id_on_file: boolean | null; birthday: string | null; contact_number: string | null };
   type RawRow = GuestRow & { guest_profile_details: Details | Details[] | null };
   const rows: GuestRow[] = ((res.data ?? []) as RawRow[]).map((r) => {
     const details = Array.isArray(r.guest_profile_details) ? r.guest_profile_details[0] : r.guest_profile_details;
     const { guest_profile_details: _drop, ...rest } = r;
-    return { ...rest, id_on_file: details?.id_on_file ?? false, birthday: details?.birthday ?? null, has_companions: companionIds.has(r.id), contact_number: details?.contact_number ?? null };
+    return { ...rest, id_on_file: details?.id_on_file ?? false, birthday: details?.birthday ?? null, has_companions: companions.has(r.id), has_id_photo: photos.has(r.id), contact_number: details?.contact_number ?? null };
   });
   return { rows, total: res.count ?? rows.length, page };
 }

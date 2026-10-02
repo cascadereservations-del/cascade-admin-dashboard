@@ -9,7 +9,6 @@ import { Field } from '@/components/data/detail-sheet';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { safeDriveUrl } from './local-records';
 import type { ProfileDetails } from './api';
-import { useIdPhotoReveal } from './id-photos';
 
 // Notes are stored as one text field ("YYYY-MM-DD: point | point || YYYY-MM-DD:
 // point") so multi-stay history survives in a single column. Rendered as a
@@ -77,18 +76,14 @@ export function isPlausiblePHMobile(raw: string): boolean {
 }
 
 export function PrivateGuestDetails({ details: d }: { details: ProfileDetails | null }) {
-  // Shares one reveal toggle with the ID photo previews when rendered inside the guest page.
-  const photos = useIdPhotoReveal();
-  const [localReveal, setLocalReveal] = useState(false);
-  const reveal = photos ? photos.reveal : localReveal;
-  const setReveal = photos ? photos.setReveal : setLocalReveal;
+  const [reveal, setReveal] = useState(false);
   const link = safeDriveUrl(d?.id_drive_url);
   return <Card className="gap-3 py-4"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden />Private guest details</CardTitle></CardHeader><CardContent className="space-y-3">
     <Field label="ID on file">{d?.id_on_file ? 'Marked on file' : 'Not marked on file'}</Field>
     <Field label="Identity review">{d?.id_verified_at ? `Recorded ${formatDateTime(d.id_verified_at)}` : 'No verification recorded'}</Field>
     <Button size="sm" variant="outline" onClick={() => setReveal(!reveal)}>{reveal ? 'Hide private details' : 'Reveal private details'}</Button>
     {reveal && <div className="space-y-2"><Field label="Address">{d?.address || 'Not recorded'}</Field><Field label="Airbnb profile ID">{d?.airbnb_profile_id || 'Not recorded'}</Field><Field label="ID type">{d?.id_type?.replaceAll('_', ' ') || 'Not recorded'}</Field><Field label="ID number">{d?.id_number || 'Not recorded'}</Field><Field label="ID document">{link ? <a href={link} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="underline">Open private Drive document</a> : d?.id_drive_url ? 'The stored link needs correction.' : 'No Drive link recorded'}</Field></div>}
-    <p className="text-xs text-muted-foreground">Documents and ID photo previews are shown only when requested. A photo on file does not confirm a person’s identity. The primary guest's own ID photo, if collected, is stored as a companion record below (named after the guest) rather than a separate field here.</p>
+    <p className="text-xs text-muted-foreground">ID photos show on the guest card and beside each companion; click one to see it full size. Address and ID number stay hidden until revealed. A photo on file does not confirm a person’s identity.</p>
   </CardContent></Card>;
 }
 

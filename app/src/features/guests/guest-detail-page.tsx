@@ -22,9 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FollowUpForm } from './follow-up-form';
 import { ImportantNotes, ProfileExtraFields, PrivateGuestDetails, isPlausiblePHMobile, phNetworkHint } from './profile-extras';
 import { safeMessengerUrl, validateIdPhoto } from './local-records';
-import { GuestIdPhotoControl, IdPhotoProvider, IdPhotoThumb } from './id-photos';
-import { findSelfCompanion } from './id-photo';
-import { deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion, type ProfileDetails } from './api';
+import { GuestIdPanel, IdPhotoProvider, IdPhotoThumb, NoIdPhotoTile } from './id-photos';
+import { findSelfCompanion, otherCompanions } from './id-photo';
+import { deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
 
 // CRM01-CRM06. Profile fields are optional and carry provenance; the timeline
 // is server-filtered by permission; merge requires a server preview, a
@@ -36,7 +36,7 @@ import { deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGu
 
 type CompanionDraft = { id?: string; name: string; contact_number: string; id_type: string; id_number: string; notes: string; version?: number };
 
-export function CompanionsSection({ guestId }: { guestId: string }) {
+export function CompanionsSection({ guestId, guestName }: { guestId: string; guestName: string }) {
   const qc = useQueryClient();
   const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
   const [draft, setDraft] = useState<CompanionDraft | null>(null);
@@ -75,16 +75,27 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
 
   return (
     <Section title="Companions" aside={<Button size="sm" variant="outline" onClick={() => open()}>Add companion</Button>}>
-      <p className="mb-2 text-xs text-muted-foreground">People staying besides the booking guest. ID number and photo are sensitive; photos are uploaded here directly, not sent anywhere else.</p>
+      <p className="mb-2 text-xs text-muted-foreground">People staying besides the booking guest. Click a photo to see it full size. ID numbers and photos are sensitive and stay in Cascade’s private storage.</p>
       <QueryState query={companions}>
-        {(rows) => rows.length === 0 ? <p className="text-sm text-muted-foreground">No companions recorded.</p> : (
+        {(all) => {
+          // The guest's own ID row (D-129) stays here so it can be edited or removed, first and marked "Guest";
+          // its photo is already on the guest card, so it is not shown twice.
+          const self = findSelfCompanion(all, guestName);
+          const rows = [...(self ? [self] : []), ...otherCompanions(all, guestName)];
+          return rows.length === 0 ? <p className="text-sm text-muted-foreground">No companions recorded.</p> : (
           <ul className="divide-y rounded-lg border text-sm">
             {rows.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
-                {c.id_photo_path && <IdPhotoThumb companionId={c.id} path={c.id_photo_path} name={c.name} />}
-                <button type="button" className="text-left font-medium hover:underline" onClick={() => open(c)}>{c.name}</button>
-                {c.contact_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{c.contact_number}<CopyButton value={c.contact_number} /></span>}
-                {c.id_type && <StatusBadge tone="info">{c.id_type.replace('_', ' ')}</StatusBadge>}
+              <li key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-3">
+                {c.id === self?.id && c.id_photo_path ? <div className="flex aspect-[4/3] w-32 shrink-0 items-center justify-center rounded-lg border border-dashed p-2 text-center text-xs text-muted-foreground">Photo shown on the guest card</div>
+                  : c.id_photo_path ? <IdPhotoThumb companionId={c.id} path={c.id_photo_path} name={c.name} className="w-32" /> : <NoIdPhotoTile className="w-32" text="No ID photo · add one" onClick={() => open(c)} />}
+                <div className="min-w-0 space-y-1">
+                  <button type="button" className="text-left font-medium hover:underline" onClick={() => open(c)}>{c.name}</button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {c.id === self?.id && <StatusBadge tone="neutral">Guest</StatusBadge>}
+                    {c.id_type && <StatusBadge tone="info">{c.id_type.replace('_', ' ')}</StatusBadge>}
+                    {c.contact_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{c.contact_number}<CopyButton value={c.contact_number} /></span>}
+                  </div>
+                </div>
                 <div className="ml-auto flex gap-1">
                   <Button size="sm" variant="outline" onClick={() => open(c)}>Edit</Button>
                   {confirmDelete === c.id ? <div className="flex flex-wrap gap-2"><Input aria-label="Reason for removing companion" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} /><Button size="sm" variant="destructive" disabled={remove.isPending || reason.trim().length < 3} onClick={() => remove.mutate(c.id)}>Confirm removal</Button><Button size="sm" variant="ghost" onClick={() => { setConfirmDelete(null); setReason(''); }}>Keep companion</Button></div> : <Button size="sm" variant="outline" onClick={() => { setConfirmDelete(c.id); setReason(''); }}>Remove</Button>}
@@ -92,7 +103,7 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
               </li>
             ))}
           </ul>
-        )}
+        ); }}
       </QueryState>
       <DetailSheet open={!!draft} onOpenChange={(o) => { if (!o && !save.isPending) setDraft(null); }} title={draft?.id ? 'Edit companion' : 'Add companion'}>
         {draft && (
@@ -116,21 +127,6 @@ export function CompanionsSection({ guestId }: { guestId: string }) {
         )}
       </DetailSheet>
     </Section>
-  );
-}
-
-// The primary guest has no id_photo_path column of their own (2026-09-15
-// decision: reuse the companion mechanism rather than a new migration) -- a
-// companion row named after the guest holds their own ID photo when collected.
-// The button below creates or updates that row through the audited companion save.
-function PrimaryIdPhoto({ guestId, guestName, details }: { guestId: string; guestName: string; details: ProfileDetails | null }) {
-  const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
-  const self = findSelfCompanion(companions.data, guestName);
-  return (
-    <>
-      {self?.id_photo_path ? <IdPhotoThumb companionId={self.id} path={self.id_photo_path} name={guestName} size="size-20" /> : <p className="max-w-24 text-center text-[11px] leading-tight text-muted-foreground">No ID photo on file</p>}
-      <GuestIdPhotoControl guestId={guestId} guestName={guestName} details={details} />
-    </>
   );
 }
 
@@ -177,15 +173,15 @@ export default function GuestDetailPage() {
         {({ guest: g, details: d, detailsError }) => (
           <IdPhotoProvider guestId={id} guestName={g.name}>
           <div className="space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className="flex shrink-0 flex-col items-center gap-1.5">
-                  <div aria-hidden className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                    {(d?.display_name ?? g.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
-                  </div>
-                  <PrimaryIdPhoto guestId={id} guestName={g.name} details={d} />
+            {/* The guest's own ID photo is a column of its own beside the name (side by side once the
+                content area is wide, stacked below on a phone) -- it used to sit squeezed under the avatar.
+                The primary guest has no photo column (D-129): a companion row named after the guest holds it. */}
+            <div className="flex flex-col gap-5 rounded-xl border bg-card p-5 shadow-sm @2xl/main:flex-row @2xl/main:items-start">
+              <div className="flex min-w-0 flex-1 items-start gap-4">
+                <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                  {(d?.display_name ?? g.name).replace(/[⁦-⁩]/g, '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-xl font-semibold tracking-tight">{d?.display_name ?? g.name}</h1>
                     <StatusBadge tone="neutral">{g.source}</StatusBadge>
@@ -197,12 +193,13 @@ export default function GuestDetailPage() {
                     <span className="tabular">{g.total_stays ?? 0} {g.total_stays === 1 ? 'stay' : 'stays'} · {g.total_nights_stayed ?? 0} nights</span>
                     <span>Last stay {formatDate(g.last_stay_date, 'long')}</span>
                   </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button variant="outline" onClick={() => setNewTask(true)}>New follow-up</Button>
+                    <Button disabled={!!detailsError} onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={() => setNewTask(true)}>New follow-up</Button>
-                <Button disabled={!!detailsError} onClick={() => { setPatch({}); setEditing(true); }}>Edit profile</Button>
-              </div>
+              <GuestIdPanel guestId={id} guestName={g.name} details={d} />
             </div>
 
             <ImportantNotes key={`notes-${id}`} details={d} />
@@ -248,7 +245,7 @@ export default function GuestDetailPage() {
             </div>
 
             <PrivateGuestDetails key={`private-${id}`} details={d} />
-            <CompanionsSection key={`companions-${id}`} guestId={id} />
+            <CompanionsSection key={`companions-${id}`} guestId={id} guestName={g.name} />
 
             <Section title="Follow-ups" aside={<Button size="sm" variant="outline" onClick={() => setNewTask(true)}>Add</Button>}>
               <QueryState query={tasks}>

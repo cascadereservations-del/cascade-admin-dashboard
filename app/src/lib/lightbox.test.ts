@@ -21,6 +21,7 @@ describe('lightbox helpers', () => {
     expect(photoLabel('afterclean_2026-09-28T10-12-00.jpg')).toBe('Afterclean');
     expect(photoLabel('kitchen_1759000000000_ab.jpg')).toBe('Kitchen');
     expect(photoLabel('Bathroom (2).png')).toBe('Bathroom');
+    expect(photoLabel('a5620ce0-6ccb-4b4e-bf7b-8bfdcd6520fe_electric_meter.jpg')).toBe('Electric meter');
     expect(photoLabel('2026-09-28.jpg')).toBe('2026-09-28.jpg');
   });
 });

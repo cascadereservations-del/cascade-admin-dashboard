@@ -23,6 +23,7 @@ export function counterText(i: number, n: number): string {
 export function photoLabel(name: string): string {
   const base = name.replace(/\.[a-z0-9]{2,5}$/i, '');
   const cleaned = base
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[_-]?/gi, '') // session/photo uuid
     .replace(/[_-]?\d{4}-\d{2}-\d{2}.*$/, '')   // trailing timestamp
     .replace(/[_-]?\d{10,}.*$/, '')               // trailing epoch / long id
     .replace(/\s*\(\d+\)\s*$/, '')
