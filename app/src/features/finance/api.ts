@@ -102,7 +102,7 @@ export function saveTransaction(propertyId: string, draft: TxnDraft, key = newId
 
 export type BulkAction = 'hide' | 'unhide' | 'archive' | 'restore';
 export function bulkTransactions(propertyId: string, ids: string[], action: BulkAction, reason?: string) {
-  return rpc<{ ok: boolean; action: BulkAction; changed: number; skipped: number; amount: string; auditIds: string[] }>('admin_transactions_bulk_v1', { p_property_id: propertyId, p_ids: ids, p_action: action, p_reason: reason ?? null });
+  return rpc<{ ok: boolean; action: BulkAction; changed: number; skipped: number; amount: string; auditIds: string[]; ids: string[] }>('admin_transactions_bulk_v1', { p_property_id: propertyId, p_ids: ids, p_action: action, p_reason: reason ?? null });
 }
 
 export type PaymentQueueRow = Record<string, unknown>;

@@ -9,7 +9,7 @@ import { formatPHP, toCentavos, fromCentavos } from '@/lib/money';
 import { exportCsv } from '@/lib/export';
 import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
-import { softDelete, undoAudit, useUndoToast } from '@/lib/undo';
+import { softDelete, useUndoToast } from '@/lib/undo';
 import { PageHeader } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
@@ -42,6 +42,7 @@ const CATEGORIES: Record<string, string[]> = {
   drawing: ['owner_drawing', 'transfer_to_owner', 'other'],
 };
 
+const INVERSE: Record<BulkAction, BulkAction> = { hide: 'unhide', unhide: 'hide', archive: 'restore', restore: 'archive' };
 type Draft = TxnDraft & { gross_amount: string };
 const blank = (): Draft => ({ txn_type: 'expense', category: 'other', transaction_date: todayManila(), gross_amount: '', payee_name: '', notes: '', or_number: '', reason: '' });
 
@@ -93,7 +94,8 @@ export default function TransactionsPage() {
       toast.success(`${r.changed} transaction${r.changed === 1 ? '' : 's'} ${label}`, {
         description,
         duration: 8000,
-        action: r.auditIds.length ? { label: 'Undo', onClick: () => { Promise.all(r.auditIds.map((id) => undoAudit(id))).then(() => { toast.success('Undone'); invalidate(); }).catch((e) => toast.error(toAppError(e).message)); } } : undefined,
+        // One inverse call over exactly the rows this call changed: all or nothing, unlike one undo per row.
+        action: r.ids.length ? { label: 'Undo', onClick: () => { bulkTransactions(s.propertyId, r.ids, INVERSE[r.action], `undo of ${r.action}`).then(() => { toast.success('Undone'); invalidate(); }).catch((e) => toast.error(toAppError(e).message)); } } : undefined,
       });
       setSel(new Set()); setArchiveOpen(false); setArchiveReason(''); invalidate();
     },
@@ -127,7 +129,7 @@ export default function TransactionsPage() {
     { id: 'amount', header: 'Amount', accessorFn: (r) => Number(r.gross_amount), cell: ({ row }) => <span className={`tabular ${row.original.txn_type === 'income' ? 'font-medium' : ''}`}>{formatPHP(row.original.gross_amount)}</span> },
   ], [sel, pageRows]);
   const doExport = async () => {
-    const all = await fetchTransactions(s.propertyId, { ...state, page: '1' });
+    const all = await fetchTransactions(s.propertyId, { ...state, page: '1', hidden: '1' }); // hidden rows still count in every total, so the CSV carries them (hidden_at marks them)
     exportCsv(`transactions-${state.from || 'all'}-${state.to || 'all'}.csv`, all.rows as unknown as Record<string, unknown>[], {
       property: s.propertyId, period: `${state.from || 'start'}..${state.to || 'now'}`, basis: 'operational ledger (not accrual)', generated: new Date().toISOString(), completeness: `first page of ${all.total} rows`,
     });

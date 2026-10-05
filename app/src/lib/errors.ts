@@ -30,6 +30,9 @@ export function toAppError(err: unknown): AppError {
   if (code === '23505' || code === '40001' || code === '40P01' || /idempotency conflict|stale version|conflict/i.test(msg) || e.status === 409) {
     return new AppError('conflict', msg, e.details);
   }
+  if (/transactions_archived_is_void_check/.test(msg)) {
+    return new AppError('validation', 'This transaction is archived. Restore it first, then change it.', msg);
+  }
   if (code === '22023' || code === '23514' || code === '22P02' || e.status === 400) {
     return new AppError('validation', msg, e.details);
   }
