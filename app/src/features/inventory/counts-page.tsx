@@ -36,7 +36,7 @@ export default function CountsPage() {
   });
   return (
     <div>
-      <PageHeader title="Stock counts" description="Enter the counted quantity per item, review the variance, then confirm. Confirming records a reviewed baseline; the item then uses the movement ledger for every change." />
+      <PageHeader title="Stock counts" description="Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history." />
       <QueryState query={query}>
         {(d) => (
           <div className="overflow-x-auto rounded-lg border" role="region" aria-label="Count sheet" tabIndex={0}>

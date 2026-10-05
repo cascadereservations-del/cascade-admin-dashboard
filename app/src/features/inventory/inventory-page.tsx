@@ -28,10 +28,11 @@ import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, r
 // or row-click, since a printed page can't act on any of those anyway.
 function PrintTable({ title, rows }: { title: string; rows: Item[] }) {
   if (rows.length === 0) return null;
+  const qtyHeader = title === 'Consumables' ? 'In storage' : 'On hand'; // D-298.6: a consumable placed in the unit counts as used, so its quantity is what is in the storeroom
   return (
     <table className="mb-6 w-full border-collapse text-xs">
       <caption className="mb-1 text-left text-sm font-semibold">{title} ({rows.length})</caption>
-      <thead><tr className="border-b border-black"><th className="py-1 text-left">Item</th><th className="py-1 text-left">Category</th><th className="py-1 text-right">On hand</th><th className="py-1 text-left">Reorder below</th><th className="py-1 text-left">State</th></tr></thead>
+      <thead><tr className="border-b border-black"><th className="py-1 text-left">Item</th><th className="py-1 text-left">Category</th><th className="py-1 text-right">{qtyHeader}</th><th className="py-1 text-left">Reorder below</th><th className="py-1 text-left">State</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id} className="border-b border-gray-300">
@@ -105,18 +106,18 @@ export default function InventoryPage() {
   });
 
   const nameCol = useMemo<ColumnDef<Item, unknown>>(() => ({ id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div></div> }), [set]);
-  const qtyCol: ColumnDef<Item, unknown> = { id: 'qty', header: 'On hand', accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> };
+  const qtyCol = (header: string): ColumnDef<Item, unknown> => ({ id: 'qty', header, accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> });
   const controlCol: ColumnDef<Item, unknown> = { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : 'legacy quantity'}</StatusBadge> };
   const stateCol: ColumnDef<Item, unknown> = { id: 'state', header: 'State', accessorFn: (r) => r.attention, cell: ({ row }) => (!row.original.active ? <StatusBadge tone="neutral">inactive</StatusBadge> : Number(row.original.qty) <= 0 ? <StatusBadge tone="bad">out of stock</StatusBadge> : row.original.attention ? <StatusBadge tone="warn">attention</StatusBadge> : <StatusBadge tone="good">ok</StatusBadge>) };
   // Consumables carry reorder-point and coverage columns; durables don't run
   // out on a schedule, so those two columns would only ever read empty there.
   const consumableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [
-    nameCol, qtyCol,
+    nameCol, qtyCol('In storage'),
     { id: 'reorder', header: 'Reorder below', accessorFn: (r) => r.reorderBelow ?? '', cell: ({ row }) => <span className="tabular">{row.original.reorderBelow ?? '—'}</span> },
     { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? r.estCoverageDays ?? '', cell: ({ row }) => (row.original.coverageDays ? <span className="tabular">{formatNumber(row.original.coverageDays, 0)} days</span> : row.original.estCoverageDays ? <span className="tabular text-muted-foreground">~{formatNumber(row.original.estCoverageDays, 0)} days (estimated)</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>) },
     controlCol, stateCol,
   ], [nameCol]);
-  const durableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [nameCol, qtyCol, controlCol, stateCol], [nameCol]);
+  const durableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [nameCol, qtyCol('On hand'), controlCol, stateCol], [nameCol]);
 
   // Phase-3 grouping (D-137): the category field mixes real appliances with
   // utensils and furniture under one label ("Kitchen & Dining" holds the
@@ -217,7 +218,7 @@ export default function InventoryPage() {
         {selected && (
           <div className="space-y-4">
             <dl className="space-y-1">
-              <Field label="On hand">{formatNumber(selected.qty, 2)} {selected.unit}</Field>
+              <Field label={selected.consumable ? 'In storage' : 'On hand'}>{formatNumber(selected.qty, 2)} {selected.unit}</Field>
               <Field label="Reorder below">{selected.reorderBelow ?? 'not set'}</Field>
               <Field label="Purchase unit">{selected.purchaseUnit ? `${selected.purchaseUnit} = ${selected.unitsPerPurchase} ${selected.unit}` : 'same as base unit'}</Field>
               <Field label="Unit cost">{selected.unitCost !== null ? formatPHP(selected.unitCost) : s.caps.can('read_finance') ? 'not recorded' : 'restricted'}</Field>

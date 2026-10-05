@@ -7,6 +7,7 @@ import { PageHeader, Section } from '@/components/data/page-header';
 import { QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
+import { errorPage, shortUa, CLIENT_ERROR_DAYS } from './client-errors';
 import { ackVerifierFinding, fetchClientErrors, fetchHealth, fetchHealthRuns, fetchVerifierFindings, runHealthChecks } from './api';
 
 // Cross-tab checks (session 12): ledger vs reservations vs payouts vs cleaning
@@ -88,22 +89,31 @@ function FindingsSection() {
   );
 }
 
-// D-240: what the checklist PWA and the booking site reported to the error monitor, newest first.
-// Read-only; the monitor's own dedupe and Telegram alert decide what gets escalated.
+// D-240 / SPEC-42 9c: what the checklist PWA and the booking site reported to the error monitor, last 30 days,
+// newest first. Read-only; the monitor's own dedupe and Telegram alert decide what gets escalated. Times are Asia/Manila.
 function ClientErrorsSection() {
   const q = useQuery({ queryKey: ['client-errors'], queryFn: fetchClientErrors, refetchInterval: 60_000 });
   return (
-    <Section title="Client errors">
-      {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.rows.length === 0 ? <p className="text-sm text-muted-foreground">No client errors recorded.</p> : (
+    <Section title="Errors the apps reported">
+      {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.rows.length === 0 ? <p className="text-sm text-muted-foreground">No client errors in {CLIENT_ERROR_DAYS} days.</p> : (
         <ul className="divide-y rounded-lg border text-sm">
-          {q.data.rows.map((e) => (
-            <li key={e.fingerprint} className="flex flex-wrap items-center gap-2 px-3 py-2">
-              <StatusBadge tone="neutral" className="normal-case">{e.app}</StatusBadge>
-              <span className="min-w-0 break-words font-medium">{e.message}</span>
-              <span className="tabular text-xs text-muted-foreground">{e.count}×</span>
-              <span className="ml-auto text-xs text-muted-foreground">first seen {formatDateTime(e.first_seen)} · last seen {formatDateTime(e.last_seen)} · {e.last_alerted_at ? `alerted ${formatDateTime(e.last_alerted_at)}` : 'not alerted'}</span>
-            </li>
-          ))}
+          {q.data.rows.map((e) => {
+            const page = errorPage(e.detail);
+            const ua = shortUa(e.detail);
+            return (
+              <li key={e.fingerprint} className="space-y-1 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge tone="neutral" className="normal-case">{e.app}</StatusBadge>
+                  <StatusBadge tone="neutral" className="normal-case">{e.kind}</StatusBadge>
+                  <span className="min-w-0 break-words font-medium">{e.message}</span>
+                  <span className="tabular text-xs text-muted-foreground">{e.count}×</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {[page && `page ${page}`, ua, `first seen ${formatDateTime(e.first_seen)}`, `last seen ${formatDateTime(e.last_seen)}`, e.last_alerted_at ? `alerted ${formatDateTime(e.last_alerted_at)}` : 'not alerted'].filter(Boolean).join(' · ')}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Section>

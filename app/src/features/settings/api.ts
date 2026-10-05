@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 import type { GuestContact } from './guest-contact';
+import { CLIENT_ERROR_LIMIT, clientErrorSince } from './client-errors';
 
 // Settings adapter (P29). Staff management keeps the deployed staff-users
 // Edge Function contract (owner/admin only, MFA on the server). Health reads
@@ -119,5 +120,5 @@ export type ClientError = { fingerprint: string; app: string; kind: string; mess
 export async function fetchClientErrors() {
   return unwrapList<ClientError>(await supabase.from('client_errors')
     .select('fingerprint,app,kind,message,detail,first_seen,last_seen,count,last_alerted_at')
-    .order('last_seen', { ascending: false }).limit(20));
+    .gte('last_seen', clientErrorSince()).order('last_seen', { ascending: false }).limit(CLIENT_ERROR_LIMIT));
 }
