@@ -33,6 +33,7 @@ export function parseTlv(s: string): Tlv[] | null {
 /** Acquirer BIC (the merchant template's sub-tag 01) -> the name people know. MariBank's BIC is added from Honey's own payload (SPEC-37 7.D); an unknown BIC is shown as itself. */
 export const BANKS: Record<string, string> = {
   GXCHPHM2XXX: 'GCash',
+  LAUIPHM2XXX: 'MariBank',
 };
 
 export type QrphInfo =
