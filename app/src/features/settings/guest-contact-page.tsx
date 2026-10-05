@@ -36,7 +36,7 @@ export default function GuestContactPage() {
         {() => (
           <form onSubmit={submit} className="max-w-md space-y-4">
             <div><Label htmlFor="gc-name">Name guests ask for</Label><Input id="gc-name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} className="text-base" /></div>
-            <div><Label htmlFor="gc-phone">Mobile number</Label><Input id="gc-phone" type="tel" inputMode="tel" autoComplete="off" placeholder="0991 853 8269" value={phone} onChange={(e) => setPhone(e.target.value)} className="text-base" /></div>
+            <div><Label htmlFor="gc-phone">Mobile number</Label><Input id="gc-phone" type="tel" inputMode="tel" autoComplete="off" placeholder="+63 9XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className="text-base" /></div>
             {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
             <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button>
           </form>
