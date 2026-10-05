@@ -42,6 +42,8 @@ export type StaffDetails = {
   id_type: string | null; id_number: string | null; id_drive_url: string | null;
   emergency_contact_name: string | null; emergency_contact_number: string | null; start_date: string | null;
   fee_turnover: string | null; fee_transport: string | null; fee_deep_clean: string | null; version: number;
+  // SPEC-37: the decoded QR Ph payload of the payout account. Never rendered or logged; the screen shows bank, holder and the last four digits.
+  payout_qrph: string | null;
 };
 export async function listStaffDetails() {
   return rpc<StaffDetails[]>('list_staff_details_v1', {});
