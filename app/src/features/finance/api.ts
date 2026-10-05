@@ -9,15 +9,21 @@ import { toCentavos } from '@/lib/money';
 // transaction review (existing table contract), post/reverse journals, opening
 // balances, close. All amounts are decimal strings.
 
-export type Txn = { id: string; transaction_date: string; txn_type: string; category: string; status: string; source: string; gross_amount: string; payee_name: string | null; or_number: string | null; external_ref: string | null; booking_id: string | null; reservation_id: string | null; income_stage: string | null; notes: string | null; receipt_image_path: string | null; ocr_confidence: string | null; created_at: string };
-export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string; mirror?: string };
-const TXN_COLS = 'id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, reservation_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at';
+export type Txn = { id: string; transaction_date: string; txn_type: string; category: string; status: string; source: string; gross_amount: string; payee_name: string | null; or_number: string | null; external_ref: string | null; booking_id: string | null; reservation_id: string | null; income_stage: string | null; notes: string | null; receipt_image_path: string | null; ocr_confidence: string | null; created_at: string; hidden_at: string | null; archived_at: string | null };
+// voided / archived / hidden = '1' bring those rows back into the list. Void and archived rows are out of every money total; hidden rows are only out of the list.
+export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string; mirror?: string; voided?: string; archived?: string; hidden?: string };
+const TXN_COLS = 'id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, reservation_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at, hidden_at, archived_at';
 
 export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   let q = supabase.from('transactions').select(TXN_COLS, { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
   if (f.q) q = q.or(`payee_name.ilike.%${f.q}%,external_ref.ilike.%${f.q}%,category.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
   if (f.type) q = q.eq('txn_type', f.type);
   if (f.status) q = q.eq('status', f.status);
+  // An archived row is status void with archived_at set, so voided and archived are two views of the void rows.
+  if (f.voided !== '1' && f.archived !== '1') q = q.neq('status', 'void');
+  else if (f.archived !== '1') q = q.or('status.neq.void,archived_at.is.null');
+  else if (f.voided !== '1') q = q.or('status.neq.void,archived_at.not.is.null');
+  if (f.hidden !== '1') q = q.is('hidden_at', null);
   if (f.source) q = q.eq('source', f.source);
   else if (f.mirror !== 'show') q = q.not('source', 'in', NOT_MIRROR); // estimates and CSV mirrors are archived by default; the payout is the record
   if (f.from) q = q.gte('transaction_date', f.from);
@@ -92,6 +98,11 @@ export async function reviewTransaction(id: string, status: 'confirmed' | 'void'
 export type TxnDraft = { id?: string; txn_type: string; category: string; transaction_date: string; gross_amount: string; payee_name?: string; notes?: string; or_number?: string; reservation_id?: string | null; reason?: string };
 export function saveTransaction(propertyId: string, draft: TxnDraft, key = newIdempotencyKey('txn')) {
   return rpc<{ ok: boolean; id: string; status: string; auditId: string | null; replayed?: boolean }>('admin_save_transaction_v1', { p_property_id: propertyId, p_txn: draft, p_idempotency_key: key });
+}
+
+export type BulkAction = 'hide' | 'unhide' | 'archive' | 'restore';
+export function bulkTransactions(propertyId: string, ids: string[], action: BulkAction, reason?: string) {
+  return rpc<{ ok: boolean; action: BulkAction; changed: number; skipped: number; amount: string; auditIds: string[] }>('admin_transactions_bulk_v1', { p_property_id: propertyId, p_ids: ids, p_action: action, p_reason: reason ?? null });
 }
 
 export type PaymentQueueRow = Record<string, unknown>;

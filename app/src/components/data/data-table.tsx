@@ -32,9 +32,10 @@ type Props<T> = {
   emptyMessage?: ReactNode;
   getRowId?: (row: T) => string;
   toolbar?: ReactNode;
+  rowClassName?: (row: T) => string | undefined;
 };
 
-export function DataTable<T>({ columns, rows, total, page = 1, pageSize = 25, onPageChange, density = 'comfortable', onRowClick, caption, emptyMessage, getRowId, toolbar }: Props<T>) {
+export function DataTable<T>({ columns, rows, total, page = 1, pageSize = 25, onPageChange, density = 'comfortable', onRowClick, caption, emptyMessage, getRowId, toolbar, rowClassName }: Props<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [visibility, setVisibility] = useState<VisibilityState>({});
   const table = useReactTable({
@@ -105,7 +106,7 @@ export function DataTable<T>({ columns, rows, total, page = 1, pageSize = 25, on
               table.getRowModel().rows.map((r) => (
                 <TableRow
                   key={r.id}
-                  className={cn(onRowClick && 'cursor-pointer')}
+                  className={cn(onRowClick && 'cursor-pointer', rowClassName?.(r.original))}
                   onClick={onRowClick ? () => onRowClick(r.original) : undefined}
                   onKeyDown={onRowClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRowClick(r.original); } } : undefined}
                   tabIndex={onRowClick ? 0 : undefined}

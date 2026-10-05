@@ -20,7 +20,7 @@ export default function FinanceQueuePage() {
   const s = useSession();
   const qc = useQueryClient();
   const canApprove = s.caps.can('approve_payment');
-  const pending = useQuery({ queryKey: ['transactions', s.propertyId, 'pending'], queryFn: () => fetchTransactions(s.propertyId, { status: 'pending_review' }) });
+  const pending = useQuery({ queryKey: ['transactions', s.propertyId, 'pending'], queryFn: () => fetchTransactions(s.propertyId, { status: 'pending_review', hidden: '1' }) });
   const payments = useQuery({ queryKey: ['payment-queue', s.propertyId], queryFn: () => fetchPaymentQueue(s.propertyId) });
   const [reason, setReason] = useState<Record<string, string>>({});
   const review = useMutation({

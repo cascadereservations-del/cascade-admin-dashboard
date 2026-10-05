@@ -40,6 +40,7 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   merge_guests_v1: 'follow_ups',
   record_payment_finance_review: 'finance',
   admin_save_transaction_v1: 'finance',
+  admin_transactions_bulk_v1: 'finance',
   post_journal_v1: 'finance',
   reverse_journal_v1: 'finance',
   acct_seed_chart_v1: 'finance',
