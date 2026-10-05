@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PayoutQrField } from './payout-qr-field';
 import { STAFF_PIN_PREFIX, STAFF_PIN_RE, STAFF_ROLES, createStaff, listStaff, listStaffDetails, saveStaffDetails, staffAction, type StaffDetails, type StaffUser } from './api';
 
 // OPS03: named staff through the deployed staff-users function: create with a
@@ -24,7 +25,7 @@ import { STAFF_PIN_PREFIX, STAFF_PIN_RE, STAFF_ROLES, createStaff, listStaff, li
 
 type Draft = { user_id?: string; name: string; role: string; pin: string; note: string };
 type DetailsDraft = Omit<StaffDetails, 'user_id'>;
-const EMPTY_DETAILS: DetailsDraft = { contact_number: '', alternate_contact: '', address: '', id_type: '', id_number: '', id_drive_url: '', emergency_contact_name: '', emergency_contact_number: '', start_date: '', fee_turnover: '', fee_transport: '', fee_deep_clean: '', version: 1 };
+const EMPTY_DETAILS: DetailsDraft = { contact_number: '', alternate_contact: '', address: '', id_type: '', id_number: '', id_drive_url: '', emergency_contact_name: '', emergency_contact_number: '', start_date: '', fee_turnover: '', fee_transport: '', fee_deep_clean: '', payout_qrph: null, version: 1 };
 
 export default function StaffPage() {
   const s = useSession();
@@ -67,7 +68,9 @@ export default function StaffPage() {
   };
   const submitDetails = () => {
     if (!draft?.user_id || !detailsDraft) return;
-    const { version, ...patch } = detailsDraft;
+    const { version, ...rest } = detailsDraft;
+    const patch: Record<string, unknown> = { ...rest };
+    delete patch.payout_qrph; // the payout QR saves through its own field, never with this form
     saveDetails.mutate({ userId: draft.user_id, patch, version });
   };
   const editing = draft?.user_id ? staff.data?.find((u) => u.user_id === draft.user_id) : undefined;
@@ -145,6 +148,10 @@ export default function StaffPage() {
             <div className="flex justify-end"><Button type="submit" size="sm" disabled={saveDetails.isPending}>Save details</Button></div>
           </form>
         )}
+        {draft?.user_id && detailsDraft && (s.caps.role === 'owner' || s.caps.role === 'admin') && (() => {
+          const stored = details.data?.find((x) => x.user_id === draft.user_id);
+          return <PayoutQrField userId={draft.user_id} payload={stored?.payout_qrph ?? null} version={stored?.version ?? detailsDraft.version} onSaved={refresh} />;
+        })()}
       </DetailSheet>
     </div>
   );
