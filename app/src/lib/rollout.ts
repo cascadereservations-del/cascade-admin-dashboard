@@ -51,6 +51,9 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   publish_rate_card_v1: 'pricing',
   save_rate_promotion_v1: 'pricing',
   end_rate_promotion_v1: 'pricing',
+  admin_add_pay_rate_v1: 'finance', // D-301: Settings -> Pay rates (append-only, owner/admin)
+  task_set_done_v1: 'follow_ups', // D-301: Tasks page done / undo
+  task_add_reminder_v1: 'follow_ups', // D-301: Tasks page, add a reminder
 };
 
 export function mutationsEnabled(module: MutationModule): boolean {
