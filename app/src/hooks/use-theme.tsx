@@ -35,6 +35,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolved === 'dark');
     document.documentElement.style.colorScheme = resolved;
+    // Both metas get the same value so the browser bar follows the in-app toggle, not just the OS setting.
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', resolved === 'dark' ? '#130E09' : '#F9F6F0'));
   }, [resolved]);
 
   const setTheme = useCallback((t: Theme) => {

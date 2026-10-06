@@ -115,7 +115,7 @@ export function AppShell() {
           <Button variant="outline" className="h-9 min-w-0 flex-1 max-w-md justify-start gap-2 text-muted-foreground sm:w-72 sm:flex-none" onClick={() => setPaletteOpen(true)}>
             <Search className="size-4" aria-hidden />
             <span className="truncate">Search or jump to…</span>
-            <kbd className="ml-auto hidden rounded border bg-muted px-1.5 text-[10px] font-medium sm:inline">Ctrl K</kbd>
+            <kbd className="ml-auto hidden rounded border bg-muted px-1.5 text-xs font-medium sm:inline">Ctrl K</kbd>
           </Button>
           <div className="ml-auto flex items-center gap-1">
             <DropdownMenu>

@@ -67,7 +67,7 @@ export function KpiCard({ metric, title, definition, drilldownHref }: { metric: 
             </PopoverContent>
           </Popover>
         </div>
-        <p className={`tabular font-display text-[32px] leading-9 font-semibold ${metric.value === null ? 'text-muted-foreground' : ''}`}>{value}</p>
+        <p className={`tabular text-[28px] leading-8 font-semibold ${metric.value === null ? 'text-muted-foreground' : ''}`}>{value}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Badge variant={coverageVariant} className="capitalize">{metric.coverage}</Badge>
           <span>{metric.includedCount} records</span>

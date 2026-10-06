@@ -239,7 +239,7 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 600;
-    font-size: 11px;
+    font-size: var(--text-xs);
     border-color: color-mix(in srgb, currentColor 24%, transparent);
   }
   [data-slot="button"][data-variant="default"] {

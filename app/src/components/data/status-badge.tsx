@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 const TONE = {
   good: 'border-chart-4/40 bg-chart-4/10 text-foreground',
-  warn: 'border-champagne/50 bg-cream text-foreground',
+  warn: 'border-warn/40 bg-warn-soft text-warn',
   bad: 'border-destructive/40 bg-destructive/10 text-foreground',
   neutral: 'bg-muted text-muted-foreground',
   info: 'border-chart-3/40 bg-chart-3/10 text-foreground',
@@ -19,7 +19,7 @@ export type Tone = keyof typeof TONE;
 
 export function StatusBadge({ tone = 'neutral', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   return (
-    <Badge variant="outline" className={cn('gap-1 font-normal', TONE[tone], className)}>
+    <Badge variant="outline" className={cn('gap-1 font-normal normal-case', TONE[tone], className)}>
       <span aria-hidden className="text-[9px]">{GLYPH[tone]}</span>
       {children}
     </Badge>

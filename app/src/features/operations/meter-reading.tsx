@@ -22,7 +22,7 @@ function UsageRow({ line, prev, curr }: { line: UsageLine; prev: string | null; 
         <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           {line.perNight !== null && <span className="tabular">{fmtUsage(line.perNight, line.kind)} {line.unit}/night</span>}
           {line.band && <span className="tabular">usual {fmtUsage(line.band.low, line.kind)}–{fmtUsage(line.band.high, line.kind)} (median {Number(line.band.median.toFixed(dp))}, last {line.band.n} stays)</span>}
-          <StatusBadge tone={TONE[line.status]} className="px-1.5 py-0 text-[11px]">{STATUS_LABEL[line.status]}</StatusBadge>
+          <StatusBadge tone={TONE[line.status]} className="px-1.5 py-0 text-xs">{STATUS_LABEL[line.status]}</StatusBadge>
         </p>
       </div>
     </div>

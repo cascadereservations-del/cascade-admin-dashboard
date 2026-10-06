@@ -101,10 +101,10 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
               <div key={k.key} className="rounded-lg border bg-card px-3 py-2.5">
                 <p className="truncate text-xs text-muted-foreground">{k.title}</p>
                 <p className={`tabular text-lg font-semibold ${!m || m.value === null ? 'text-muted-foreground' : ''}`}>{m ? formatMetricValue(m) : q.isPending ? '…' : 'Not available'}</p>
-                {m && m.coverage !== 'complete' && <p className="text-[11px] text-muted-foreground capitalize">{m.coverage} coverage</p>}
+                {m && m.coverage !== 'complete' && <p className="text-xs text-muted-foreground capitalize">{m.coverage} coverage</p>}
                 {dir && (
                   <p
-                    className={`text-[11px] ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}
+                    className={`text-xs ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}
                     title={`3-month average (same elapsed days each month): ${trailing.map((tp, i) => `${formatDate(tp.start, 'short')}-${formatDate(tp.endExclusive, 'short')} ${Number.isFinite(trailingVals[i]) ? formatByUnit(trailingVals[i]!, m!.unit) : 'no data'}`).join(', ')}`}
                   >
                     {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '≈'} {Math.abs(deltaPct!).toFixed(0)}% vs 3-mo avg ({formatByUnit(avg!, m!.unit)}){dir === 'down' && deltaPct! < -20 ? ' - well below recent months' : dir === 'up' && deltaPct! > 20 ? ' - well above recent months' : ''}
