@@ -4,7 +4,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-[28px] leading-[34px] font-semibold">{title}</h1>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

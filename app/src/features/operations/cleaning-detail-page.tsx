@@ -151,7 +151,7 @@ export default function CleaningDetailPage() {
                   <div aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Sparkles className="size-6" aria-hidden /></div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-xl font-semibold tracking-tight">{c.last_guest_name ?? 'Cleaning'}</h1>
+                      <h1 className="text-[28px] leading-[34px] font-semibold">{c.last_guest_name ?? 'Cleaning'}</h1>
                       <StatusBadge tone={c.is_complete ? 'good' : c.is_complete === false ? 'warn' : 'neutral'}>{c.is_complete === null ? 'unknown' : c.is_complete ? 'complete' : 'incomplete'}</StatusBadge>
                     </div>
                     <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">Submission {c.submission_id}<CopyButton value={c.submission_id} /></p>

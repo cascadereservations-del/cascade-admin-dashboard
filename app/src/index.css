@@ -3,93 +3,124 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Cascade admin palette (D-095, 2026-09-13): "dawn over the bay".
-   Cool ink and lagoon teal for structure and action, warm sand for selection
-   and gentle emphasis, coral only for danger. The old mahogany/champagne
-   world is retired in the admin; the guest-facing brand keeps it.
-   Rules: teal is the single action colour; amber is a highlight, never text
-   under 18px; status colours always travel with a glyph and a label. */
+/* Cascade theme v2 (D-299/D-300.10/D-303; DESIGN-cascade-ui-theme-2026-10-05 section 8): the
+   guest guide look - warm cream, espresso ink, deep-bronze action colour, gilt Cormorant
+   display, Raleway UI. Replaces the D-095 teal palette and the inert HIG sheet.
+   Rules: deep bronze is the only tap-me colour; gold (--accent-bronze, --gilt) is display and
+   decoration only (26px+ or hairlines); status colours always travel with a glyph and a label;
+   every pair is AA (DESIGN 8.3). Teal survives only as --chart-2, a data colour. */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.982 0.006 210);
-  --foreground: oklch(0.24 0.03 245);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.03 245);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.03 245);
-  --primary: oklch(0.46 0.09 205);
-  --primary-foreground: oklch(0.985 0.01 200);
-  --secondary: oklch(0.945 0.02 205);
-  --secondary-foreground: oklch(0.3 0.05 215);
-  --muted: oklch(0.955 0.008 220);
-  --muted-foreground: oklch(0.5 0.025 240);
-  --accent: oklch(0.955 0.03 85);
-  --accent-foreground: oklch(0.32 0.06 60);
-  --destructive: oklch(0.58 0.2 25);
-  --border: oklch(0.905 0.012 220);
-  --input: oklch(0.905 0.012 220);
-  --ring: oklch(0.6 0.11 200);
+  --radius: 16px;
+  --background: #F9F6F0;
+  --foreground: #2A1F16;
+  --card: #FFFFFF;
+  --card-foreground: #2A1F16;
+  --popover: #FFFFFF;
+  --popover-foreground: #2A1F16;
+  --primary: #7A5A2B;
+  --primary-foreground: #FBF7EE;
+  --secondary: #F1EBE1;
+  --secondary-foreground: #2A1F16;
+  --muted: #F1EBE1;
+  --muted-foreground: #5C4D3F;
+  --accent: #F3E9D8;
+  --accent-foreground: #7A5A2B;
+  --destructive: #B3261E;
+  --border: #E6DCCB;
+  --input: #E6DCCB;
+  --ring: #B58E5F;
   /* Legacy brand aliases kept for the few components that name them. */
-  --champagne: oklch(0.72 0.14 70);
-  --mahogany: oklch(0.24 0.03 245);
-  --cream: oklch(0.955 0.03 85);
-  --chart-1: oklch(0.6 0.12 200);
-  --chart-2: oklch(0.72 0.14 70);
-  --chart-3: oklch(0.55 0.13 265);
-  --chart-4: oklch(0.62 0.14 150);
-  --chart-5: oklch(0.62 0.19 25);
-  --sidebar: oklch(0.23 0.045 235);
-  --sidebar-foreground: oklch(0.9 0.015 215);
-  --sidebar-primary: oklch(0.78 0.11 190);
-  --sidebar-primary-foreground: oklch(0.18 0.04 235);
-  --sidebar-accent: oklch(0.3 0.05 232);
-  --sidebar-accent-foreground: oklch(0.985 0.01 200);
-  --sidebar-border: oklch(0.34 0.05 232);
-  --sidebar-ring: oklch(0.78 0.11 190);
+  --champagne: #B58E5F;
+  --mahogany: #2A1F16;
+  --cream: #F6EEE0;
+  --chart-1: #7A5A2B;
+  --chart-2: #146C70;
+  --chart-3: #2F5FA8;
+  --chart-4: #287247;
+  --chart-5: #B3261E;
+  --sidebar: #1F1711;
+  --sidebar-foreground: #EFE6D8;
+  --sidebar-primary: #D7B377;
+  --sidebar-primary-foreground: #2A1E0E;
+  --sidebar-accent: #2E241B;
+  --sidebar-accent-foreground: #EFE6D8;
+  --sidebar-border: rgba(215, 179, 119, 0.14);
+  --sidebar-ring: #D7B377;
+  /* v2 additions (DESIGN 8.2) */
+  --accent-bronze: #B58E5F;
+  --accent-bronze-text: #6E4F22;
+  --accent-bronze-soft: #F6EEE0;
+  --ok: #287247;  --ok-soft: #E2F2E7;
+  --warn: #8A5A00; --warn-soft: #FBEFD3;
+  --info: #2F5FA8; --info-soft: #E1EAF7;
+  --danger-soft: #FBE3E1;
+  --gilt: linear-gradient(135deg, #A47A45 0%, #7A5A2B 55%, #5C4220 100%);
+  --rule: linear-gradient(90deg, transparent 0%, #B58E5F 50%, transparent 100%);
+  --hairline: rgba(181, 142, 95, 0.28);
+  --shadow-sm: 0 1px 2px rgba(61, 43, 31, 0.05), 0 4px 14px rgba(61, 43, 31, 0.06);
+  --shadow-md: 0 2px 6px rgba(61, 43, 31, 0.07), 0 12px 32px rgba(61, 43, 31, 0.10);
+  --shadow-lg: 0 8px 16px rgba(61, 43, 31, 0.10), 0 28px 56px rgba(61, 43, 31, 0.16);
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 300ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 .dark {
-  --background: oklch(0.17 0.025 240);
-  --foreground: oklch(0.94 0.01 210);
-  --card: oklch(0.21 0.03 238);
-  --card-foreground: oklch(0.94 0.01 210);
-  --popover: oklch(0.21 0.03 238);
-  --popover-foreground: oklch(0.94 0.01 210);
-  --primary: oklch(0.8 0.11 190);
-  --primary-foreground: oklch(0.18 0.04 235);
-  --secondary: oklch(0.28 0.04 232);
-  --secondary-foreground: oklch(0.94 0.01 210);
-  --muted: oklch(0.26 0.03 235);
-  --muted-foreground: oklch(0.72 0.02 220);
-  --accent: oklch(0.32 0.05 75);
-  --accent-foreground: oklch(0.95 0.03 85);
-  --destructive: oklch(0.68 0.18 25);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.7 0.11 195);
-  --champagne: oklch(0.8 0.13 75);
-  --mahogany: oklch(0.94 0.01 210);
-  --cream: oklch(0.32 0.05 75);
-  --chart-1: oklch(0.72 0.12 195);
-  --chart-2: oklch(0.8 0.13 75);
-  --chart-3: oklch(0.7 0.12 265);
-  --chart-4: oklch(0.72 0.14 150);
-  --chart-5: oklch(0.7 0.18 25);
-  --sidebar: oklch(0.14 0.03 240);
-  --sidebar-foreground: oklch(0.9 0.015 215);
-  --sidebar-primary: oklch(0.8 0.11 190);
-  --sidebar-primary-foreground: oklch(0.18 0.04 235);
-  --sidebar-accent: oklch(0.24 0.04 235);
-  --sidebar-accent-foreground: oklch(0.985 0.01 200);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.8 0.11 190);
+  --background: #130E09;
+  --foreground: #F5EFE4;
+  --card: #1D1611;
+  --card-foreground: #F5EFE4;
+  --popover: #1D1611;
+  --popover-foreground: #F5EFE4;
+  --primary: #D7B377;
+  --primary-foreground: #2A1E0E;
+  --secondary: #28201A;
+  --secondary-foreground: #F5EFE4;
+  --muted: #28201A;
+  --muted-foreground: #C3B5A3;
+  --accent: #3A2C18;
+  --accent-foreground: #D7B377;
+  --destructive: #F28B82;
+  --border: rgba(215, 179, 119, 0.18);
+  --input: rgba(215, 179, 119, 0.24);
+  --ring: #E4C98F;
+  --champagne: #D7B377;
+  --mahogany: #F5EFE4;
+  --cream: #33291A;
+  --chart-1: #D7B377;
+  --chart-2: #63C5C7;
+  --chart-3: #8FB7F5;
+  --chart-4: #84C79A;
+  --chart-5: #F28B82;
+  --sidebar: #0F0B07;
+  --sidebar-foreground: #EFE6D8;
+  --sidebar-primary: #D7B377;
+  --sidebar-primary-foreground: #2A1E0E;
+  --sidebar-accent: #231A12;
+  --sidebar-accent-foreground: #EFE6D8;
+  --sidebar-border: rgba(215, 179, 119, 0.14);
+  --sidebar-ring: #D7B377;
+  --accent-bronze: #D7B377;
+  --accent-bronze-text: #E4C98F;
+  --accent-bronze-soft: #33291A;
+  --ok: #84C79A;  --ok-soft: #1E3527;
+  --warn: #E6B65A; --warn-soft: #3A2D12;
+  --info: #8FB7F5; --info-soft: #1D2C44;
+  --danger-soft: #44201D;
+  --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
+  --rule: linear-gradient(90deg, transparent 0%, #D7B377 50%, transparent 100%);
+  --hairline: rgba(215, 179, 119, 0.22);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 14px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 6px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 6px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -124,7 +155,19 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-bronze: var(--accent-bronze);
+  --color-bronze-text: var(--accent-bronze-text);
+  --color-bronze-soft: var(--accent-bronze-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: "Raleway", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-script: "Style Script", "Cormorant Garamond", cursive;
 }
 
 @layer base {
@@ -138,6 +181,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     caret-color: var(--primary);
+    line-height: 24px;
+    letter-spacing: 0.01em;
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
+  }
+  /* Raleway default figures are old-style; form controls do not inherit lining-nums. */
+  button, input, select, textarea {
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
   }
   ::selection {
     background: color-mix(in oklch, var(--primary) 22%, transparent);
@@ -149,6 +201,55 @@
   h1, h2, h3 {
     text-wrap: balance;
     letter-spacing: -0.01em;
+  }
+  /* Display: Cormorant is for page titles, card titles (22px+) and KPI figures only; the many
+     small uppercase h2 section labels stay Raleway. Gilt text is AA-large, so 26px+ only (DESIGN 8.3). */
+  h1 {
+    font-family: var(--font-display);
+    font-size: 34px;
+    line-height: 1.18;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    background: var(--gilt);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  [data-slot="card-title"] {
+    font-family: var(--font-display);
+    font-size: 22px;
+    line-height: 28px;
+    letter-spacing: 0.005em;
+  }
+  [data-slot="card"] {
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  .dark [data-slot="card"] {
+    box-shadow: none;
+  }
+  [data-slot="badge"] {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    font-size: 11px;
+    border-color: color-mix(in srgb, currentColor 24%, transparent);
+  }
+  [data-slot="button"][data-variant="default"] {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.05));
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(42, 31, 22, 0.16), 0 4px 12px rgba(122, 90, 43, 0.18);
+  }
+  [data-slot="button"], [data-slot="input"], [data-slot="select-trigger"] {
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease);
+  }
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+  @media (forced-colors: active) {
+    h1 { background: none; -webkit-text-fill-color: currentColor; }
   }
   .tabular {
     font-variant-numeric: tabular-nums;
@@ -186,60 +287,3 @@
     }
   }
 }
-
-/* Apple HIG token sheet v2 (session 27; PLAN-apple-design-language-adoption step 1, D-160 #5).
-   Lives side by side with v1 above: <html data-theme="hig"> switches it on (open the app with
-   ?theme=hig, ?theme=default switches back; main.tsx remembers the choice). Keeps the D-095 hues
-   and adopts HIG's ROLES and everything non-colour:
-   - label hierarchy (label / secondaryLabel / tertiaryLabel) on the same ink,
-   - grouped backgrounds (page = systemGroupedBackground, card = secondarySystemGroupedBackground),
-   - one tint (teal stays the tint), separator a touch firmer,
-   - type scale (Large Title / Title 2 / Title 3 / Body 15 / Footnote 13), continuous-corner radii,
-   - materials (soft two-layer card shadow, no hairline), motion 0.2-0.35 s ease-in-out,
-   - lucide at SF-Symbols stroke 1.75.
-   Not the default until Lloyd compares. */
-[data-theme="hig"] {
-  --radius: 0.75rem;
-  --foreground: oklch(0.22 0.03 245);          /* label */
-  --muted-foreground: oklch(0.47 0.02 240);    /* secondaryLabel */
-  --hig-tertiary: oklch(0.62 0.015 235);       /* tertiaryLabel: timestamps, helper text */
-  --background: oklch(0.965 0.006 215);        /* systemGroupedBackground */
-  --card: oklch(1 0 0);                        /* secondarySystemGroupedBackground */
-  --popover: oklch(1 0 0);
-  --secondary: oklch(0.935 0.012 215);
-  --muted: oklch(0.945 0.008 218);
-  --accent: oklch(0.955 0.03 85);              /* D-095 sand stays the selection colour */
-  --border: oklch(0.88 0.01 220);              /* separator */
-  --input: oklch(0.88 0.01 220);
-  --primary: oklch(0.5 0.1 205);               /* the one tint (D-095 teal) */
-  --ring: oklch(0.6 0.11 200);
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 5%), 0 6px 16px oklch(0 0 0 / 5%);
-  --motion-fast: 200ms;
-  --motion-base: 250ms;
-  --motion-slow: 350ms;
-  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
-}
-[data-theme="hig"].dark {
-  /* HIG dark: elevated greys, base below cards, never inverted */
-  --background: oklch(0.155 0.02 240);         /* base */
-  --card: oklch(0.215 0.025 238);              /* elevated */
-  --popover: oklch(0.235 0.025 238);
-  --secondary: oklch(0.27 0.03 235);
-  --muted: oklch(0.25 0.025 236);
-  --foreground: oklch(0.95 0.008 210);
-  --muted-foreground: oklch(0.70 0.018 220);
-  --hig-tertiary: oklch(0.55 0.015 225);
-  --border: oklch(1 0 0 / 14%);
-  --input: oklch(1 0 0 / 18%);
-  --primary: oklch(0.8 0.11 190);
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 35%), 0 8px 20px oklch(0 0 0 / 25%);
-}
-[data-theme="hig"] h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }   /* Large Title */
-[data-theme="hig"] h2 { font-size: 1.375rem; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; } /* Title 2 */
-[data-theme="hig"] h3 { font-size: 1.125rem; line-height: 1.3; font-weight: 600; }                            /* Title 3 */
-[data-theme="hig"] small, [data-theme="hig"] .text-xs { font-size: 0.8667rem; color: var(--hig-tertiary); }   /* Footnote 13 */
-[data-theme="hig"] [data-slot="card"] { border-radius: var(--radius-xl); border-color: transparent; box-shadow: var(--shadow-card); }
-[data-theme="hig"] [data-slot="button"], [data-theme="hig"] [data-slot="input"], [data-theme="hig"] [data-slot="select-trigger"] { border-radius: var(--radius-md); transition-duration: var(--motion-fast); transition-timing-function: var(--motion-ease); }
-[data-theme="hig"] [data-slot="table-cell"], [data-theme="hig"] [data-slot="table-head"] { padding-block: 0.7rem; }
-[data-theme="hig"] [data-slot="sheet-content"], [data-theme="hig"] [data-slot="dialog-content"] { border-radius: var(--radius-xl); transition-duration: var(--motion-base); }
-[data-theme="hig"] svg.lucide { stroke-width: 1.75; }

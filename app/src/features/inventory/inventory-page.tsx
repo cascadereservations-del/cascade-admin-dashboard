@@ -204,7 +204,7 @@ export default function InventoryPage() {
               </div>
             </DetailSheet>
             <div className="hidden print:block">
-              <h1 className="mb-4 text-lg font-semibold">Cascade Hideaway — Inventory</h1>
+              <h1 className="mb-4 text-[28px] leading-[34px] font-semibold">Cascade Hideaway — Inventory</h1>
               <p className="mb-4 text-xs text-muted-foreground">Printed {formatDateTime(new Date().toISOString())}</p>
               {/* D-298.6: a consumable placed in the unit counts as used, so its quantity is what is in the storeroom */}
               {printSel.consumables && <PrintTable title="Consumables" qtyHeader="In storage" rows={pConsumables} />}

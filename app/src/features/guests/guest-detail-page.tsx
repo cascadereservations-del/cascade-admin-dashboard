@@ -183,7 +183,7 @@ export default function GuestDetailPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-xl font-semibold tracking-tight">{d?.display_name ?? g.name}</h1>
+                    <h1 className="text-[28px] leading-[34px] font-semibold">{d?.display_name ?? g.name}</h1>
                     <StatusBadge tone="neutral">{g.source}</StatusBadge>
                     {g.tier && <StatusBadge tone={g.tier === 'vip' ? 'warn' : 'info'}>{g.tier}</StatusBadge>}
                     {d?.vip && <StatusBadge tone="warn">VIP</StatusBadge>}

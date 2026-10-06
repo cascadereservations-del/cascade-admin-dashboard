@@ -71,7 +71,7 @@ export default function BookingDetailPage() {
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-xl font-semibold tracking-tight">{st.guestName}</h1>
+                      <h1 className="text-[28px] leading-[34px] font-semibold">{st.guestName}</h1>
                       <StatusBadge tone={bookingTone(st.bookingState)}>{st.bookingState}</StatusBadge>
                       <StatusBadge tone={payoutTone(st.payoutState)}>{st.payoutState.replaceAll('_', ' ')}</StatusBadge>
                     </div>
