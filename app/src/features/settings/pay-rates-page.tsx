@@ -41,7 +41,7 @@ function Rates({ data, propertyId }: { data: PayRates; propertyId: string }) {
   const [general, setGeneral] = useState('');
   const [transport, setTransport] = useState('');
   const [note, setNote] = useState('');
-  const input = { effectiveFrom: from, regular: num(regular), general: num(general), transport: transport.trim() === '' ? null : num(transport), note };
+  const input = { effectiveFrom: from, regular: num(regular), general: num(general), transport: transport.trim() === '' || num(transport) === 0 ? null : num(transport), note }; // 0 = no transport fee, as in the staff app
   const problem = rateProblem(input, earliest, data.today, addIsoDays);
   const save = useMutation({
     mutationFn: () => addPayRate(propertyId, input),

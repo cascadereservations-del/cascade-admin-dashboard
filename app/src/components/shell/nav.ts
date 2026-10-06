@@ -35,7 +35,16 @@ export const NAV: NavItem[] = [
       { to: '/bookings/inquiries', label: 'Inquiries' },
     ],
   },
-  { to: '/guests', label: 'Guests', icon: Users, action: 'manage_operations' },
+  {
+    to: '/guests',
+    label: 'Guests',
+    icon: Users,
+    action: 'manage_operations',
+    children: [
+      { to: '/guests', label: 'List' },
+      { to: '/guests/conversations', label: 'Conversations' }, // SPEC-42 s7
+    ],
+  },
   {
     to: '/operations',
     label: 'Operations',
@@ -45,6 +54,7 @@ export const NAV: NavItem[] = [
       { to: '/operations', label: 'Cleaning log' },
       { to: '/operations/work-orders', label: 'Work orders' },
       { to: '/operations/notices', label: 'Notices' },
+      { to: '/operations/tasks', label: 'Tasks' }, // D-301
     ],
   },
   {
@@ -74,7 +84,16 @@ export const NAV: NavItem[] = [
     ],
   },
   { to: '/insights', label: 'KPIs & Analytics', icon: BarChart3, action: 'read_finance' },
-  { to: '/pricing', label: 'Pricing', icon: Tag, action: 'publish_rate_policy' }, // SPEC-34 (D-259)
+  {
+    to: '/pricing',
+    label: 'Pricing',
+    icon: Tag,
+    action: 'publish_rate_policy',
+    children: [
+      { to: '/pricing', label: 'Rate settings' },
+      { to: '/pricing/advisor', label: 'Price advisor', action: 'read_finance' }, // SPEC-35
+    ],
+  }, // SPEC-34 (D-259), SPEC-35
   {
     to: '/settings',
     label: 'Settings',
@@ -85,6 +104,7 @@ export const NAV: NavItem[] = [
       { to: '/settings/health', label: 'System health' },
       { to: '/settings/audit', label: 'Audit history', action: 'manage_staff' },
       { to: '/settings/guest-contact', label: 'Guest contact', action: 'manage_staff' },
+      { to: '/settings/pay-rates', label: 'Pay rates', action: 'manage_staff' }, // D-301
     ],
   },
 ];

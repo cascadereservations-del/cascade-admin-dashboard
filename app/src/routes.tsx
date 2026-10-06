@@ -36,6 +36,10 @@ const StaffPage = lazy(() => import('@/features/settings/staff-page'));
 const HealthPage = lazy(() => import('@/features/settings/health-page'));
 const AuditPage = lazy(() => import('@/features/settings/audit-page'));
 const GuestContactPage = lazy(() => import('@/features/settings/guest-contact-page'));
+const TasksPage = lazy(() => import('@/features/operations/tasks-page'));
+const PayRatesPage = lazy(() => import('@/features/settings/pay-rates-page'));
+const ConversationsPage = lazy(() => import('@/features/guests/conversations-page'));
+const PriceAdvisorPage = lazy(() => import('@/features/pricing/advisor-page'));
 
 function guard(action: Action, el: ReactNode) {
   return (
@@ -62,11 +66,13 @@ export const router = createHashRouter([
       { path: 'bookings/inquiries', element: guard('read_operations', <InquiriesPage />) },
       { path: 'bookings/:kind/:id', element: guard('read_operations', <BookingDetailPage />) },
       { path: 'guests', element: guard('manage_operations', <GuestsPage />) },
+      { path: 'guests/conversations', element: guard('manage_operations', <ConversationsPage />) }, // SPEC-42 s7
       { path: 'guests/:id', element: guard('manage_operations', <GuestDetailPage />) },
       { path: 'operations', element: guard('read_operations', <CleaningPage />) },
       { path: 'operations/cleaning/:id', element: guard('read_operations', <CleaningDetailPage />) },
       { path: 'operations/work-orders', element: guard('read_operations', <WorkOrdersPage />) },
       { path: 'operations/notices', element: guard('read_operations', <NoticesPage />) },
+      { path: 'operations/tasks', element: guard('read_operations', <TasksPage />) }, // D-301: one task list
       { path: 'inventory', element: guard('read_operations', <InventoryPage />) },
       { path: 'inventory/purchases', element: guard('read_operations', <PurchasesPage />) },
       { path: 'inventory/counts', element: guard('manage_inventory', <CountsPage />) },
@@ -79,10 +85,12 @@ export const router = createHashRouter([
       { path: 'finance/setup', element: guard('read_finance', <AccountingSetupPage />) },
       { path: 'insights', element: guard('read_finance', <InsightsPage />) },
       { path: 'pricing', element: guard('publish_rate_policy', <PricingPage />) }, // SPEC-34 (D-259): the one rate card
+      { path: 'pricing/advisor', element: guard('read_finance', <PriceAdvisorPage />) }, // SPEC-35: suggests only, never writes a price
       { path: 'settings', element: guard('manage_staff', <StaffPage />) },
       { path: 'settings/health', element: guard('read_operations', <HealthPage />) },
       { path: 'settings/audit', element: guard('manage_staff', <AuditPage />) },
       { path: 'settings/guest-contact', element: guard('manage_staff', <GuestContactPage />) },
+      { path: 'settings/pay-rates', element: guard('manage_staff', <PayRatesPage />) }, // D-301: append-only pay rates
       { path: '*', element: <Navigate to="/today" replace /> },
     ],
   },
