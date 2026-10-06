@@ -14,8 +14,10 @@ export type Txn = { id: string; transaction_date: string; txn_type: string; cate
 export type TxnFilters = { q?: string; type?: string; status?: string; source?: string; from?: string; to?: string; page?: string; mirror?: string; voided?: string; archived?: string; hidden?: string };
 const TXN_COLS = 'id, transaction_date, txn_type, category, status, source, gross_amount, payee_name, or_number, external_ref, booking_id, reservation_id, income_stage, notes, receipt_image_path, ocr_confidence, created_at, hidden_at, archived_at';
 
-export async function fetchTransactions(propertyId: string, f: TxnFilters) {
-  let q = supabase.from('transactions').select(TXN_COLS, { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+// The list and the CSV export share one filter so the export is exactly what the toggles show.
+type TxnQuery = { or(f: string): TxnQuery; eq(c: string, v: unknown): TxnQuery; neq(c: string, v: unknown): TxnQuery; is(c: string, v: null): TxnQuery; not(c: string, op: string, v: string): TxnQuery; gte(c: string, v: string): TxnQuery; lt(c: string, v: string): TxnQuery };
+export function applyTxnFilters<Q>(query: Q, f: TxnFilters): Q {
+  let q = query as unknown as TxnQuery;
   if (f.q) q = q.or(`payee_name.ilike.%${f.q}%,external_ref.ilike.%${f.q}%,category.ilike.%${f.q}%,notes.ilike.%${f.q}%`);
   if (f.type) q = q.eq('txn_type', f.type);
   if (f.status) q = q.eq('status', f.status);
@@ -28,9 +30,28 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   else if (f.mirror !== 'show') q = q.not('source', 'in', NOT_MIRROR); // estimates and CSV mirrors are archived by default; the payout is the record
   if (f.from) q = q.gte('transaction_date', f.from);
   if (f.to) q = q.lt('transaction_date', f.to);
+  return q as unknown as Q;
+}
+
+const txnBase = (propertyId: string) => supabase.from('transactions').select(TXN_COLS, { count: 'exact' }).eq('property_id', propertyId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+
+export async function fetchTransactions(propertyId: string, f: TxnFilters) {
   const page = Number(f.page) || 1;
-  const res = await q.range((page - 1) * 25, page * 25 - 1);
+  const res = await applyTxnFilters(txnBase(propertyId), f).range((page - 1) * 25, page * 25 - 1);
   return { ...unwrapList<Txn>(res), page };
+}
+
+// D-308.1: every row the current filters and toggles match, newest first, up to 1,000 (PostgREST's own page ceiling).
+export const EXPORT_CAP = 1000;
+// The CSV header's completeness line; with Show hidden off the file leaves hidden rows out, so it says so (the money totals elsewhere still count them).
+export function exportCompleteness(all: { rows: unknown[]; total: number; capped: boolean }, f: Pick<TxnFilters, 'hidden'>): string {
+  const base = all.capped ? `first ${all.rows.length} of ${all.total} matching rows (export cap); narrow the dates or filters for the rest` : `all ${all.total} matching rows`;
+  return f.hidden === '1' ? base : `${base}; hidden rows excluded; turn on Show hidden to include them`;
+}
+export async function fetchTransactionsForExport(propertyId: string, f: TxnFilters) {
+  const res = await applyTxnFilters(txnBase(propertyId), f).range(0, EXPORT_CAP - 1);
+  const { rows, total } = unwrapList<Txn>(res);
+  return { rows, total, capped: total > rows.length };
 }
 
 // Money that counts: the same rule as get_admin_overview_v1. Airbnb CSV rows

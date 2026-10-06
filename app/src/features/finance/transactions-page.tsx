@@ -24,7 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { bulkTransactions, fetchTransactions, saveTransaction, type BulkAction, type Txn, type TxnDraft } from './api';
+import { bulkTransactions, exportCompleteness, fetchTransactions, fetchTransactionsForExport, saveTransaction, type BulkAction, type Txn, type TxnDraft } from './api';
 
 // Historical operational ledger (transactions table). Rows before the
 // accounting start are historical data, not posted journals. Manual rows are
@@ -129,15 +129,20 @@ export default function TransactionsPage() {
     { id: 'amount', header: 'Amount', accessorFn: (r) => Number(r.gross_amount), cell: ({ row }) => <span className={`tabular ${row.original.txn_type === 'income' ? 'font-medium' : ''}`}>{formatPHP(row.original.gross_amount)}</span> },
   ], [sel, pageRows]);
   const doExport = async () => {
-    const all = await fetchTransactions(s.propertyId, { ...state, page: '1', hidden: '1' }); // hidden rows still count in every total, so the CSV carries them (hidden_at marks them)
-    exportCsv(`transactions-${state.from || 'all'}-${state.to || 'all'}.csv`, all.rows as unknown as Record<string, unknown>[], {
-      property: s.propertyId, period: `${state.from || 'start'}..${state.to || 'now'}`, basis: 'operational ledger (not accrual)', generated: new Date().toISOString(), completeness: `first page of ${all.total} rows`,
-    });
+    try {
+      const all = await fetchTransactionsForExport(s.propertyId, state);
+      exportCsv(`transactions-${state.from || 'all'}-${state.to || 'all'}.csv`, all.rows as unknown as Record<string, unknown>[], {
+        property: s.propertyId, period: `${state.from || 'start'}..${state.to || 'now'}`, basis: 'operational ledger (not accrual)', generated: new Date().toISOString(),
+        completeness: exportCompleteness(all, state),
+      });
+      if (all.capped) toast.warning(`Exported the first ${all.rows.length} of ${all.total} rows. Narrow the dates or filters to get the rest.`);
+      else toast.success(`Exported ${all.total} row${all.total === 1 ? '' : 's'}.`);
+    } catch (e) { toast.error(toAppError(e).message); }
   };
   const isVoid = draft?.id ? query.data?.rows.find((r) => r.id === draft.id)?.status === 'void' : false;
   return (
     <div>
-      <PageHeader title="Transactions" description="Historical operational ledger from e-mail ingestion, OCR receipts, Telegram and manual entry. Void and archived rows are kept for audit and hidden until you show them; every change here is undoable from Settings → Audit history." actions={<><Button variant="outline" onClick={() => void doExport()}>Export CSV</Button>{canWrite && <Button onClick={() => open()}>New transaction</Button>}</>} />
+      <PageHeader title="Transactions" description="Historical operational ledger from e-mail ingestion, OCR receipts, Telegram and manual entry. Void and archived rows are kept for audit and hidden until you show them; Export CSV downloads every row the current filters and toggles show (up to 1,000); every change here is undoable from Settings → Audit history." actions={<><Button variant="outline" onClick={() => void doExport()}>Export CSV</Button>{canWrite && <Button onClick={() => open()}>New transaction</Button>}</>} />
       <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Payee, reference, category" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
         <FilterSelect label="Type" value={state.type || undefined} onChange={(v) => set({ type: v ?? '' })} options={[{ value: 'income', label: 'Income' }, { value: 'expense', label: 'Expense' }, { value: 'drawing', label: 'Drawing' }]} />
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['confirmed', 'pending_review'].map((v) => ({ value: v, label: v.replace('_', ' ') }))} />
