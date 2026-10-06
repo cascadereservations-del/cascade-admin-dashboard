@@ -228,6 +228,8 @@ export function calculate(months: AdvisorMonth[], s: AdvisorSettings): AdvisorRe
   const gross = need / keep; // what guests must pay in total for the host to keep `need`
   const rawFlat = gross / nights;
   const flatG = guard(rawFlat, s.minPrice, s.maxPrice);
+  // The seasonal index is over the chosen period's average occupancy (this keeps the period total equal to the need),
+  // deliberately not the yearly average that the SPEC-35 wording names.
   const avgOcc = nights / sellable;
   const weight = used.reduce((t, p) => t + (p.occupancy as number) * p.sellable * ((p.occupancy as number) / avgOcc), 0); // sum(index x nights)
   for (const p of used) {
