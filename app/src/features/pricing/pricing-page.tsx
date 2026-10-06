@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
@@ -17,6 +18,7 @@ import {
   endPromotion, fetchCard, fetchPromotions, fetchVersions, pctToPrice, previewQuote, promoStatus, publishCard, savePromotion, tierProblem, tierRate,
   type PromotionRow, type Quote, type RateCard, type Tier,
 } from './api';
+import { parsePrefill } from './advisor';
 
 // SPEC-34 Pricing tab (D-259, D-261, D-262). The one rate card: the booking site, the Messenger concierge, Cassy and
 // submit-booking all read it through get_rate_card_v1 / the rate-card function (a change reaches them within a minute).
@@ -30,6 +32,9 @@ export default function PricingPage() {
   const s = useSession();
   const qc = useQueryClient();
   const card = useQuery({ queryKey: ['rate-card'], queryFn: fetchCard });
+  // The Price advisor links here with ?prefill=<peso>&from=<date>. Read once, it only types the number into the form: nothing is published.
+  const [params] = useSearchParams();
+  const [prefill] = useState(() => parsePrefill(params));
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['rate-card'] }); void qc.invalidateQueries({ queryKey: ['rate-versions'] }); void qc.invalidateQueries({ queryKey: ['rate-promotions'] }); };
   return (
     <div className="space-y-8">
@@ -37,7 +42,7 @@ export default function PricingPage() {
       <QueryState query={card}>
         {(c) => (
           <>
-            <StandardRate card={c} propertyId={s.propertyId} onDone={refresh} />
+            <StandardRate card={c} propertyId={s.propertyId} onDone={refresh} prefill={prefill} />
             <Promotions card={c} propertyId={s.propertyId} onDone={refresh} />
             <Preview />
           </>
@@ -47,15 +52,15 @@ export default function PricingPage() {
   );
 }
 
-function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId: string; onDone: () => void }) {
+function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; propertyId: string; onDone: () => void; prefill: { price: number; from: string | null } | null }) {
   const versions = useQuery({ queryKey: ['rate-versions', propertyId], queryFn: () => fetchVersions(propertyId) });
-  const [editing, setEditing] = useState(false);
-  const [base, setBase] = useState(String(card.base));
+  const [editing, setEditing] = useState(prefill !== null);
+  const [base, setBase] = useState(String(prefill?.price ?? card.base));
   const [fee, setFee] = useState(String(card.deposit_pct));
   const [tiers, setTiers] = useState<Array<{ min: string; pct: string }>>(card.tiers.map((t) => ({ min: String(t.min_nights), pct: String(t.pct) })));
   // A card may start later: since release rate_card_upcoming_20260926 get_rate_card_v1 lists it as `upcoming` and every
   // quote prices a stay by the card in force on its check-in date (review 2026-09-26, finding 1).
-  const [from, setFrom] = useState(todayManila());
+  const [from, setFrom] = useState(prefill?.from && prefill.from >= todayManila() ? prefill.from : todayManila());
   const [reason, setReason] = useState('');
   const [key, setKey] = useState(() => newIdempotencyKey('rate-card'));
   const parsed: Tier[] = tiers.map((t) => ({ min_nights: num(t.min), pct: num(t.pct) }));
@@ -90,6 +95,7 @@ function StandardRate({ card, propertyId, onDone }: { card: RateCard; propertyId
       </div>
       {editing && (
         <div className="space-y-3 rounded-lg border border-dashed p-4">
+          {prefill && <p role="status" className="text-sm text-muted-foreground">{formatPHP(prefill.price, { whole: true })} came from the Price advisor. Nothing is published yet: check the number and the date, say why, then press Publish.</p>}
           <div className="flex flex-wrap gap-4">
             <div><Label htmlFor="rc-base">Standard rate per night (PHP)</Label><Input id="rc-base" inputMode="numeric" className="w-36 text-base sm:text-sm" value={base} onChange={(e) => setBase(e.target.value)} /></div>
             <div><Label htmlFor="rc-fee">Reservation fee (%)</Label><Input id="rc-fee" inputMode="numeric" className="w-24 text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
