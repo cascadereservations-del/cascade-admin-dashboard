@@ -91,7 +91,7 @@ function FindingsSection() {
 
 // D-240 / SPEC-42 9c: what the checklist PWA and the booking site reported to the error monitor, last 30 days,
 // newest first. Read-only; the monitor's own dedupe and Telegram alert decide what gets escalated. Times are Asia/Manila.
-function ClientErrorsSection() {
+export function ClientErrorsSection() {
   const q = useQuery({ queryKey: ['client-errors'], queryFn: fetchClientErrors, refetchInterval: 60_000 });
   return (
     <Section title="Errors the apps reported">

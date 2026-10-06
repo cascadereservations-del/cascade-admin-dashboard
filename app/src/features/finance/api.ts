@@ -43,6 +43,11 @@ export async function fetchTransactions(propertyId: string, f: TxnFilters) {
 
 // D-308.1: every row the current filters and toggles match, newest first, up to 1,000 (PostgREST's own page ceiling).
 export const EXPORT_CAP = 1000;
+// The CSV header's completeness line; with Show hidden off the file leaves hidden rows out, so it says so (the money totals elsewhere still count them).
+export function exportCompleteness(all: { rows: unknown[]; total: number; capped: boolean }, f: Pick<TxnFilters, 'hidden'>): string {
+  const base = all.capped ? `first ${all.rows.length} of ${all.total} matching rows (export cap); narrow the dates or filters for the rest` : `all ${all.total} matching rows`;
+  return f.hidden === '1' ? base : `${base}; hidden rows excluded; turn on Show hidden to include them`;
+}
 export async function fetchTransactionsForExport(propertyId: string, f: TxnFilters) {
   const res = await applyTxnFilters(txnBase(propertyId), f).range(0, EXPORT_CAP - 1);
   const { rows, total } = unwrapList<Txn>(res);

@@ -24,7 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { bulkTransactions, fetchTransactions, fetchTransactionsForExport, saveTransaction, type BulkAction, type Txn, type TxnDraft } from './api';
+import { bulkTransactions, exportCompleteness, fetchTransactions, fetchTransactionsForExport, saveTransaction, type BulkAction, type Txn, type TxnDraft } from './api';
 
 // Historical operational ledger (transactions table). Rows before the
 // accounting start are historical data, not posted journals. Manual rows are
@@ -133,7 +133,7 @@ export default function TransactionsPage() {
       const all = await fetchTransactionsForExport(s.propertyId, state);
       exportCsv(`transactions-${state.from || 'all'}-${state.to || 'all'}.csv`, all.rows as unknown as Record<string, unknown>[], {
         property: s.propertyId, period: `${state.from || 'start'}..${state.to || 'now'}`, basis: 'operational ledger (not accrual)', generated: new Date().toISOString(),
-        completeness: all.capped ? `first ${all.rows.length} of ${all.total} matching rows (export cap); narrow the dates or filters for the rest` : `all ${all.total} matching rows`,
+        completeness: exportCompleteness(all, state),
       });
       if (all.capped) toast.warning(`Exported the first ${all.rows.length} of ${all.total} rows. Narrow the dates or filters to get the rest.`);
       else toast.success(`Exported ${all.total} row${all.total === 1 ? '' : 's'}.`);

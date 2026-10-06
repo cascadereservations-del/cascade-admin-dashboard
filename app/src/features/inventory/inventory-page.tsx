@@ -26,9 +26,8 @@ import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, r
 
 // Plain HTML table for the print-only view (#PRINT01): no sorting, filtering
 // or row-click, since a printed page can't act on any of those anyway.
-function PrintTable({ title, rows }: { title: string; rows: Item[] }) {
+function PrintTable({ title, rows, qtyHeader }: { title: string; rows: Item[]; qtyHeader: string }) {
   if (rows.length === 0) return null;
-  const qtyHeader = title === 'Consumables' ? 'In storage' : 'On hand'; // D-298.6: a consumable placed in the unit counts as used, so its quantity is what is in the storeroom
   return (
     <table className="mb-6 w-full border-collapse text-xs">
       <caption className="mb-1 text-left text-sm font-semibold">{title} ({rows.length})</caption>
@@ -207,9 +206,10 @@ export default function InventoryPage() {
             <div className="hidden print:block">
               <h1 className="mb-4 text-lg font-semibold">Cascade Hideaway — Inventory</h1>
               <p className="mb-4 text-xs text-muted-foreground">Printed {formatDateTime(new Date().toISOString())}</p>
-              {printSel.consumables && <PrintTable title="Consumables" rows={pConsumables} />}
-              {printSel.appliances && <PrintTable title="Appliances & utensils" rows={pAppliances} />}
-              {printSel.stores && <PrintTable title="Stores" rows={pStores} />}
+              {/* D-298.6: a consumable placed in the unit counts as used, so its quantity is what is in the storeroom */}
+              {printSel.consumables && <PrintTable title="Consumables" qtyHeader="In storage" rows={pConsumables} />}
+              {printSel.appliances && <PrintTable title="Appliances & utensils" qtyHeader="On hand" rows={pAppliances} />}
+              {printSel.stores && <PrintTable title="Stores" qtyHeader="On hand" rows={pStores} />}
             </div>
           </>
         );

@@ -12,7 +12,7 @@ vi.mock('@/lib/rpc', async () => {
   return { ...real, rpc: vi.fn() };
 });
 
-import { applyTxnFilters, EXPORT_CAP, fetchTransactionsForExport } from './api';
+import { applyTxnFilters, EXPORT_CAP, exportCompleteness, fetchTransactionsForExport } from './api';
 
 function filtered(f: Parameters<typeof applyTxnFilters>[1]) {
   const log: string[] = [];
@@ -74,5 +74,16 @@ describe('fetchTransactionsForExport', () => {
     calls.log.length = 0;
     await fetchTransactionsForExport('p1', {});
     expect(calls.log).toContain('is(hidden_at,obj)');
+  });
+});
+
+describe('exportCompleteness', () => {
+  const all = { rows: [{}, {}], total: 2, capped: false };
+  it('says hidden rows are excluded, and how to include them, when Show hidden is off', () => {
+    expect(exportCompleteness(all, {})).toBe('all 2 matching rows; hidden rows excluded; turn on Show hidden to include them');
+    expect(exportCompleteness({ ...all, total: 1400, capped: true }, {})).toContain('(export cap); narrow the dates or filters for the rest; hidden rows excluded; turn on Show hidden to include them');
+  });
+  it('stays silent about hidden rows when Show hidden is on', () => {
+    expect(exportCompleteness(all, { hidden: '1' })).toBe('all 2 matching rows');
   });
 });
