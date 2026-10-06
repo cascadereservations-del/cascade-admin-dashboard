@@ -26,9 +26,11 @@
   --accent: #F3E9D8;
   --accent-foreground: #7A5A2B;
   --destructive: #B3261E;
+  --destructive-foreground: #FFFFFF;
+  --border-strong: #957F60;
   --border: #E6DCCB;
   --input: #E6DCCB;
-  --ring: #B58E5F;
+  --ring: #7A5A2B;
   /* Legacy brand aliases kept for the few components that name them. */
   --champagne: #B58E5F;
   --mahogany: #2A1F16;
@@ -51,7 +53,7 @@
   --accent-bronze-text: #6E4F22;
   --accent-bronze-soft: #F6EEE0;
   --ok: #287247;  --ok-soft: #E2F2E7;
-  --warn: #8A5A00; --warn-soft: #FBEFD3;
+  --warn: #9C3F0A; --warn-soft: #FCE6D6;
   --info: #2F5FA8; --info-soft: #E1EAF7;
   --danger-soft: #FBE3E1;
   --gilt: linear-gradient(135deg, #A47A45 0%, #7A5A2B 55%, #5C4220 100%);
@@ -82,6 +84,8 @@
   --accent: #3A2C18;
   --accent-foreground: #D7B377;
   --destructive: #F28B82;
+  --destructive-foreground: #44201D;
+  --border-strong: rgba(215, 179, 119, 0.48);
   --border: rgba(215, 179, 119, 0.18);
   --input: rgba(215, 179, 119, 0.24);
   --ring: #E4C98F;
@@ -101,11 +105,11 @@
   --sidebar-accent-foreground: #EFE6D8;
   --sidebar-border: rgba(215, 179, 119, 0.14);
   --sidebar-ring: #D7B377;
-  --accent-bronze: #D7B377;
+  --accent-bronze: #EAD3A3;
   --accent-bronze-text: #E4C98F;
   --accent-bronze-soft: #33291A;
   --ok: #84C79A;  --ok-soft: #1E3527;
-  --warn: #E6B65A; --warn-soft: #3A2D12;
+  --warn: #F0A05A; --warn-soft: #3E2414;
   --info: #8FB7F5; --info-soft: #1D2C44;
   --danger-soft: #44201D;
   --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
@@ -136,6 +140,12 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border-strong: var(--border-strong);
+  --text-xs: 0.8rem;
+  --text-xs--line-height: 1.0667rem;
+  --text-sm: 0.8667rem;
+  --text-sm--line-height: 1.3333rem;
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -210,10 +220,7 @@
     line-height: 1.18;
     font-weight: 600;
     letter-spacing: 0.005em;
-    background: var(--gilt);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--accent-bronze-text);
   }
   [data-slot="card-title"] {
     font-family: var(--font-display);
@@ -247,9 +254,6 @@
   }
   svg.lucide {
     stroke-width: 1.75;
-  }
-  @media (forced-colors: active) {
-    h1 { background: none; -webkit-text-fill-color: currentColor; }
   }
   .tabular {
     font-variant-numeric: tabular-nums;
