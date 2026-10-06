@@ -80,17 +80,27 @@ describe('sendHostReply', () => {
     f.mockReturnValue(ok({ ok: false, error: 'reply_window_closed' }, 409));
     await expect(sendHostReply({ psid: 'zz-1', text: 'Hi', handoffId: null })).rejects.toMatchObject({ kind: 'conflict' });
   });
-  it('treats a network failure as nothing sent, and never retries', async () => {
+  it('treats a network failure as possibly sent, never claims nothing was sent, and never retries', async () => {
     const f = vi.mocked(fetch);
     f.mockRejectedValue(new TypeError('Failed to fetch'));
-    await expect(sendHostReply({ psid: 'zz-1', text: 'Hi', handoffId: null })).rejects.toMatchObject({ kind: 'unavailable', message: expect.stringMatching(/nothing was sent/i) });
+    await expect(sendHostReply({ psid: 'zz-1', text: 'Hi', handoffId: null })).rejects.toMatchObject({ kind: 'unavailable', message: 'The reply may have been sent. Refresh the conversation before trying again.' });
     expect(f).toHaveBeenCalledTimes(1);
+  });
+  it('says the reply may have been sent on a 504 or any unnamed 5xx', async () => {
+    const f = vi.mocked(fetch);
+    for (const status of [500, 504]) {
+      f.mockReturnValue(ok({}, status));
+      await expect(sendHostReply({ psid: 'zz-1', text: 'Hi', handoffId: null })).rejects.toMatchObject({ message: expect.stringMatching(/may have been sent/i) });
+    }
   });
 });
 
 describe('replyError', () => {
   it('maps an unknown code by status and never claims a send', () => {
-    expect(replyError('weird', 500)).toMatchObject({ kind: 'unavailable', message: 'The reply was not sent.' });
+    expect(replyError('weird', 500)).toMatchObject({ kind: 'unavailable', message: expect.stringMatching(/may have been sent/i) });
+    expect(replyError('weird', 400)).toMatchObject({ kind: 'validation', message: 'The reply was not sent.' });
+    expect(replyError('duplicate_reply', 409)).toMatchObject({ kind: 'conflict' });
+    expect(replyError('messenger_refused', 502).message).toMatch(/nothing was sent/i); // the function named it: Messenger said no
     expect(replyError(undefined, 404)).toMatchObject({ kind: 'not_found' });
     expect(replyError('handoff_not_open', 409)).toMatchObject({ kind: 'conflict' });
   });

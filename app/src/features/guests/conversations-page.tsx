@@ -122,7 +122,11 @@ function ReplyBox({ t }: { t: ThreadDetail }) {
       void qc.invalidateQueries({ queryKey: ['conversation', t.psid] });
       void qc.invalidateQueries({ queryKey: ['handoffs'] });
     },
-    onError: (e) => toast.error(toAppError(e).message),
+    onError: (e) => {
+      toast.error(toAppError(e).message);
+      // The reply may have gone out (network error, 504): reload the thread so the host sees what is on record before trying again.
+      void qc.invalidateQueries({ queryKey: ['conversation', t.psid] });
+    },
   });
   if (!win.open) {
     return <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground" role="status">{win.lastGuestAt ? `The 7-day reply window closed ${formatDateTime(win.closesAt)}.` : 'This guest has no message on record.'} Reply from the Page inbox in Messenger.</p>;

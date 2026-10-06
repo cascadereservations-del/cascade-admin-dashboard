@@ -26,6 +26,9 @@ export async function fetchThread(psid: string): Promise<ThreadDetail | null> {
   return t ? { ...t, history: Array.isArray(t.history) ? t.history : [], handoffs: Array.isArray(t.handoffs) ? t.handoffs : [] } : null;
 }
 
+/** The request may have reached Messenger (a dropped connection, a 504, a 5xx the function did not name): never say "nothing was sent". */
+export const MAYBE_SENT = 'The reply may have been sent. Refresh the conversation before trying again.';
+
 const REPLY_ERRORS: Record<string, [AppErrorKind, string]> = {
   authentication_required: ['forbidden', 'Sign in again, then send.'],
   invalid_or_expired_session: ['forbidden', 'Your session expired. Sign in again, then send.'],
@@ -36,15 +39,17 @@ const REPLY_ERRORS: Record<string, [AppErrorKind, string]> = {
   thread_not_found: ['not_found', 'This conversation no longer exists.'],
   handoff_not_found: ['not_found', 'That handoff no longer exists. Refresh and try again.'],
   handoff_not_open: ['conflict', 'Someone already answered this handoff. Nothing was sent. Refresh to see the reply.'],
+  duplicate_reply: ['conflict', 'This exact reply was just sent. Nothing was sent again. Refresh the conversation.'],
   reply_window_closed: ['conflict', 'The 7-day reply window has closed. Nothing was sent. Reply from the Page inbox instead.'],
   messenger_refused: ['unavailable', 'Messenger did not accept the reply, so nothing was sent and nothing was marked. Try again in a minute.'],
   host_reply_unavailable: ['unavailable', 'Sending is not available right now. Nothing was sent.'],
 };
 
-/** A host-reply error code as the AppError the page shows. Unknown codes keep the HTTP status's meaning and never claim a send. */
+/** A host-reply error code as the AppError the page shows. Unknown codes keep the HTTP status's meaning; an unknown 5xx says the reply may have been sent. */
 export function replyError(code: string | undefined, status: number): AppError {
   const known = code ? REPLY_ERRORS[code] : undefined;
   if (known) return new AppError(known[0], known[1], code);
+  if (status >= 500) return new AppError('unavailable', MAYBE_SENT, code ?? `HTTP ${status}`);
   const kind: AppErrorKind = status === 401 || status === 403 ? 'forbidden' : status === 409 ? 'conflict' : status === 404 ? 'not_found' : status === 400 ? 'validation' : 'unavailable';
   return new AppError(kind, 'The reply was not sent.', code ?? `HTTP ${status}`);
 }
@@ -60,7 +65,7 @@ export async function sendHostReply(a: { psid: string; text: string; handoffId: 
     headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ action: 'send', psid: a.psid, text: a.text, ...(a.handoffId ? { handoff_id: a.handoffId } : {}) }),
   }).catch(() => null);
-  if (!resp) throw new AppError('unavailable', 'Could not reach the server. Nothing was sent.');
+  if (!resp) throw new AppError('unavailable', MAYBE_SENT);
   const body = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string } & Partial<SendResult>;
   if (!resp.ok || body.ok === false) throw replyError(body.error, resp.status);
   return { sent_text: String(body.sent_text ?? ''), recorded: body.recorded === true, handoff_marked: body.handoff_marked === true };

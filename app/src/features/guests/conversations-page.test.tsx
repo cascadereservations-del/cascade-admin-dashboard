@@ -7,6 +7,8 @@ const api = vi.hoisted(() => ({ fetchConversations: vi.fn(), fetchThread: vi.fn(
 vi.mock('./conversations-api', () => api);
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+import { toast } from 'sonner';
+import { AppError } from '@/lib/errors';
 import ConversationsPage from './conversations-page';
 
 const recent = new Date(Date.now() - 3_600_000).toISOString();
@@ -63,4 +65,18 @@ it('disables Send for an empty reply', async () => {
   api.fetchThread.mockResolvedValue(thread(recent));
   view();
   expect(await screen.findByRole('button', { name: 'Send reply' })).toBeDisabled();
+});
+
+it('after a network error or 504 it shows the may-have-been-sent line and reloads the thread', async () => {
+  api.fetchThread.mockResolvedValue(thread(recent));
+  const msg = 'The reply may have been sent. Refresh the conversation before trying again.';
+  api.sendHostReply.mockRejectedValue(new AppError('unavailable', msg));
+  const user = userEvent.setup();
+  view();
+  await user.type(await screen.findByLabelText(/Reply to Zz Guest/), 'Hello');
+  const loads = api.fetchThread.mock.calls.length;
+  await user.click(screen.getByRole('button', { name: 'Send reply' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(msg));
+  await waitFor(() => expect(api.fetchThread.mock.calls.length).toBeGreaterThan(loads));
+  expect(api.sendHostReply).toHaveBeenCalledTimes(1); // never retried on its own
 });
