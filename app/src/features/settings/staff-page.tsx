@@ -145,6 +145,7 @@ export default function StaffPage() {
               <div><Label htmlFor="sd-fee-transport">Transport allowance</Label><Input id="sd-fee-transport" inputMode="decimal" value={detailsDraft.fee_transport ?? ''} onChange={(e) => setDetailsDraft({ ...detailsDraft, fee_transport: e.target.value })} className="text-base" /></div>
               <div><Label htmlFor="sd-fee-deep">Fee per deep clean</Label><Input id="sd-fee-deep" inputMode="decimal" value={detailsDraft.fee_deep_clean ?? ''} onChange={(e) => setDetailsDraft({ ...detailsDraft, fee_deep_clean: e.target.value })} className="text-base" /></div>
             </div>
+            <p className="text-xs text-muted-foreground">These three amounts are for reference only. What staff are paid, and what payment requests use, comes from Settings → Pay rates.</p>
             <div className="flex justify-end"><Button type="submit" size="sm" disabled={saveDetails.isPending}>Save details</Button></div>
           </form>
         )}
