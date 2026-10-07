@@ -63,4 +63,10 @@ describe('mergeStays', () => {
     expect(filterStays(stays, { view: 'unpaid' }, '2026-09-13').map((s) => s.kind)).toEqual(['direct']);
     expect(filterStays(stays, { q: 'hm1' }, '2026-09-13')).toHaveLength(1);
   });
+  it('cancelled stays are hidden unless Status asks for them', () => {
+    const stays = mergeStays([res({}), res({ id: 'r2', confirmation_code: 'HM2', status: 'cancelled', cancelled_at: '2026-09-10T00:00:00Z' })], [inq({ id: 'c9', status: 'cancelled' })], [], '2026-09-13');
+    expect(filterStays(stays, {}, '2026-09-13').map((s) => s.bookingState)).not.toContain('cancelled');
+    expect(filterStays(stays, {}, '2026-09-13')).toHaveLength(1);
+    expect(filterStays(stays, { status: 'cancelled' }, '2026-09-13')).toHaveLength(2);
+  });
 });

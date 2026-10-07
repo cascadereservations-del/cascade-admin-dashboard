@@ -99,9 +99,16 @@ export default function BookingsPage() {
           const filtered = filterStays(data.stays, { ...state, view: state.view }, today);
           const page = Number(state.page) || 1;
           const rows = filtered.slice((page - 1) * 25, page * 25);
+          const hiddenCancelled = state.status ? 0 : filterStays(data.stays, { ...state, status: 'cancelled' }, today).length;
           return (
             <div className="space-y-2">
               <PartialBanner warnings={data.warnings} />
+              {hiddenCancelled > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {hiddenCancelled} cancelled {hiddenCancelled === 1 ? 'stay is' : 'stays are'} hidden.{' '}
+                  <button type="button" className="underline hover:text-foreground" onClick={() => set({ status: 'cancelled' })}>Show cancelled</button>
+                </p>
+              )}
               {filtered.length === 0 ? (
                 <EmptyState
                   title={activeFilterCount ? 'No bookings match these filters' : 'No bookings yet'}
