@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { fetchConversations, fetchThread, sendHostReply, type ConversationRow, type ThreadDetail } from './conversations-api';
+import { GuestReplyButton } from './guest-reply-dialog';
 import { buildTimeline, newestOpenHandoff, replyWindow, speakerOf, turnRisk, windowLabel, type Speaker } from './conversations-window';
 
 // SPEC-42 section 7 (H4): every Cassy thread and its handoffs in one place, and a reply box. Owner/admin only (route guard plus the
@@ -28,7 +29,7 @@ export default function ConversationsPage() {
   const psid = selected ?? list.data?.[0]?.psid ?? null;
   return (
     <div>
-      <PageHeader title="Conversations" description="Every Cassy thread in one place. Open handoffs are first. Replies go out only when you press Send." />
+      <PageHeader title="Conversations" description="Every Cassy thread in one place. Open handoffs are first. Replies go out only when you press Send." actions={<GuestReplyButton />} />
       <QueryState query={list}>
         {(rows) => rows.length === 0 ? <EmptyState title="No Messenger conversations yet" hint="A thread appears here after a guest messages the Page." /> : (
           <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
