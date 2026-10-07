@@ -57,6 +57,19 @@ describe('draftGuestReply', () => {
     expect(err.message).not.toMatch(/!|unfortunately/i);
     expect(err.detail).toBe(code);
   });
+  it('gives a warm sentence for a gateway timeout whose body is not JSON', async () => {
+    fetchMock().mockReturnValue(Promise.resolve(new Response('<html>Gateway Timeout</html>', { status: 504 })));
+    const err = await draftGuestReply({ text: 'Hi' }).catch((e) => e);
+    expect(err.message).toMatch(/could not draft a reply this time/);
+    expect(err.message).not.toMatch(/!|unfortunately|html/i);
+  });
+  it('gives a warm sentence when the function is not configured (503 guest_reply_draft_unavailable)', async () => {
+    fetchMock().mockReturnValue(respond({ ok: false, error: 'guest_reply_draft_unavailable' }, 503));
+    const err = await draftGuestReply({ text: 'Hi' }).catch((e) => e);
+    expect(err.message).toMatch(/could not draft a reply this time/);
+    expect(err.message).not.toMatch(/!|unfortunately/i);
+    expect(err.detail).toBe('guest_reply_draft_unavailable');
+  });
   it('says the server could not be reached on a network failure', async () => {
     fetchMock().mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(draftGuestReply({ text: 'Hi' })).rejects.toMatchObject({ kind: 'unavailable', message: expect.stringMatching(/Could not reach the server/) });

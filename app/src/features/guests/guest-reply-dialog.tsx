@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { draftGuestReply, MAX_GUEST_TEXT, type GuestPlatform, type GuestReplyDraft } from './guest-reply-api';
+import { draftGuestReply, guestReplyError, MAX_GUEST_TEXT, type GuestPlatform, type GuestReplyDraft } from './guest-reply-api';
 import { shrinkImage } from './guest-reply-image';
 
 // "Cassy reply" (S76): draft one or two warm replies to a guest message, from pasted text or a screenshot. It drafts only; the host
@@ -38,38 +38,49 @@ function Body() {
   const draft = useMutation({
     mutationFn: async (): Promise<GuestReplyDraft> => {
       const common = { guestName: name, platform };
-      return mode === 'text' ? draftGuestReply({ text: text.trim(), ...common }) : draftGuestReply({ image: await shrinkImage(file!), ...common });
+      if (mode === 'text') return draftGuestReply({ text: text.trim(), ...common });
+      // An image the browser cannot decode (HEIC, a renamed non-image) gets the same warm sentence as the function's bad_image.
+      const image = await shrinkImage(file!).catch(() => { throw guestReplyError('bad_image', 400); });
+      return draftGuestReply({ image, ...common });
     },
   });
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const refocusTitle = useRef(false);
+  // Any edit clears a stale error.
+  const edit = (fn: () => void) => { draft.reset(); fn(); };
   const ready = mode === 'text' ? text.trim().length > 0 : file !== null;
 
-  const startOver = () => { draft.reset(); setText(''); setName(''); setFile(null); };
+  const startOver = () => { refocusTitle.current = true; draft.reset(); setText(''); setName(''); setFile(null); };
+  // The Result view replaces the form, so focus would fall to the page; put it back on the heading after Start over.
+  useEffect(() => { if (!draft.isSuccess && refocusTitle.current) { refocusTitle.current = false; titleRef.current?.focus(); } }, [draft.isSuccess]);
   // Only the screenshot tab takes a pasted image; in the Text tab a paste goes into the box as usual.
   const onPaste = (e: ClipboardEvent) => {
     if (mode !== 'screenshot') return;
     const img = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'));
-    if (img) { e.preventDefault(); setFile(img); }
+    if (img) { e.preventDefault(); edit(() => setFile(img)); }
   };
 
-  if (draft.isSuccess) return <Result d={draft.data} onStartOver={startOver} />;
+  const live = <p className="sr-only" role="status" aria-live="polite">{draft.isPending ? 'Cassy is writing the replies.' : draft.isSuccess ? 'The replies are ready.' : ''}</p>;
+  if (draft.isSuccess) return <>{live}<Result d={draft.data} onStartOver={startOver} /></>;
   return (
     <form onPaste={onPaste} onSubmit={(e) => { e.preventDefault(); if (ready && !draft.isPending) draft.mutate(); }} className="grid gap-4">
+      {live}
       <DialogHeader>
-        <DialogTitle>What did the guest send?</DialogTitle>
+        <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">What did the guest send?</DialogTitle>
         <DialogDescription>Cassy writes one or two replies in her voice. Nothing is sent to the guest from here.</DialogDescription>
       </DialogHeader>
-      <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+      <Tabs value={mode} onValueChange={(v) => edit(() => setMode(v as Mode))}>
         <TabsList aria-label="What the guest sent">
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="screenshot">Screenshot</TabsTrigger>
         </TabsList>
         <TabsContent value="text" className="mt-3 grid gap-1.5">
           <Label htmlFor="gr-text">Guest message</Label>
-          <Textarea id="gr-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={MAX_GUEST_TEXT} rows={5} placeholder="Paste what the guest wrote." className="text-base" />
+          <Textarea id="gr-text" value={text} onChange={(e) => edit(() => setText(e.target.value))} maxLength={MAX_GUEST_TEXT} rows={5} placeholder="Paste what the guest wrote." className="text-base" />
         </TabsContent>
         <TabsContent value="screenshot" className="mt-3 grid gap-1.5">
           <Label htmlFor="gr-file">Screenshot of the message</Label>
-          <Input id="gr-file" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <Input id="gr-file" type="file" accept="image/*" onChange={(e) => edit(() => setFile(e.target.files?.[0] ?? null))} />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
             <ImagePlus className="size-3.5" aria-hidden />
             {file ? `Ready: ${file.name || 'pasted image'}. It is shrunk here before it is sent.` : 'Choose a file, or paste an image anywhere in this window.'}
@@ -89,7 +100,7 @@ function Body() {
           </ToggleGroup>
         </div>
       </div>
-      {draft.isPending && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Cassy is writing the replies. This takes a few seconds.</p>}
+      {draft.isPending && <p className="text-sm text-muted-foreground">Cassy is writing the replies. This takes a few seconds.</p>}
       {draft.isError && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">{toAppError(draft.error).message}</p>}
       <DialogFooter>
         <Button type="submit" disabled={!ready || draft.isPending}>{draft.isPending ? 'Writing…' : 'Write replies'}</Button>
@@ -99,10 +110,12 @@ function Body() {
 }
 
 function Result({ d, onStartOver }: { d: GuestReplyDraft; onStartOver: () => void }) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { titleRef.current?.focus(); }, []);
   return (
     <div className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Draft replies</DialogTitle>
+        <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">Draft replies</DialogTitle>
         <DialogDescription className="line-clamp-3 whitespace-pre-wrap break-words">Replying to: {d.guest_text}</DialogDescription>
       </DialogHeader>
       <ul className="grid gap-3" aria-label="Draft replies">

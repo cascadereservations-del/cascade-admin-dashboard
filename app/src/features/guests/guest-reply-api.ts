@@ -44,6 +44,7 @@ export async function draftGuestReply(a: GuestReplyInput): Promise<GuestReplyDra
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw guestReplyError('authentication_required', 401);
   const name = a.guestName?.trim();
+  // ponytail: no AbortController. The call is read-only and the dialog just ignores a late answer; abort on unmount if cost matters.
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/guest-reply-draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` },

@@ -13,6 +13,7 @@ import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { GuestReplyButton } from '@/features/guests/guest-reply-dialog';
 import { fetchOverview, type Overview, type OverviewStay } from './api';
 
 // Today (P10). Every card links to the matching records; a failed or
@@ -124,7 +125,7 @@ export default function TodayPage() {
   const query = useQuery({ queryKey: ['overview', s.propertyId, s.caps.role, s.caps.aal], queryFn: () => fetchOverview(s.propertyId), refetchInterval: 120_000 });
   return (
     <div>
-      <PageHeader title="Today" description={`Asia/Manila · ${formatDate(todayManila(), 'long')}`} />
+      <PageHeader title="Today" description={`Asia/Manila · ${formatDate(todayManila(), 'long')}`} actions={s.caps.can('manage_operations') ? <GuestReplyButton /> : undefined} />
       <QueryState query={query} skeleton={<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></div>}>
         {(o) => (
           <div className="space-y-6">
