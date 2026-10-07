@@ -15,7 +15,7 @@ import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { fetchCleanings, type CleaningRow } from './api';
+import { feeState, fetchCleanings, type CleaningRow } from './api';
 
 // CLN01/CLN03: the register shows submission completeness, evidence, review
 // and payment states separately. Fee columns render only for finance roles.
@@ -43,7 +43,7 @@ export default function CleaningPage() {
     ];
     if (canFees) {
       cols.push({ id: 'fee', header: 'Fee', accessorFn: (r) => r.fee_amount ?? '', cell: ({ row }) => <span className="tabular">{formatPHP(row.original.fee_amount)}</span> });
-      cols.push({ id: 'paid', header: 'Paid', accessorFn: (r) => r.fee_paid_at ?? '', cell: ({ row }) => (row.original.fee_amount ? (
+      cols.push({ id: 'paid', header: 'Paid', accessorFn: (r) => r.fee_paid_at ?? '', cell: ({ row }) => (feeState(row.original) !== 'none' ? (
         row.original.fee_paid_at
           ? <span className="inline-flex items-center gap-1 text-sm text-chart-4"><CheckCircle2 className="size-4" aria-hidden /> Paid <span className="text-xs text-muted-foreground">{formatDate(row.original.fee_paid_at.slice(0, 10))}</span></span>
           : <span className="inline-flex items-center gap-1 text-sm"><Circle className="size-4 text-champagne" aria-hidden /> Unpaid</span>

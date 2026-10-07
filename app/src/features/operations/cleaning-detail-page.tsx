@@ -22,7 +22,7 @@ import { PhotoLightbox } from '@/components/data/photo-lightbox';
 import { photoLabel } from '@/lib/lightbox';
 import { MeterReadingBlock } from './meter-reading';
 import { baselineFrom } from './meter-context';
-import { fetchCleaningDetail, fetchMeterBaseline, reviewEvidence, reviewMeterReading, reviewReadiness } from './api';
+import { feeState, fetchCleaningDetail, fetchMeterBaseline, reviewEvidence, reviewMeterReading, reviewReadiness } from './api';
 
 // CLN02-CLN05. Evidence is linked by submission identity; advisory findings
 // are shown as advisory; readiness needs a human decision with a reason for
@@ -175,7 +175,7 @@ export default function CleaningDetailPage() {
                     <Field label="Evidence">{d.evidence.length === 0 ? 'no verification evidence' : `${d.evidence.length} items, ${d.evidence.filter((e) => e.reviews.length > 0).length} reviewed`}</Field>
                     <Field label="Inspector review">{followUp ? 'follow-up required' : anyReviewed ? 'reviewed' : 'pending'}</Field>
                     <Field label="Readiness">{d.readiness[0] ? `${d.readiness[0].outcome.replace('_', ' ')} · ${formatDateTime(d.readiness[0].reviewed_at)}` : 'not reviewed'}</Field>
-                    <Field label="Cleaner fee">{canFees ? (c.fee_amount ? `${formatPHP(c.fee_amount)} · ${c.fee_paid_at ? `paid ${formatDateTime(c.fee_paid_at)}` : 'accrued, unpaid'}` : 'no fee recorded') : 'restricted'}</Field>
+                    <Field label="Cleaner fee">{!canFees ? 'restricted' : feeState(c) === 'none' ? 'no fee' : feeState(c) === 'paid' ? `${c.fee_amount !== null ? `${formatPHP(c.fee_amount)} · ` : ''}paid ${formatDateTime(c.fee_paid_at!)}` : c.fee_amount !== null ? `${formatPHP(c.fee_amount)} · accrued, unpaid` : 'unpaid · amount set when the cleaner requests pay'}</Field>
                     {c.incomplete_reasons?.length ? <Field label="Incomplete"><ul className="list-disc pl-4">{c.incomplete_reasons.map((r) => <li key={r}>{r}</li>)}</ul></Field> : null}
                     <Field label="Issues">{c.issue_count ? <StatusBadge tone="warn">{c.issue_count} issue{c.issue_count > 1 ? 's' : ''}</StatusBadge> : 'none reported'}</Field>
                     {c.notes && (

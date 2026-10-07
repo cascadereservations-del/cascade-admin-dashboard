@@ -30,6 +30,12 @@ export type CleaningRow = {
   notes: string | null;
 };
 
+// 'none' = an explicit 0 fee; an unpriced (NULL) fee is unpaid until fee_paid_at is set (SPEC-37 pay requests).
+export function feeState(r: { fee_amount: string | number | null; fee_paid_at: string | null }): 'none' | 'paid' | 'unpaid' {
+  if (r.fee_amount !== null && Number(r.fee_amount) === 0) return 'none';
+  return r.fee_paid_at ? 'paid' : 'unpaid';
+}
+
 export type CleaningFilters = { q?: string; state?: string; fees?: string; from?: string; to?: string; page?: string };
 
 export async function fetchCleanings(propertyId: string, f: CleaningFilters, canFees: boolean) {
@@ -39,7 +45,8 @@ export async function fetchCleanings(propertyId: string, f: CleaningFilters, can
   if (f.state === 'incomplete') q = q.eq('is_complete', false);
   if (f.state === 'complete') q = q.eq('is_complete', true);
   if (f.state === 'issues') q = q.gt('issue_count', 0);
-  if (f.fees === 'unpaid' && canFees) q = q.gt('fee_amount', 0).is('fee_paid_at', null);
+  // Same rule as get_admin_overview_v1 unpaidCleanerFees: an unpriced (NULL) fee is still owed under SPEC-37; 0 = no fee.
+  if (f.fees === 'unpaid' && canFees) q = q.is('fee_paid_at', null).or('fee_amount.is.null,fee_amount.gt.0');
   if (f.from) q = q.gte('cleaned_at', f.from);
   if (f.to) q = q.lt('cleaned_at', f.to);
   const page = Number(f.page) || 1;
