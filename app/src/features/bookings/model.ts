@@ -230,7 +230,9 @@ export function filterStays(stays: Stay[], f: StayFilters, today: IsoDate): Stay
   if (f.view === 'upcoming') out = out.filter((s) => s.checkin > today && s.bookingState === 'confirmed');
   if (f.view === 'pending') out = out.filter((s) => s.bookingState === 'inquiry');
   if (f.view === 'unpaid') out = out.filter((s) => s.kind === 'direct' && s.bookingState !== 'cancelled' && s.paymentState === 'not_recorded');
+  // Lloyd 2026-10-08: cancelled stays clutter the list; they show only when Status asks for them.
   if (f.status) out = out.filter((s) => s.bookingState === f.status);
+  else out = out.filter((s) => s.bookingState !== 'cancelled');
   if (f.channel) out = out.filter((s) => s.kind === f.channel);
   if (from) out = out.filter((s) => s.checkout > from);
   if (to) out = out.filter((s) => s.checkin < to);
