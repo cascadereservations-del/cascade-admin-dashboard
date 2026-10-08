@@ -126,12 +126,11 @@ export function bulkTransactions(propertyId: string, ids: string[], action: Bulk
   return rpc<{ ok: boolean; action: BulkAction; changed: number; skipped: number; amount: string; auditIds: string[]; ids: string[] }>('admin_transactions_bulk_v1', { p_property_id: propertyId, p_ids: ids, p_action: action, p_reason: reason ?? null });
 }
 
-export type PaymentQueueRow = Record<string, unknown>;
-export function fetchPaymentQueue(propertyId: string) {
-  return rpc<PaymentQueueRow[] | { rows?: PaymentQueueRow[] }>('get_payment_review_queue', { p_property_id: propertyId, p_limit: 50 });
-}
-export function reviewPayment(comparisonId: string, outcome: string, reason: string) {
-  return rpc('record_payment_finance_review', { p_comparison_id: comparisonId, p_outcome: outcome, p_reason: reason });
+// SPEC-44: Inquiries is the one place to confirm a direct booking, so this queue
+// leaves out the income rows of bookings that are still pending there.
+export function hidePendingInquiryRows<T extends { source: string; booking_id: string | null }>(rows: T[], pendingBookingIds: ReadonlySet<string> | null): T[] {
+  if (!pendingBookingIds) return rows;
+  return rows.filter((r) => !(r.source === 'direct_booking' && r.booking_id !== null && pendingBookingIds.has(r.booking_id)));
 }
 
 // P21 workbench: fetch the raw rows the two legacy views disagree over. The

@@ -14,6 +14,7 @@ import { StatusBadge } from '@/components/data/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GuestReplyButton } from '@/features/guests/guest-reply-dialog';
+import { BookingsToConfirmCard } from './bookings-to-confirm-card';
 import { fetchOverview, type Overview, type OverviewStay } from './api';
 
 // Today (P10). Every card links to the matching records; a failed or
@@ -129,6 +130,7 @@ export default function TodayPage() {
       <QueryState query={query} skeleton={<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></div>}>
         {(o) => (
           <div className="space-y-6">
+            <BookingsToConfirmCard />
             <KpiStrip financeVisible={o.finance !== null} />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Card className="py-4 gap-3">

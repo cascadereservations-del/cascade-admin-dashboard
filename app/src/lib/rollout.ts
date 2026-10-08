@@ -21,7 +21,9 @@ const LABEL: Record<MutationModule, string> = {
 
 // Every mutating RPC the admin calls, by module. A read RPC is absent and passes.
 export const RPC_MODULE: Record<string, MutationModule> = {
-  staff_decide_direct_booking_v1: 'bookings',
+  staff_confirm_direct_booking_v1: 'finance', // SPEC-44: the one Confirm booking sheet (approve_payment)
+  staff_decline_direct_booking_v1: 'bookings', // SPEC-44: Decline on Inquiries
+  concierge_resume_cassy_v1: 'operations', // SPEC-44: Let Cassy answer again on Conversations
   record_booking_lifecycle_action: 'bookings',
   authorize_booking_refund: 'bookings',
   save_work_order_v1: 'operations',
@@ -38,7 +40,6 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   save_guest_profile_v1: 'follow_ups',
   save_follow_up_v1: 'follow_ups',
   merge_guests_v1: 'follow_ups',
-  record_payment_finance_review: 'finance',
   admin_save_transaction_v1: 'finance',
   admin_transactions_bulk_v1: 'finance',
   post_journal_v1: 'finance',

@@ -26,6 +26,11 @@ export async function fetchThread(psid: string): Promise<ThreadDetail | null> {
   return t ? { ...t, history: Array.isArray(t.history) ? t.history : [], handoffs: Array.isArray(t.handoffs) ? t.handoffs : [] } : null;
 }
 
+/** SPEC-44: hand a paused thread back to Cassy. She answers again from the guest's next message. */
+export function resumeCassy(psid: string) {
+  return rpc<{ ok?: boolean }>('concierge_resume_cassy_v1', { p_psid: psid });
+}
+
 /** The request may have reached Messenger (a dropped connection, a 504, a 5xx the function did not name): never say "nothing was sent". */
 export const MAYBE_SENT = 'The reply may have been sent. Refresh the conversation before trying again.';
 

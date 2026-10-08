@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import { AppError } from '@/lib/errors';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { todayManila } from '@/lib/dates';
@@ -7,7 +6,7 @@ import { mergeStays, type CalendarRow, type InquiryRow, type ReservationRow, typ
 
 // Adapter for the bookings module. Reads go through RLS-protected tables and
 // are merged by the tested read model; writes go only through the deployed
-// authoritative RPCs (decide_direct_booking, record_booking_lifecycle_action).
+// authoritative RPCs (record_booking_lifecycle_action, authorize_booking_refund).
 
 export type StaysResult = { stays: Stay[]; sourceAsOf: string | null; warnings: string[] };
 
@@ -91,29 +90,7 @@ export async function fetchStayDetail(propertyId: string, kind: string, id: stri
   };
 }
 
-// BKG03: confirm/decline a direct inquiry through the canonical decision RPC.
-// The server rechecks availability inside its transaction and serialises on
-// the idempotency key, so two concurrent confirmations cannot both succeed.
-// decide_direct_booking requires the id of a final Finance review of the
-// booking's payment evidence (approved authorises confirm, rejected authorises
-// decline); without one the server refuses. Look it up and name it.
-export async function decideDirectBooking(bookingId: string, action: 'confirm' | 'decline', idempotencyKey = newIdempotencyKey('decision')) {
-  const wanted = action === 'confirm' ? 'approved' : 'rejected';
-  const { data: review, error } = await supabase
-    .from('payment_finance_reviews')
-    .select('id')
-    .eq('booking_id', bookingId)
-    .eq('outcome', wanted)
-    .order('reviewed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  if (!review) {
-    throw new AppError('validation', `No ${wanted} Finance review of this booking's payment yet. Review it in Finance → Payment queue first.`);
-  }
-  // D-171: decide_direct_booking is service_role only, so the direct call could never succeed; this is its staff-session gate (approve_payment).
-  return rpc<Record<string, unknown>>('staff_decide_direct_booking_v1', { p_booking_id: bookingId, p_action: action, p_idempotency_key: idempotencyKey, p_finance_review_id: review.id });
-}
+// BKG03: confirm and decline of a direct inquiry moved to confirm-api.ts (SPEC-44: staff_confirm / staff_decline_direct_booking_v1).
 
 // BKG04: cancellation and amendment update the lifecycle only; refunds are a
 // separate authorised state via authorize_booking_refund.

@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useSession } from '@/auth/session';
 import { formatDateTime } from '@/lib/dates';
 import { toAppError } from '@/lib/errors';
 import { PageHeader } from '@/components/data/page-header';
 import { EmptyState, ListSkeleton, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { fetchConversations, fetchThread, sendHostReply, type ConversationRow, type ThreadDetail } from './conversations-api';
+import { fetchConversations, fetchThread, resumeCassy, sendHostReply, type ConversationRow, type ThreadDetail } from './conversations-api';
 import { GuestReplyButton } from './guest-reply-dialog';
 import { buildTimeline, newestOpenHandoff, replyWindow, speakerOf, turnRisk, windowLabel, type Speaker } from './conversations-window';
 
@@ -68,12 +70,14 @@ function ThreadView({ psid }: { psid: string }) {
 
 function Thread({ t }: { t: ThreadDetail }) {
   const items = buildTimeline(t.history, t.handoffs);
+  const paused = !!t.human_until && Date.parse(t.human_until) > Date.now();
   return (
     <section className="space-y-3" aria-label="Conversation">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold">{t.guest_name ?? `Guest ${t.psid_short}`}</h2>
         <span className="text-xs text-muted-foreground">Messenger {t.psid_short}</span>
-        {t.human_until && Date.parse(t.human_until) > Date.now() && <StatusBadge tone="info">Cassy paused until {formatDateTime(t.human_until)}</StatusBadge>}
+        {paused && <StatusBadge tone="info">Cassy paused until {formatDateTime(t.human_until)}</StatusBadge>}
+        {paused && <ResumeCassy psid={t.psid} />}
       </div>
       <div className="flex max-h-[55vh] flex-col gap-2 overflow-auto rounded-lg border p-3">
         {items.length === 0 && <p className="text-sm text-muted-foreground">No messages stored for this guest.</p>}
@@ -90,6 +94,42 @@ function Thread({ t }: { t: ThreadDetail }) {
       </div>
       <ReplyBox t={t} />
     </section>
+  );
+}
+
+// SPEC-44: hand a paused thread back to Cassy (manage_operations). One confirm, then the pause is cleared.
+function ResumeCassy({ psid }: { psid: string }) {
+  const s = useSession();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const resume = useMutation({
+    mutationFn: () => resumeCassy(psid),
+    onSuccess: (r) => {
+      if (r?.ok === false) { toast.error('Cassy could not be switched back on. Try again.'); return; }
+      toast.success('Cassy will answer this guest again from their next message.');
+      setOpen(false);
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+      void qc.invalidateQueries({ queryKey: ['conversation', psid] });
+    },
+    onError: (e) => toast.error(toAppError(e).message),
+  });
+  if (!s.caps.can('manage_operations')) return null;
+  return (
+    <>
+      <Button size="sm" variant="outline" className="ml-auto" onClick={() => setOpen(true)}>Let Cassy answer again</Button>
+      <Dialog open={open} onOpenChange={(o) => { if (!resume.isPending) setOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Let Cassy answer again</DialogTitle>
+            <DialogDescription>Cassy will answer this guest again from their next message.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={resume.isPending}>Cancel</Button>
+            <Button onClick={() => resume.mutate()} disabled={resume.isPending}>{resume.isPending ? 'Working…' : 'Let Cassy answer again'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

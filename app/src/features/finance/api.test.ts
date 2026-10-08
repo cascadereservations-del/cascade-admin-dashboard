@@ -12,7 +12,7 @@ vi.mock('@/lib/rpc', async () => {
   return { ...real, rpc: vi.fn() };
 });
 
-import { applyTxnFilters, EXPORT_CAP, exportCompleteness, fetchTransactionsForExport } from './api';
+import { applyTxnFilters, EXPORT_CAP, exportCompleteness, fetchTransactionsForExport, hidePendingInquiryRows } from './api';
 
 function filtered(f: Parameters<typeof applyTxnFilters>[1]) {
   const log: string[] = [];
@@ -85,5 +85,23 @@ describe('exportCompleteness', () => {
   });
   it('stays silent about hidden rows when Show hidden is on', () => {
     expect(exportCompleteness(all, { hidden: '1' })).toBe('all 2 matching rows');
+  });
+});
+
+describe('hidePendingInquiryRows (SPEC-44: Inquiries is the one place to confirm a direct booking)', () => {
+  const rows = [
+    { id: '1', source: 'direct_booking', booking_id: 'pending-1' },
+    { id: '2', source: 'direct_booking', booking_id: 'confirmed-1' },
+    { id: '3', source: 'ocr', booking_id: 'pending-1' },
+    { id: '4', source: 'direct_booking', booking_id: null },
+  ];
+  it('hides direct_booking rows whose booking is still pending and keeps every other row', () => {
+    expect(hidePendingInquiryRows(rows, new Set(['pending-1'])).map((r) => r.id)).toEqual(['2', '3', '4']);
+  });
+  it('hides nothing when the pending list could not be read', () => {
+    expect(hidePendingInquiryRows(rows, null)).toHaveLength(4);
+  });
+  it('hides nothing when no booking is pending', () => {
+    expect(hidePendingInquiryRows(rows, new Set())).toHaveLength(4);
   });
 });

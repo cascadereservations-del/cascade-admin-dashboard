@@ -1,52 +1,36 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/auth/session';
 import { todayManila, formatDate, formatDateTime } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
-import { toAppError } from '@/lib/errors';
-import { newIdempotencyKey } from '@/lib/idempotency';
 import { PageHeader } from '@/components/data/page-header';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { decideDirectBooking, fetchStays } from './api';
+import { fetchStays } from './api';
+import { fetchInquiryPayments } from './confirm-api';
+import { paymentLine } from './confirm-model';
+import { ConfirmSheet, DeclineSheet } from './confirm-sheet';
 import { filterStays, type Stay } from './model';
 
-// BKG03/BKG05: pending direct inquiries with confirm/decline through the
-// canonical decision RPC. The idempotency key is minted when the dialog opens
-// so a retry after a network failure cannot create a second decision.
+// BKG03/BKG05 + SPEC-44: pending direct inquiries. Each card shows what
+// payment evidence is on file; one Confirm booking sheet (or Decline) decides.
+// Confirm needs approve_payment; the server checks it again.
 
-type Pending = { stay: Stay; action: 'confirm' | 'decline'; key: string };
+type Pending = { stay: Stay; action: 'confirm' | 'decline' };
 
 export default function InquiriesPage() {
   const s = useSession();
-  const qc = useQueryClient();
   const query = useQuery({ queryKey: ['stays', s.propertyId], queryFn: () => fetchStays(s.propertyId) });
+  const payments = useQuery({ queryKey: ['inquiry-payments', s.propertyId], queryFn: () => fetchInquiryPayments(s.propertyId) });
   const [pending, setPending] = useState<Pending | null>(null);
-  const canDecide = s.caps.can('manage_operations');
-
-  const decide = useMutation({
-    mutationFn: (p: Pending) => decideDirectBooking(p.stay.sourceId, p.action, p.key),
-    onSuccess: (res, p) => {
-      toast.success(`${p.action === 'confirm' ? 'Confirmed' : 'Declined'} ${p.stay.guestName}`, {
-        description: `Outcome: ${String(res.outcome ?? res.status ?? 'recorded')} · ${formatDateTime(new Date().toISOString())}`,
-      });
-      setPending(null);
-      void qc.invalidateQueries({ queryKey: ['stays'] });
-    },
-    onError: (e) => {
-      const err = toAppError(e);
-      toast.error(err.kind === 'conflict' ? 'Those dates are no longer available or this decision already exists.' : err.message, { description: err.detail });
-    },
-  });
+  const canDecide = s.caps.can('approve_payment');
 
   return (
     <div>
-      <PageHeader title="Inquiries" description="Direct booking requests awaiting a decision. Confirming rechecks availability on the server." actions={<Button variant="outline" asChild><Link to="/bookings?view=pending">Open in list</Link></Button>} />
+      <PageHeader title="Inquiries" description="Direct booking requests awaiting a decision. Confirming rechecks the dates on the server." actions={<Button variant="outline" asChild><Link to="/bookings?view=pending">Open in list</Link></Button>} />
       <QueryState query={query}>
         {(data) => {
           const rows = filterStays(data.stays, { view: 'pending' }, todayManila());
@@ -70,10 +54,11 @@ export default function InquiriesPage() {
                       <dt className="text-muted-foreground">Deposit</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
                       <dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd>
                     </dl>
+                    <p className="text-sm" data-testid="payment-line">{payments.isError ? 'Could not check for a receipt. Reload to try again.' : payments.isPending ? 'Checking for a receipt…' : paymentLine(payments.data?.find((p) => p.id === st.sourceId))}</p>
                     {canDecide && (
                       <div className="flex gap-2 pt-1">
-                        <Button size="sm" className="min-h-10 flex-1" onClick={() => setPending({ stay: st, action: 'confirm', key: newIdempotencyKey('decision') })}>Confirm</Button>
-                        <Button size="sm" variant="outline" className="min-h-10 flex-1" onClick={() => setPending({ stay: st, action: 'decline', key: newIdempotencyKey('decision') })}>Decline</Button>
+                        <Button size="sm" className="min-h-10 flex-1" disabled={!payments.isSuccess} onClick={() => setPending({ stay: st, action: 'confirm' })}>Confirm booking</Button>
+                        <Button size="sm" variant="outline" className="min-h-10 flex-1" onClick={() => setPending({ stay: st, action: 'decline' })}>Decline</Button>
                       </div>
                     )}
                   </CardContent>
@@ -83,21 +68,8 @@ export default function InquiriesPage() {
           );
         }}
       </QueryState>
-      <Dialog open={!!pending} onOpenChange={(o) => !o && !decide.isPending && setPending(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{pending?.action === 'confirm' ? 'Confirm booking' : 'Decline inquiry'}</DialogTitle>
-            <DialogDescription>
-              {pending && `${pending.stay.guestName}, ${formatDate(pending.stay.checkin, 'long')} to ${formatDate(pending.stay.checkout, 'long')}. `}
-              {pending?.action === 'confirm' ? 'Availability is rechecked inside the server transaction; a clash is rejected.' : 'The guest is not messaged automatically. Reply in Messenger as usual.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPending(null)} disabled={decide.isPending}>Cancel</Button>
-            <Button onClick={() => pending && decide.mutate(pending)} disabled={decide.isPending}>{decide.isPending ? 'Working…' : pending?.action === 'confirm' ? 'Confirm' : 'Decline'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {pending?.action === 'confirm' && <ConfirmSheet key={pending.stay.key} stay={pending.stay} payment={payments.data?.find((p) => p.id === pending.stay.sourceId) ?? null} onClose={() => setPending(null)} />}
+      {pending?.action === 'decline' && <DeclineSheet key={pending.stay.key} stay={pending.stay} onClose={() => setPending(null)} />}
     </div>
   );
 }
