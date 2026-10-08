@@ -105,6 +105,12 @@ describe('outcome sentences', () => {
   });
 });
 
+describe('declineSentence', () => {
+  it('maps note_required to a plain ask for a reason', () => {
+    expect(declineSentence({ ok: false, outcome: 'note_required' })).toBe('Choose or write a reason first.');
+  });
+});
+
 describe('declineReason', () => {
   it('joins the chip and the text, and is null when both are empty', () => {
     expect(declineReason('No payment received', ' sent twice ')).toBe('No payment received: sent twice');

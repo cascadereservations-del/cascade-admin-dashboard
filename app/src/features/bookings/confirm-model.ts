@@ -132,6 +132,7 @@ export function declineSentence(r: DecisionResult): string {
   if (r.ok === true) return `Request declined${r.guest_name ? ` for ${r.guest_name}` : ''}.`;
   switch (r.outcome) {
     case 'invalid_state': return 'This booking is no longer waiting for a decision. Nothing was changed.';
+    case 'note_required': return 'Choose or write a reason first.';
     case 'denied': return 'Your account is not allowed to decline bookings.';
     default: return 'Nothing was declined. Please try again.';
   }
