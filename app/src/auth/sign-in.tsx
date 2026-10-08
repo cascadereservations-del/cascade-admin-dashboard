@@ -109,7 +109,7 @@ export function SignInPage() {
             <form onSubmit={onSubmit} className="space-y-4" aria-label="Sign in">
               <div className="space-y-2">
                 <Label htmlFor="identity">{pinMode ? 'Your name' : 'Name or e-mail'}</Label>
-                <Input id="identity" autoComplete="username" placeholder={pinMode ? 'e.g. Honey' : ''} value={identity} onChange={(e) => setIdentity(e.target.value)} className="text-base" required autoFocus />
+                <Input id="identity" autoComplete="username" placeholder={pinMode ? 'Your name' : ''} value={identity} onChange={(e) => setIdentity(e.target.value)} className="text-base" required autoFocus />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="secret">{pinMode ? '4-digit PIN' : 'Password'}</Label>

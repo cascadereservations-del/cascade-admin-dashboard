@@ -81,7 +81,7 @@ function Rates({ data, propertyId }: { data: PayRates; propertyId: string }) {
             <div><Label htmlFor="pr-transport">Transport (PHP)</Label><Input id="pr-transport" inputMode="decimal" className="w-32 text-base sm:text-sm" value={transport} onChange={(e) => setTransport(e.target.value)} placeholder="included" /></div>
           </div>
           <p className="text-xs text-muted-foreground">Leave transport empty when the fee already includes it. Otherwise staff get a switch for it on each clean.</p>
-          <div><Label htmlFor="pr-note">Why (kept in the audit history)</Label><Textarea id="pr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Agreed with Honey, from the first clean of the month" /></div>
+          <div><Label htmlFor="pr-note">Why (kept in the audit history)</Label><Textarea id="pr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Agreed with the cleaner, from the first clean of the month" /></div>
           {problem && regular + general + note !== '' && <p role="alert" className="text-sm text-destructive">{problem}</p>}
           <Button disabled={!!problem || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save new rate'}</Button>
         </div>

@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz';
-import { addDays, differenceInCalendarDays, format, startOfMonth, startOfYear } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, getDaysInMonth, startOfMonth, startOfYear } from 'date-fns';
 import { BUSINESS_TIMEZONE } from './env';
 
 // Business dates are Asia/Manila calendar dates independent of the browser
@@ -48,7 +48,7 @@ export function periodPreset(key: string, today: IsoDate = todayManila()): Perio
   const t = parseIso(today);
   switch (key) {
     case 'mtd':
-      return { key, start: format(startOfMonth(t), 'yyyy-MM-dd'), endExclusive: today, label: 'Month to date' };
+      return { key, start: format(startOfMonth(t), 'yyyy-MM-dd'), endExclusive: today, label: t.getDate() > 1 ? `Month to date (${t.getDate() - 1} of ${getDaysInMonth(t)} nights elapsed)` : 'Month to date' };
     case 'ytd':
       return { key, start: format(startOfYear(t), 'yyyy-MM-dd'), endExclusive: today, label: 'Year to date' };
     case 'last30':
