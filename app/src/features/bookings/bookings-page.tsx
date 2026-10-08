@@ -81,9 +81,9 @@ export default function BookingsPage() {
         actions={<Button variant="outline" asChild><Link to="/bookings/calendar">Calendar</Link></Button>}
       />
       <Tabs value={view} onValueChange={(v) => set({ view: v === 'all' ? '' : v })} className="mb-3">
-        <TabsList className="flex-wrap">
+        <TabsList className="w-full max-w-full justify-start overflow-x-auto sm:w-fit group-data-[orientation=horizontal]/tabs:max-sm:h-[44px]" aria-label="Booking views">
           {VIEWS.map((v) => (
-            <TabsTrigger key={v.value} value={v.value}>{v.label}</TabsTrigger>
+            <TabsTrigger key={v.value} value={v.value} className="flex-none px-3">{v.label}</TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
