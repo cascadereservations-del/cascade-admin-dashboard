@@ -98,6 +98,9 @@ describe('hidePendingInquiryRows (SPEC-44: Inquiries is the one place to confirm
   it('hides direct_booking rows whose booking is still pending and keeps every other row', () => {
     expect(hidePendingInquiryRows(rows, new Set(['pending-1'])).map((r) => r.id)).toEqual(['2', '3', '4']);
   });
+  it('holds back every direct_booking row while the list is still loading', () => {
+    expect(hidePendingInquiryRows(rows, null, true).map((r) => r.id)).toEqual(['3']);
+  });
   it('hides nothing when the pending list could not be read', () => {
     expect(hidePendingInquiryRows(rows, null)).toHaveLength(4);
   });

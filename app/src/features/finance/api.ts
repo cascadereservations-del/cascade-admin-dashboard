@@ -128,7 +128,9 @@ export function bulkTransactions(propertyId: string, ids: string[], action: Bulk
 
 // SPEC-44: Inquiries is the one place to confirm a direct booking, so this queue
 // leaves out the income rows of bookings that are still pending there.
-export function hidePendingInquiryRows<T extends { source: string; booking_id: string | null }>(rows: T[], pendingBookingIds: ReadonlySet<string> | null): T[] {
+// While the lookup is still loading every direct_booking row is held back; if it failed (ids null) all rows show as before.
+export function hidePendingInquiryRows<T extends { source: string; booking_id: string | null }>(rows: T[], pendingBookingIds: ReadonlySet<string> | null, loading = false): T[] {
+  if (loading) return rows.filter((r) => r.source !== 'direct_booking');
   if (!pendingBookingIds) return rows;
   return rows.filter((r) => !(r.source === 'direct_booking' && r.booking_id !== null && pendingBookingIds.has(r.booking_id)));
 }

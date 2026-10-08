@@ -38,7 +38,7 @@ describe('parseAmount', () => {
   it('accepts commas and a PHP prefix, rejects zero, negatives and text', () => {
     expect(parseAmount('5,073')).toBe('5073.00');
     expect(parseAmount('PHP 1,250.5')).toBe('1250.50');
-    for (const bad of ['', '0', '0.00', '-5', 'abc']) expect(parseAmount(bad)).toBeNull();
+    for (const bad of ['', '0', '0.00', '-5', 'abc', '12.345', '5073.001']) expect(parseAmount(bad)).toBeNull();
   });
 });
 

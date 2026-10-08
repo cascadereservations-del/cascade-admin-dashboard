@@ -164,7 +164,6 @@ export default function TodayPage() {
                   ) : (
                     <ul className="space-y-1">
                       <li><Link to="/finance" className="hover:underline">{o.finance.pendingReviewCount} transactions awaiting review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>
-                      <li><Link to="/finance" className="hover:underline">{o.finance.paymentReviewCount} payment evidence comparisons unreviewed</Link></li>
                       <li><Link to="/operations?fees=unpaid" className="hover:underline">{o.finance.unpaidCleanerFees} cleaner fees unpaid</Link></li>
                     </ul>
                   )}

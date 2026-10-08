@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { confirmDirectBooking, declineDirectBooking, newConfirmKey } from './confirm-api';
+import { confirmDirectBooking, declineDirectBooking, newConfirmKey, newDeclineKey } from './confirm-api';
 import {
   DECLINE_REASONS, METHODS, confirmArgs, confirmSentence, declineReason, declineSentence, hasReceipt, paymentLine, validateConfirm,
   type ConfirmForm, type InquiryPayment, type Method,
@@ -32,12 +32,15 @@ function useRefresh() {
 
 const toDecimal = (v: string | null) => (toCentavos(v) === null ? '' : fromCentavos(toCentavos(v)!));
 
+// The error text is tied to its input by id: pass invalid(id, error) to the input.
+const invalid = (id: string, error?: string) => ({ 'aria-invalid': error ? true : undefined, 'aria-describedby': error ? `${id}-error` : undefined });
+
 function Field({ label, htmlFor, error, children }: { label: string; htmlFor?: string; error?: string; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p id={htmlFor ? `${htmlFor}-error` : undefined} className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }
@@ -88,10 +91,10 @@ export function ConfirmSheet({ stay, payment, onClose }: { stay: SheetStay; paym
           {receipt ? (
             <div className="space-y-1">
               <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" className="mt-0.5 size-4" checked={form.checked} onChange={(e) => set({ checked: e.target.checked })} />
+                <input type="checkbox" id="confirm-checked" {...invalid('confirm-checked', errors.checked)} className="mt-0.5 size-4" checked={form.checked} onChange={(e) => set({ checked: e.target.checked })} />
                 I checked the money arrived
               </label>
-              {errors.checked && <p className="text-sm text-destructive">{errors.checked}</p>}
+              {errors.checked && <p id="confirm-checked-error" className="text-sm text-destructive">{errors.checked}</p>}
             </div>
           ) : (
             <fieldset className="space-y-1.5">
@@ -106,15 +109,15 @@ export function ConfirmSheet({ stay, payment, onClose }: { stay: SheetStay; paym
           )}
           {needsRef && (
             <Field label="Payment reference" htmlFor="confirm-ref" error={errors.reference}>
-              <Input id="confirm-ref" value={form.reference} onChange={(e) => set({ reference: e.target.value })} autoComplete="off" />
+              <Input id="confirm-ref" {...invalid('confirm-ref', errors.reference)} value={form.reference} onChange={(e) => set({ reference: e.target.value })} autoComplete="off" />
             </Field>
           )}
           <Field label="Amount received (PHP)" htmlFor="confirm-amount" error={errors.amount}>
-            <Input id="confirm-amount" inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} autoComplete="off" />
+            <Input id="confirm-amount" {...invalid('confirm-amount', errors.amount)} inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} autoComplete="off" />
           </Field>
           {!receipt && (
             <Field label={form.method === 'cash' ? 'Note (required for cash)' : 'Note (optional)'} htmlFor="confirm-note" error={errors.note}>
-              <Textarea id="confirm-note" rows={2} value={form.note} onChange={(e) => set({ note: e.target.value })} />
+              <Textarea id="confirm-note" {...invalid('confirm-note', errors.note)} rows={2} value={form.note} onChange={(e) => set({ note: e.target.value })} />
             </Field>
           )}
           {message && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">{message}</p>}
@@ -132,7 +135,7 @@ export function DeclineSheet({ stay, onClose }: { stay: SheetStay; onClose: () =
   const refresh = useRefresh();
   const [chip, setChip] = useState<string | null>(null);
   const [text, setText] = useState('');
-  const [key, setKey] = useState(newConfirmKey);
+  const [key, setKey] = useState(newDeclineKey);
   const [message, setMessage] = useState<string | null>(null);
   const reason = declineReason(chip, text);
 
@@ -146,7 +149,7 @@ export function DeclineSheet({ stay, onClose }: { stay: SheetStay; onClose: () =
         return;
       }
       setMessage(declineSentence(res));
-      setKey(newConfirmKey());
+      setKey(newDeclineKey());
     },
     onError: (e) => setMessage(toAppError(e).message),
   });

@@ -7,6 +7,7 @@ import { normalizePayments, type DecisionResult, type InquiryPayment } from './c
 // rollout switch through RPC_MODULE (finance / bookings) inside rpc().
 
 export const newConfirmKey = () => newIdempotencyKey('confirm');
+export const newDeclineKey = () => newIdempotencyKey('decline');
 
 export async function fetchInquiryPayments(propertyId: string): Promise<InquiryPayment[]> {
   return normalizePayments(await rpc<unknown>('staff_inquiry_payments_v1', { p_property_id: propertyId }));

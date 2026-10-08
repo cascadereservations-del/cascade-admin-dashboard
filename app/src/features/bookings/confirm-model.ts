@@ -72,9 +72,11 @@ export const METHODS: ReadonlyArray<{ value: Method; label: string }> = [
 export type ConfirmForm = { checked: boolean; method: Method; reference: string; amount: string; note: string };
 export type FormErrors = Partial<Record<'checked' | 'reference' | 'amount' | 'note', string>>;
 
-/** The decimal string for an amount the staff typed ("5,073" -> "5073.00"), or null when it is not above zero. */
+/** The decimal string for an amount the staff typed ("5,073" -> "5073.00"), or null when it is not above zero or has more than two decimals. */
 export function parseAmount(text: string): string | null {
-  const cents = toCentavos(text.replace(/[,\s]|^(PHP|₱)/gi, ''));
+  const clean = text.replace(/[,\s]|^(PHP|₱)/gi, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null; // more than two decimals is refused, never truncated
+  const cents = toCentavos(clean);
   return cents !== null && cents > 0 ? fromCentavos(cents) : null;
 }
 
@@ -83,7 +85,7 @@ export function validateConfirm(f: ConfirmForm, payment: InquiryPayment | null |
   const e: FormErrors = {};
   const receipt = hasReceipt(payment);
   if (receipt && !f.checked) e.checked = 'Tick the box once you have checked the money arrived.';
-  if (parseAmount(f.amount) === null) e.amount = 'Enter the amount received, more than zero.';
+  if (parseAmount(f.amount) === null) e.amount = 'Enter the amount received, more than zero, with at most two decimal places.';
   const needsRef = receipt ? !payment.reference : f.method !== 'cash';
   if (needsRef && !f.reference.trim()) e.reference = 'Enter the payment reference.';
   if (!receipt && f.method === 'cash' && !f.note.trim()) e.note = 'Add a short note about the cash, for example who handed it over.';

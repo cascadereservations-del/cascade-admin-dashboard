@@ -5,13 +5,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  n: 0,
   can: new Set<string>(['approve_payment']),
   fetchStays: vi.fn(), fetchInquiryPayments: vi.fn(), confirmDirectBooking: vi.fn(), declineDirectBooking: vi.fn(),
 }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { can: (a: string) => mocks.can.has(a) } }) }));
 vi.mock('./api', () => ({ fetchStays: mocks.fetchStays }));
 vi.mock('./confirm-api', () => ({
-  newConfirmKey: () => 'confirm-test-key-0123456789',
+  newConfirmKey: () => (mocks.n++ === 0 ? 'confirm-test-key-0123456789' : `confirm-test-key-${mocks.n}-0123456789`),
+  newDeclineKey: () => 'decline-test-key-0123456789',
   fetchInquiryPayments: mocks.fetchInquiryPayments,
   confirmDirectBooking: mocks.confirmDirectBooking,
   declineDirectBooking: mocks.declineDirectBooking,
@@ -37,6 +39,7 @@ function view() {
 }
 beforeEach(() => {
   Object.values(mocks).forEach((m) => typeof m === 'function' && m.mockReset());
+  mocks.n = 0;
   mocks.can = new Set(['approve_payment']);
   mocks.fetchStays.mockResolvedValue({ stays: [stay('b1', 'Maria Santos')], sourceAsOf: null, warnings: [] });
   mocks.fetchInquiryPayments.mockResolvedValue([RECEIPT]);
@@ -125,7 +128,7 @@ it('cash needs a note, not a reference; an amount of zero is refused', async () 
   await user.clear(within(sheet).getByLabelText(/Amount received/));
   await user.type(within(sheet).getByLabelText(/Amount received/), '0');
   await user.click(within(sheet).getByRole('button', { name: 'Confirm booking' }));
-  expect(await within(sheet).findByText('Enter the amount received, more than zero.')).toBeInTheDocument();
+  expect(await within(sheet).findByText('Enter the amount received, more than zero, with at most two decimal places.')).toBeInTheDocument();
   expect(mocks.confirmDirectBooking).not.toHaveBeenCalled();
   await user.clear(within(sheet).getByLabelText(/Amount received/));
   await user.type(within(sheet).getByLabelText(/Amount received/), '5073');
@@ -145,6 +148,13 @@ it('a server refusal shows its sentence and keeps the sheet open', async () => {
   expect(alert.textContent).not.toMatch(/!|Unfortunately/);
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(toast.success).not.toHaveBeenCalled();
+  // An answer from the server may be followed by changed inputs, so the next try gets a new key.
+  mocks.confirmDirectBooking.mockResolvedValueOnce({ ok: true, outcome: 'confirmed' });
+  await user.click(within(sheet).getByRole('button', { name: 'Confirm booking' }));
+  await waitFor(() => expect(mocks.confirmDirectBooking).toHaveBeenCalledTimes(2));
+  const [first, second] = mocks.confirmDirectBooking.mock.calls.map((c) => c[0].p_idempotency_key);
+  expect(first).toBe('confirm-test-key-0123456789');
+  expect(second).not.toBe(first);
 }, 20_000);
 
 it('a dropped connection shows the error and keeps the sheet open for a retry', async () => {
@@ -155,7 +165,37 @@ it('a dropped connection shows the error and keeps the sheet open for a retry', 
   await user.click(within(sheet).getByRole('checkbox'));
   await user.click(within(sheet).getByRole('button', { name: 'Confirm booking' }));
   expect(await within(sheet).findByRole('alert')).toHaveTextContent('The backend is unreachable.');
+  // The request may have reached the server: the retry carries the same key so it cannot be applied twice.
+  mocks.confirmDirectBooking.mockResolvedValueOnce({ ok: true, outcome: 'confirmed' });
+  await user.click(within(sheet).getByRole('button', { name: 'Confirm booking' }));
+  await waitFor(() => expect(mocks.confirmDirectBooking).toHaveBeenCalledTimes(2));
+  const keys = mocks.confirmDirectBooking.mock.calls.map((c) => c[0].p_idempotency_key);
+  expect(keys[1]).toBe(keys[0]);
 }, 20_000);
+
+it('field errors are tied to their inputs for screen readers', async () => {
+  mocks.fetchInquiryPayments.mockResolvedValue([]);
+  const user = userEvent.setup();
+  view();
+  const sheet = await open(user);
+  await user.click(within(sheet).getByRole('button', { name: 'Confirm booking' }));
+  const ref = within(sheet).getByLabelText('Payment reference');
+  expect(ref).toHaveAttribute('aria-invalid', 'true');
+  expect(document.getElementById(ref.getAttribute('aria-describedby')!)).toHaveTextContent('Enter the payment reference.');
+  const amt = within(sheet).getByLabelText(/Amount received/); // empty here: no payment row means no expected amount to prefill
+  expect(amt).toHaveAttribute('aria-invalid', 'true');
+  expect(document.getElementById(amt.getAttribute('aria-describedby')!)).toHaveTextContent(/more than zero/);
+}, 20_000);
+
+it('a role that cannot read payments sees no payment line and no could-not-check message, and nothing is fetched', async () => {
+  mocks.can = new Set(['read_operations']);
+  mocks.fetchInquiryPayments.mockRejectedValue(new Error('denied'));
+  view();
+  await screen.findByText('Maria Santos');
+  expect(screen.queryByTestId('payment-line')).not.toBeInTheDocument();
+  expect(document.body).not.toHaveTextContent(/Could not check/);
+  expect(mocks.fetchInquiryPayments).not.toHaveBeenCalled();
+});
 
 it('Decline needs a reason, then sends the chip and text to staff_decline', async () => {
   mocks.declineDirectBooking.mockResolvedValue({ ok: true, outcome: 'declined', guest_name: 'Maria Santos' });
@@ -167,7 +207,7 @@ it('Decline needs a reason, then sends the chip and text to staff_decline', asyn
   await user.click(within(sheet).getByRole('button', { name: 'No payment received' }));
   await user.type(within(sheet).getByLabelText(/Anything to add/), 'sent twice');
   await user.click(within(sheet).getByRole('button', { name: 'Decline request' }));
-  await waitFor(() => expect(mocks.declineDirectBooking).toHaveBeenCalledWith('b1', 'No payment received: sent twice', 'confirm-test-key-0123456789'));
+  await waitFor(() => expect(mocks.declineDirectBooking).toHaveBeenCalledWith('b1', 'No payment received: sent twice', 'decline-test-key-0123456789'));
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Request declined for Maria Santos.'));
 }, 20_000);
 

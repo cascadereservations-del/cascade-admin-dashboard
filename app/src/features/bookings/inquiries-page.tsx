@@ -24,7 +24,8 @@ type Pending = { stay: Stay; action: 'confirm' | 'decline' };
 export default function InquiriesPage() {
   const s = useSession();
   const query = useQuery({ queryKey: ['stays', s.propertyId], queryFn: () => fetchStays(s.propertyId) });
-  const payments = useQuery({ queryKey: ['inquiry-payments', s.propertyId], queryFn: () => fetchInquiryPayments(s.propertyId) });
+  const canSeePayments = s.caps.can('approve_payment') || s.caps.can('read_finance');
+  const payments = useQuery({ queryKey: ['inquiry-payments', s.propertyId], queryFn: () => fetchInquiryPayments(s.propertyId), enabled: canSeePayments });
   const [pending, setPending] = useState<Pending | null>(null);
   const canDecide = s.caps.can('approve_payment');
 
@@ -54,7 +55,7 @@ export default function InquiriesPage() {
                       <dt className="text-muted-foreground">Deposit</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
                       <dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd>
                     </dl>
-                    <p className="text-sm" data-testid="payment-line">{payments.isError ? 'Could not check for a receipt. Reload to try again.' : payments.isPending ? 'Checking for a receipt…' : paymentLine(payments.data?.find((p) => p.id === st.sourceId))}</p>
+                    {canSeePayments && <p className="text-sm" data-testid="payment-line">{payments.isError ? 'Could not check for a receipt. Reload to try again.' : payments.isPending ? 'Checking for a receipt…' : paymentLine(payments.data?.find((p) => p.id === st.sourceId))}</p>}
                     {canDecide && (
                       <div className="flex gap-2 pt-1">
                         <Button size="sm" className="min-h-10 flex-1" disabled={!payments.isSuccess} onClick={() => setPending({ stay: st, action: 'confirm' })}>Confirm booking</Button>

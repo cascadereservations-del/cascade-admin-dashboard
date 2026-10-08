@@ -41,7 +41,7 @@ export default function FinanceQueuePage() {
       <div className="space-y-6">
         <Section title="Transactions awaiting review">
           <QueryState query={pending}>
-            {(d) => { const rows = hidePendingInquiryRows(d.rows, pendingBookingIds); return rows.length === 0 ? <EmptyState title="No transactions awaiting review" hint="OCR receipts and Airbnb e-mail candidates land here as pending_review." /> : (
+            {(d) => { const rows = hidePendingInquiryRows(d.rows, pendingBookingIds, inquiries.isPending); return rows.length === 0 ? <EmptyState title="No transactions awaiting review" hint="OCR receipts and Airbnb e-mail candidates land here as pending_review." /> : (
               <ul className="divide-y rounded-lg border text-sm">
                 {rows.map((t) => (
                   <li key={t.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
