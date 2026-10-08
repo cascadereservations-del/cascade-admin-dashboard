@@ -1,8 +1,9 @@
 import { Link } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { AlertTriangle, ArrowRight, CheckCircle2, HelpCircle } from 'lucide-react';
 import { useSession } from '@/auth/session';
-import { comparablePeriod, formatDate, formatDateTime, periodPreset, relativeDay, todayManila, type Period } from '@/lib/dates';
+import { comparablePeriod, formatDate, formatDateTime, parseIso, periodPreset, relativeDay, todayManila, type Period } from '@/lib/dates';
 import { decimalToNumber, formatNumber, formatPHP, formatPercent } from '@/lib/money';
 import { formatMetricValue } from '@/components/data/kpi-card';
 import type { MetricUnit } from '@/types/contracts';
@@ -15,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GuestReplyButton } from '@/features/guests/guest-reply-dialog';
 import { BookingsToConfirmCard } from './bookings-to-confirm-card';
+import { dedupeOverlapping } from '@/features/bookings/same-guest';
 import { fetchOverview, type Overview, type OverviewStay } from './api';
 
 // Today (P10). Every card links to the matching records; a failed or
@@ -26,8 +28,8 @@ function formatByUnit(v: number, unit: MetricUnit): string {
   return formatNumber(v, unit === 'day' ? 1 : 0);
 }
 
-function StayLink({ st }: { st: OverviewStay }) {
-  return <Link to={`/bookings/${st.kind}/${st.id}`} className="font-medium hover:underline">{st.guest}</Link>;
+function StayLink({ st }: { st: OverviewStay & { alsoOn?: string } }) {
+  return <><Link to={`/bookings/${st.kind}/${st.id}`} className="font-medium hover:underline">{st.guest}</Link>{st.alsoOn && <span className="text-xs text-muted-foreground"> (also on {st.alsoOn})</span>}</>;
 }
 
 function ReadinessCard({ r }: { r: Overview['readiness'] }) {
@@ -98,7 +100,7 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
             const finiteVals = trailingVals.filter(Number.isFinite);
             const avg = finiteVals.length > 0 ? finiteVals.reduce((a, v) => a + v, 0) / finiteVals.length : null;
             const deltaPct = avg !== null && avg !== 0 && Number.isFinite(cur) ? ((cur - avg) / Math.abs(avg)) * 100 : null;
-            const dir = deltaPct === null ? null : deltaPct > 5 ? 'up' : deltaPct < -5 ? 'down' : 'flat';
+            const dir = deltaPct === null || Math.abs(deltaPct) < 1 ? null : deltaPct > 5 ? 'up' : deltaPct < -5 ? 'down' : 'flat';
             return (
               <div key={k.key} className="rounded-lg border bg-card px-3 py-2.5">
                 <p className="truncate text-xs text-muted-foreground">{k.title}</p>
@@ -126,9 +128,12 @@ export default function TodayPage() {
   const query = useQuery({ queryKey: ['overview', s.propertyId, s.caps.role, s.caps.aal], queryFn: () => fetchOverview(s.propertyId), refetchInterval: 120_000 });
   return (
     <div>
-      <PageHeader title="Today" description={`Asia/Manila · ${formatDate(todayManila(), 'long')}`} actions={s.caps.can('manage_operations') ? <GuestReplyButton /> : undefined} />
+      <PageHeader title="Today" description={format(parseIso(todayManila()), 'EEEE d MMMM')} actions={s.caps.can('manage_operations') ? <GuestReplyButton /> : undefined} />
       <QueryState query={query} skeleton={<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></div>}>
-        {(o) => (
+        {(o0) => {
+          // A direct stay and its Airbnb mirror are one guest: list them once (prefer the direct row).
+          const o = { ...o0, currentStays: dedupeOverlapping(o0.currentStays), arrivals: dedupeOverlapping(o0.arrivals), departures: dedupeOverlapping(o0.departures) };
+          return (
           <div className="space-y-6">
             <BookingsToConfirmCard />
             <KpiStrip financeVisible={o.finance !== null} />
@@ -163,7 +168,7 @@ export default function TodayPage() {
                     <p className="text-muted-foreground">Not available for your role.</p>
                   ) : (
                     <ul className="space-y-1">
-                      <li><Link to="/finance" className="hover:underline">{o.finance.pendingReviewCount} transactions awaiting review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>
+                      <li><Link to="/finance" className="hover:underline">{o.finance.pendingReviewCount} {o.finance.pendingReviewCount === 1 ? 'transaction awaits' : 'transactions await'} review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>
                       <li><Link to="/operations?fees=unpaid" className="hover:underline">{o.finance.unpaidCleanerFees} cleaner fees unpaid</Link></li>
                     </ul>
                   )}
@@ -223,7 +228,8 @@ export default function TodayPage() {
               <p className="text-xs text-muted-foreground">Calendar sync: {o.calendarSync ? `${o.calendarSync.status} at ${formatDateTime(o.calendarSync.syncedAt)}` : 'no sync recorded'}</p>
             </div>
           </div>
-        )}
+          );
+        }}
       </QueryState>
     </div>
   );
