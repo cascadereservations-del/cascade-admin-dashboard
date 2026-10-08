@@ -58,7 +58,7 @@ export function IdPhotoThumb({ companionId, path, name, className = 'w-28' }: { 
 
 /** The empty tile in the same place and size a photo would take, so missing IDs stand out instead of hiding. */
 export function NoIdPhotoTile({ text, warn = false, className = 'w-28', onClick }: { text: string; warn?: boolean; className?: string; onClick?: () => void }) {
-  const cls = `${tile} ${className} border-dashed ${warn ? 'border-amber-500/70 text-amber-700 dark:text-amber-400' : ''}`;
+  const cls = `${tile} ${className} border-dashed ${warn ? 'border-warn/60 text-warn' : ''}`;
   const body = <><ImageOff className="size-4" aria-hidden />{text}</>;
   return onClick ? <button type="button" className={`${cls} hover:bg-accent`} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 }

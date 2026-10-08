@@ -274,7 +274,7 @@ export default function InventoryPage() {
                         <span className="tabular w-16 shrink-0">{formatNumber(p.qty, 2)}</span>
                         <span className="tabular w-20 shrink-0">{p.unit_cost !== null && s.caps.can('read_finance') ? formatPHP(p.unit_cost) : '—'}/unit</span>
                         <span className="tabular w-20 shrink-0">{p.total_cost !== null && s.caps.can('read_finance') ? formatPHP(p.total_cost) : '—'}</span>
-                        {change !== null && s.caps.can('read_finance') && <span className={change > 0 ? 'tabular text-destructive' : change < 0 ? 'tabular text-emerald-600' : 'tabular text-muted-foreground'}>{change > 0 ? '▲' : change < 0 ? '▼' : '='} {Math.abs(change).toFixed(0)}% vs prior</span>}
+                        {change !== null && s.caps.can('read_finance') && <span className={change > 0 ? 'tabular text-destructive' : change < 0 ? 'tabular text-ok' : 'tabular text-muted-foreground'}>{change > 0 ? '▲' : change < 0 ? '▼' : '='} {Math.abs(change).toFixed(0)}% vs prior</span>}
                       </li>
                     );
                   })}

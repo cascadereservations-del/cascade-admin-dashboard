@@ -219,7 +219,7 @@ export default function GuestDetailPage() {
                     <Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="inline-flex items-center gap-1">{phone}<CopyButton value={phone} /></span>
                     {network && <span className="text-xs text-muted-foreground">({network})</span>}
-                    {!plausible && <span className="text-xs text-amber-600" title="Doesn't match a standard PH mobile format -- check for a transcription error">⚠ check format</span>}
+                    {!plausible && <span className="text-xs text-warn" title="Doesn't match a standard PH mobile format -- check for a transcription error">⚠ check format</span>}
                   </div>;
                 })()}
                 {g.email && <div className="flex items-center gap-2 text-sm"><Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /><span className="inline-flex items-center gap-1">{g.email}<CopyButton value={g.email} /></span></div>}
