@@ -26,7 +26,9 @@ export function dedupeOverlapping<T extends Row>(rows: T[]): Array<T & { alsoOn?
     if (i < 0) { out.push({ ...r }); continue; }
     const keep = out[i]!;
     const [win, lose] = r.kind === 'direct' && keep.kind !== 'direct' ? [r, keep] : [keep, r];
-    out[i] = { ...win, alsoOn: lose.kind === 'airbnb' ? 'Airbnb' : lose.kind === 'direct' ? 'direct' : 'calendar' };
+    // A direct booking's own mirror row (same guest id, same dates) is not a second booking: no note.
+    const mirror = !!lose.guestId && lose.guestId === win.guestId && lose.checkin === win.checkin && lose.checkout === win.checkout;
+    out[i] = mirror ? { ...win } : { ...win, alsoOn: lose.kind === 'airbnb' ? 'Airbnb' : lose.kind === 'direct' ? 'direct' : 'calendar' };
   }
   return out;
 }

@@ -12,6 +12,12 @@ describe('dedupeOverlapping', () => {
     expect(out[0]!.kind).toBe('direct');
     expect(out[0]!.alsoOn).toBe('Airbnb');
   });
+  it('a direct booking and its own mirror row (same id, same dates) merge with no "also on" note', () => {
+    const out = dedupeOverlapping([row({ guestId: 'g1', checkout: '2026-10-11' }), row({ kind: 'direct', guestId: 'g1', checkout: '2026-10-11' })]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.kind).toBe('direct');
+    expect(out[0]!.alsoOn).toBeUndefined();
+  });
   it('merges same name with no ids only when the dates are identical', () => {
     expect(dedupeOverlapping([row({}), row({ kind: 'direct', guest: 'ana cruz' })])).toHaveLength(1);
     expect(dedupeOverlapping([row({}), row({ kind: 'direct', checkout: '2026-10-11' })])).toHaveLength(2);
