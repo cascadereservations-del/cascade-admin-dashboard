@@ -15,10 +15,11 @@ import { fetchStays } from './api';
 import type { Stay } from './model';
 import { sameGuest } from './same-guest';
 
+// A booked chip inside a turnover cell differs from the cell fill by about 1.1:1; the word "Turnover" carries that state.
 const isLive = (st: Stay) => st.kind !== 'blocked' && st.bookingState !== 'inquiry';
 const chipLabel = (st: Stay) => (st.kind === 'blocked' ? 'Blocked' : st.guestName);
 
-export function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: boolean }) {
+function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: boolean }) {
   const state = st.kind === 'blocked' ? 'blocked' : st.bookingState === 'inquiry' ? 'inquiry' : conflict ? 'conflict' : 'booked';
   return (
     <Link
@@ -28,17 +29,17 @@ export function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: b
       className="cal-chip block truncate rounded px-1.5 py-0.5"
       title={`${st.guestName} · ${st.kind === 'blocked' ? 'blocked (not a stay)' : st.kind}${conflict ? ' · overlaps another guest' : ''}`}
     >
-      {st.checkin === day ? '→ ' : ''}{conflict && state === 'conflict' ? '! ' : ''}{chipLabel(st)}
+      {st.checkin === day ? '→ ' : ''}{conflict && state === 'conflict' ? '! ' : ''}{st.kind !== 'blocked' && <span className="mr-1 text-[10px] font-semibold opacity-80" aria-label={st.kind === 'direct' ? 'Direct' : 'Airbnb'}>{st.kind === 'direct' ? 'D' : 'A'}</span>}{chipLabel(st)}
     </Link>
   );
 }
 
-export function Legend({ show }: { show: { conflict: boolean; turn: boolean } }) {
+function Legend({ show }: { show: { conflict: boolean; turn: boolean } }) {
   const item = (cls: string, label: string) => <li className="flex items-center gap-1.5"><span className={`cal-swatch ${cls}`} aria-hidden />{label}</li>;
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Legend">
-      {item('cal-swatch-booked', 'Airbnb')}
-      {item('cal-swatch-direct', 'Direct')}
+      {item('cal-swatch-booked', 'A = Airbnb')}
+      {item('cal-swatch-direct', 'D = Direct')}
       {item('cal-swatch-inquiry', 'Inquiry')}
       {item('cal-swatch-blocked', 'Blocked (not a stay)')}
       {show.conflict && item('cal-swatch-conflict', 'Two guests on one night')}
@@ -106,9 +107,9 @@ export default function BookingCalendarPage() {
           const dayInfo = (d: string) => {
             const items = byDay.get(d) ?? [];
             const live = items.filter(isLive);
-            const distinct = live.filter((a, i) => live.findIndex((b) => sameGuest({ name: a.guestName, id: a.guestId }, { name: b.guestName, id: b.guestId })) === i);
+            const distinct = live.filter((a, i) => live.findIndex((b) => sameGuest({ name: a.guestName, id: a.guestId, checkin: a.checkin, checkout: a.checkout }, { name: b.guestName, id: b.guestId, checkin: b.checkin, checkout: b.checkout })) === i);
             const conflict = distinct.length >= 2;
-            const turn = live.some((a) => a.checkin === d && (outBy.get(d) ?? []).some((o) => !sameGuest({ name: a.guestName, id: a.guestId }, { name: o.guestName, id: o.guestId })));
+            const turn = live.some((a) => a.checkin === d && (outBy.get(d) ?? []).some((o) => !sameGuest({ name: a.guestName, id: a.guestId, checkin: a.checkin, checkout: a.checkout }, { name: o.guestName, id: o.guestId, checkin: o.checkin, checkout: o.checkout })));
             return { items, conflict, turn };
           };
           const monthDays = grid.days.filter((d) => d.startsWith(month)).map((d) => ({ d, ...dayInfo(d) }));
