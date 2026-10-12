@@ -1,8 +1,8 @@
 // Folded mode: the dashboard is published inside Cascade Staff at
 // /Cascade-Staff/admin/ and opened in a same-origin frame by that shell.
-// `?shell=1` forces it for local testing. One helper, used everywhere.
+// `?shell=1` forces it in dev builds only (never in production). One helper, used everywhere.
 export function isFolded(loc: { pathname: string; search: string } = location): boolean {
-  return loc.pathname.includes('/Cascade-Staff/') || /[?&]shell=1(&|$)/.test(loc.search);
+  return loc.pathname.includes('/Cascade-Staff/') || (import.meta.env.DEV && /[?&]shell=1(&|$)/.test(loc.search));
 }
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { length: number; key(i: number): string | null };

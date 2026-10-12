@@ -12,7 +12,7 @@ const K = 'sb-qkgfhsdppslwunarczeq-auth-token';
 describe('isFolded', () => {
   it('detects the shell path and ?shell=1 only', () => {
     expect(isFolded({ pathname: '/Cascade-Staff/admin/', search: '' })).toBe(true);
-    expect(isFolded({ pathname: '/cascade-admin-dashboard/', search: '?shell=1' })).toBe(true);
+    expect(isFolded({ pathname: '/cascade-admin-dashboard/', search: '?shell=1' })).toBe(import.meta.env.DEV); // dev-only flag
     expect(isFolded({ pathname: '/cascade-admin-dashboard/', search: '' })).toBe(false);
   });
 });
@@ -43,14 +43,16 @@ describe('foldedAuthStorage', () => {
   });
 });
 
-// Every route in routes.tsx is wrapped in guard(<action>, ...). Read the table from source
-// so a new unguarded or loosened route fails here.
+// Parses one-line `path: 'x', element: guard('action', ...)` entries from routes.tsx source and checks
+// that every non-public route (all but /sign-in, / and *) was parsed, so an unguarded or multi-line
+// route fails the count. It then checks the parsed actions against ROLE_ACTIONS for field roles.
 describe('route gates for field roles', () => {
   const src = readFileSync('app/src/routes.tsx', 'utf8');
   const routes = [...src.matchAll(/path: '([^']+)', element: guard\('(\w+)'/g)].map((m) => ({ path: m[1] ?? '', action: m[2] as Action }));
   const reach = (role: StaffRole) => routes.filter((r) => allowed(role, r.action, false, 'aal1')).map((r) => r.path);
   it('finds the guarded routes', () => {
-    expect(routes.length).toBeGreaterThan(25);
+    const pathCount = [...src.matchAll(/path: '/g)].length;
+    expect(routes.length).toBe(pathCount - 3);
     expect(isStaffRole('cleaner')).toBe(true);
   });
   it.each(['cleaner', 'inspector', 'maintenance'] as StaffRole[])('%s gets no finance, guests, pricing, insights or settings admin route', (role) => {
