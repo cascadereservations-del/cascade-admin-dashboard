@@ -13,7 +13,9 @@ export const BUSINESS_TIMEZONE = 'Asia/Manila';
 export const CURRENCY = 'PHP';
 export const APP_VERSION = '2.0.0-alpha';
 
-export const EXTERNAL_APPS = [
+import { isFolded } from './fold';
+
+const ALL_EXTERNAL_APPS = [
   { key: 'guide', label: 'Guest guide', href: 'https://cascadereservations-del.github.io/Welcome-To-Cascades-/' },
   { key: 'cleaners', label: 'Cleaner checklist', href: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/' },
   // 'inventory' removed 2026-09-16 (D-137): the dashboard's own Inventory tab
@@ -24,3 +26,7 @@ export const EXTERNAL_APPS = [
   { key: 'site', label: 'Booking site', href: 'https://cascadereservations-del.github.io/Stay_At_CascadeGSC/' },
   { key: 'legacy', label: 'Legacy admin', href: './legacy/index.html' },
 ] as const;
+
+// Folded in Cascade Staff: the shell already offers the checklist and manual, and ./legacy/ is not published there.
+const FOLDED_HIDDEN: string[] = ['cleaners', 'manual', 'legacy'];
+export const EXTERNAL_APPS = isFolded() ? ALL_EXTERNAL_APPS.filter((a) => !FOLDED_HIDDEN.includes(a.key)) : ALL_EXTERNAL_APPS;

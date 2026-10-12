@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { supabase } from '@/lib/supabase';
+import { isFolded, toShell } from '@/lib/fold';
 import { useSession } from './session';
 import { defaultRoute } from './capabilities';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,17 @@ export function SignInPage() {
   if (s.status === 'ready') {
     const from = (loc.state as { from?: string } | null)?.from;
     return <Navigate to={from && from !== '/sign-in' ? from : defaultRoute(s.caps.role)} replace />;
+  }
+
+  if (isFolded()) {
+    return (
+      <main className="flex min-h-svh items-center justify-center bg-background p-4">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">Sign in from Cascade Staff</p>
+          <Button className="min-h-11" onClick={toShell}>Open Cascade Staff</Button>
+        </div>
+      </main>
+    );
   }
 
   async function onSubmit(e: FormEvent) {
