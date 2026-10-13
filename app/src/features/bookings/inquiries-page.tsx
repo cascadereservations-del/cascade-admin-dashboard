@@ -52,7 +52,7 @@ export default function InquiriesPage() {
                     </div>
                     <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
                       <dt className="text-muted-foreground">Dates</dt><dd className="tabular">{formatDate(st.checkin)} → {formatDate(st.checkout)} · {st.nights}n</dd>
-                      {!compact && <><dt className="text-muted-foreground">Guests</dt><dd>{st.guestCount ?? '—'}</dd></>}
+                      <dt className="text-muted-foreground">Guests</dt><dd>{st.guestCount ?? '—'}</dd>
                       <dt className="text-muted-foreground">Quoted</dt><dd className="tabular">{formatPHP(st.totalAmount)}</dd>
                       <dt className="text-muted-foreground">Deposit</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
                       {!compact && <><dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd></>}

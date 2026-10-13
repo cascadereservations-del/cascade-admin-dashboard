@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
@@ -19,8 +20,10 @@ export default function SearchPage() {
   const s = useSession();
   const [params, setParams] = useSearchParams();
   const embed = isEmbed();
-  const q = params.get('q') ?? '';
-  const setQ = (v: string) => setParams(v ? { q: v } : {}, { replace: true });
+  const [local, setLocal] = useState('');
+  // ?q= is read and written in embed mode only (the desktop page keeps its own state); other params, such as embed=1, are kept.
+  const q = embed ? params.get('q') ?? '' : local;
+  const setQ = (v: string) => (embed ? setParams((p) => { const n = new URLSearchParams(p); if (v) n.set('q', v); else n.delete('q'); return n; }, { replace: true }) : setLocal(v));
   const term = q.trim();
   const hits = useQuery({ queryKey: ['search-page', s.propertyId, s.caps.role, term, embed], queryFn: () => globalSearch(s.propertyId, term, s.caps, embed ? { kinds: D_EMBED_KINDS } : undefined), enabled: term.length >= 2, staleTime: 10_000 });
   const pages = NAV.filter((n) => s.caps.can(n.action)).flatMap((n) => [{ to: n.to, label: n.label }, ...(n.children ?? []).filter((c) => !c.action || s.caps.can(c.action)).map((c) => ({ to: c.to, label: `${n.label} › ${c.label}` }))]);

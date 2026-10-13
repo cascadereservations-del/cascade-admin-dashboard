@@ -11,7 +11,7 @@ import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { softDelete, useUndoToast } from '@/lib/undo';
 import { PageHeader } from '@/components/data/page-header';
-import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
+import { FilterBar, FilterDate, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { D_RowCards } from '@/components/data/row-cards';
 import { D_useCompact } from '@/lib/compact';
@@ -146,7 +146,7 @@ export default function TransactionsPage() {
   return (
     <div>
       <PageHeader title="Transactions" description="Historical operational ledger from e-mail ingestion, OCR receipts, Telegram and manual entry. Void and archived rows are kept for audit and hidden until you show them; Export CSV downloads every row the current filters and toggles show (up to 1,000); every change here is undoable from Settings → Audit history." actions={<><Button variant="outline" onClick={() => void doExport()}>Export CSV</Button>{canWrite && <Button onClick={() => open()}>New transaction</Button>}</>} compactActions={canWrite ? <Button onClick={() => open()} aria-label="New transaction" className="shrink-0">New</Button> : null} />
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Payee, reference, category" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
+      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Payee, reference, category" activeCount={compact && state.q ? activeFilterCount - 1 : activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
         sheetBottom={<Button variant="outline" className="min-h-11" onClick={() => void doExport()}>Export CSV</Button>}>
         <FilterSelect label="Type" value={state.type || undefined} onChange={(v) => set({ type: v ?? '' })} options={[{ value: 'income', label: 'Income' }, { value: 'expense', label: 'Expense' }, { value: 'drawing', label: 'Drawing' }]} />
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['confirmed', 'pending_review'].map((v) => ({ value: v, label: v.replace('_', ' ') }))} />
@@ -155,12 +155,13 @@ export default function TransactionsPage() {
         <ShowToggle label="Show voided" on={state.voided === '1'} onChange={(v) => set({ voided: v ? '1' : '' })} />
         <ShowToggle label="Show hidden" on={state.hidden === '1'} onChange={(v) => set({ hidden: v ? '1' : '' })} />
         <ShowToggle label="Show archived" on={state.archived === '1'} onChange={(v) => set({ archived: v ? '1' : '' })} />
-        <Input type="date" aria-label="From" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
-        <Input type="date" aria-label="To (exclusive)" className="w-40 text-base sm:text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} />
+        <FilterDate label="From" ariaLabel="From" value={state.from} onChange={(v) => set({ from: v })} />
+        <FilterDate label="To (exclusive)" ariaLabel="To (exclusive)" value={state.to} onChange={(v) => set({ to: v })} />
       </FilterBar>
       {selected.length > 0 && (
         <div role="region" aria-label="Selected transactions" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
           <span className="text-sm font-medium tabular">{selected.length} selected</span>
+          {compact && !allOnPage && <Button size="sm" variant="outline" onClick={() => toggleAll(true)}>Select all on this page</Button>}
           {canWrite && one && one.status !== 'void' && <Button size="sm" variant="outline" onClick={() => open(one)}>Edit</Button>}
           {canWrite && selected.some((r) => !r.hidden_at) && <Button size="sm" variant="outline" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: 'hide' })}>Hide</Button>}
           {canWrite && selected.some((r) => r.hidden_at) && <Button size="sm" variant="outline" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: 'unhide' })}>Unhide</Button>}
@@ -177,7 +178,7 @@ export default function TransactionsPage() {
               items={d.rows.map((t) => ({
                 key: t.id,
                 title: t.payee_name || t.category.replaceAll('_', ' '),
-                sub: `${t.txn_type} · ${t.category.replaceAll('_', ' ')} · ${t.source}`,
+                sub: `${t.txn_type} · ${t.category.replaceAll('_', ' ')} · ${t.source}${t.income_stage ? ` · ${t.income_stage}` : ''}${t.external_ref ? ` · ${t.external_ref}` : ''}`,
                 when: formatDate(t.transaction_date, 'long'),
                 chip: <span className="inline-flex gap-1"><StatusBadge tone={t.status === 'confirmed' ? 'good' : t.status === 'void' ? 'neutral' : 'warn'}>{rowKind(t).replace('_', ' ')}</StatusBadge>{t.hidden_at && <StatusBadge tone="neutral">hidden</StatusBadge>}</span>,
                 amount: formatPHP(t.gross_amount),

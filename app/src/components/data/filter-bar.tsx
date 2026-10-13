@@ -51,7 +51,7 @@ export function FilterBar({
               <SlidersHorizontal className="size-4" aria-hidden /> {activeCount > 0 ? `Filters (${activeCount})` : 'Filters'}
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85svh] overflow-y-auto">
+          <SheetContent side="bottom" className="D_filters-content max-h-[85svh] overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
               <SheetDescription className="sr-only">Narrow the list. Changes apply straight away.</SheetDescription>
@@ -92,6 +92,13 @@ export function FilterBar({
       )}
     </div>
   );
+}
+
+/** A date field. In the phone Filters sheet it gets a visible label (a bare date input has none); elsewhere it is exactly the old input. */
+export function FilterDate({ label, ariaLabel, value, onChange }: { label: string; ariaLabel: string; value: string; onChange: (v: string) => void }) {
+  const compact = D_useCompact();
+  const input = <Input type="date" aria-label={ariaLabel} className="w-40 text-base sm:text-sm" value={value} onChange={(e) => onChange(e.target.value)} />;
+  return compact ? <label className="flex flex-col gap-1 text-sm font-medium">{label}{input}</label> : input;
 }
 
 export function FilterSelect({ label, value, onChange, options, allLabel = 'All' }: { label: string; value: string | undefined; onChange: (v: string | undefined) => void; options: Array<{ value: string; label: string }>; allLabel?: string }) {

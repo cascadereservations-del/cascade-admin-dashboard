@@ -7,14 +7,13 @@ import { useUrlState } from '@/lib/url-state';
 import { formatDate, relativeDay, todayManila } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
 import { PageHeader } from '@/components/data/page-header';
-import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
+import { FilterBar, FilterDate, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { D_RowCards } from '@/components/data/row-cards';
 import { D_useCompact } from '@/lib/compact';
 import { EmptyState, PartialBanner, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
 import { StatusBadge, bookingTone, payoutTone } from '@/components/data/status-badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { fetchStays } from './api';
@@ -75,6 +74,9 @@ export default function BookingsPage() {
   }, [today, canFinance]);
 
   const view = state.view || 'all';
+  // Compact: the view lives in the sheet so it counts; the visible search text does not.
+  const sheetCount = compact ? activeFilterCount + (state.view ? 1 : 0) - (state.q ? 1 : 0) : activeFilterCount;
+  const emptyCount = activeFilterCount + (compact && state.view ? 1 : 0);
 
   return (
     <div>
@@ -91,12 +93,12 @@ export default function BookingsPage() {
           ))}
         </TabsList>
       </Tabs>}
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest or code" activeCount={activeFilterCount + (compact && state.view ? 1 : 0)} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
+      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest or code" activeCount={sheetCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
         sheetTop={<FilterSelect label="View" value={state.view || undefined} onChange={(v) => set({ view: v ?? '' })} options={VIEWS.filter((v) => v.value !== 'all').map((v) => ({ value: v.value, label: v.label }))} />}>
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['inquiry', 'confirmed', 'completed', 'cancelled'].map((v) => ({ value: v, label: v }))} />
         <FilterSelect label="Channel" value={state.channel || undefined} onChange={(v) => set({ channel: v ?? '' })} options={[{ value: 'airbnb', label: 'Airbnb' }, { value: 'direct', label: 'Direct' }, { value: 'calendar_only', label: 'Calendar only' }, { value: 'blocked', label: 'Blocked' }]} />
-        <Input type="date" aria-label="From date" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
-        <Input type="date" aria-label="To date" className="w-40 text-base sm:text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} />
+        <FilterDate label="From" ariaLabel="From date" value={state.from} onChange={(v) => set({ from: v })} />
+        <FilterDate label="To" ariaLabel="To date" value={state.to} onChange={(v) => set({ to: v })} />
         <FilterSelect label="Balance" value={state.balance || undefined} onChange={(v) => set({ balance: v ?? '' })} options={[{ value: 'outstanding', label: 'Outstanding / unknown' }]} />
       </FilterBar>
       <QueryState query={query}>
@@ -116,9 +118,9 @@ export default function BookingsPage() {
               )}
               {filtered.length === 0 ? (
                 <EmptyState
-                  title={activeFilterCount ? 'No bookings match these filters' : 'No bookings yet'}
-                  hint={activeFilterCount ? 'Clear the filters to see all stays.' : undefined}
-                  action={activeFilterCount ? <Button variant="outline" size="sm" onClick={reset}>Clear filters</Button> : undefined}
+                  title={emptyCount ? 'No bookings match these filters' : 'No bookings yet'}
+                  hint={emptyCount ? 'Clear the filters to see all stays.' : undefined}
+                  action={emptyCount ? <Button variant="outline" size="sm" onClick={reset}>Clear filters</Button> : undefined}
                 />
               ) : (
                 compact ? (
@@ -127,9 +129,9 @@ export default function BookingsPage() {
                     items={rows.map((r) => ({
                       key: r.key,
                       title: r.guestName,
-                      sub: r.code,
+                      sub: `${r.code} · ${r.kind.replace('_', ' ')}`,
                       when: `${relativeDay(r.checkin, today)} → ${formatDate(r.checkout, 'weekday')} · ${r.nights}n`,
-                      chip: <StatusBadge tone={bookingTone(r.bookingState)}>{r.bookingState}</StatusBadge>,
+                      chip: <span className="inline-flex flex-wrap gap-1"><StatusBadge tone={bookingTone(r.bookingState)}>{r.bookingState}</StatusBadge><StatusBadge tone="neutral">Pay {r.paymentState.replaceAll('_', ' ')}</StatusBadge><StatusBadge tone={payoutTone(r.payoutState)}>Payout {r.payoutState.replaceAll('_', ' ')}</StatusBadge></span>,
                       amount: canFinance ? formatPHP(r.totalAmount) : undefined,
                       href: r.href,
                     }))}

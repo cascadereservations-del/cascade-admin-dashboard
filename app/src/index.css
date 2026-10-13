@@ -382,7 +382,7 @@ h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); 
   .D_embed-sections { padding-inline: 12px; }
 }
 
-/* D_ F18 (embed only): titles follow the shell's section scale (--v5-t-section: 20 px at 360 px, never the 28 to 34 px of the desktop h1).
+/* D_ F18 (embed only): titles follow the shell's section scale (--v5-t-section: about 24 px at 360 px by the clamp, never the 28 to 34 px of the desktop h1).
    Scoped to [data-embed], so the desktop layout is untouched. */
 [data-embed] h1, [data-embed] [data-slot="card-title"] { font-size: var(--v5-t-section); line-height: 1.2; }
 
@@ -390,3 +390,4 @@ h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); 
 .D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet [data-slot="input"], .D_filters-sheet label { width: 100%; }
 .D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet label { min-height: 44px; }
 .D_cards a:focus-visible, .D_cards button:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; border-radius: 12px; }
+.D_filters-content > button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; top: 0.5rem; right: 0.5rem; }

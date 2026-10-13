@@ -49,8 +49,9 @@ export function toShell() {
 
 /** The one pay-rates screen is the shell's top-level `#payrates` route (D-301, session 82). From the folded dashboard `../` is the shell. */
 export const D_SHELL_PAYRATES = '../#payrates';
-export function D_toShellPayRates() {
+export function D_toShellPayRates(target?: Pick<Location, 'replace'>) {
   const url = new URL(D_SHELL_PAYRATES, location.href).href;
-  try { (window.parent ?? window).location.href = url; }
-  catch { location.href = url; }
+  // replace(), not href: no history entry, so Back from the shell never lands on this redirect again.
+  try { (target ?? window.parent.location).replace(url); }
+  catch { location.replace(url); }
 }

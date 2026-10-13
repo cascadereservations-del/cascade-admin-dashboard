@@ -10,7 +10,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
   const want = (k: SearchHit['kind']) => !opts?.kinds || opts.kinds.includes(k);
   const term = q.trim();
   if (term.length < 2) return [];
-  const like = `%${term.replace(/[%_]/g, '\$&')}%`;
+  const like = `%${term.replace(/[,()]/g, '').replace(/[\\%_]/g, '\\$&')}%`; // , ( ) would break the .or() filter; backslash, % and _ are escaped for LIKE
   const hits: SearchHit[] = [];
   const jobs: PromiseLike<void>[] = [];
 

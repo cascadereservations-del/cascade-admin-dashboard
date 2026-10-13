@@ -57,7 +57,7 @@ export function buildDemoData(now: Date): DemoData {
     { id: U(242), property_id: DEMO_PROPERTY_ID, session_id: U(232), electric_prev: '1150.0', electric_curr: '1200.0', electric_delta: '50.0', water_prev: '306.0', water_curr: '310.0', water_delta: '4.0', kwh_per_night: '12.5', m3_per_night: '1.0', meter_flag: null, meter_override_note: null, recorded_at: iso(-30 * DAY) },
   ];
   const txn = (n: number, d: number, type: string, category: string, amount: string, payee: string | null, status = 'confirmed', source = 'manual'): Record<string, unknown> => ({
-    id: U(300 + n), property_id: DEMO_PROPERTY_ID, transaction_date: day(d), txn_type: type, category, status, source, gross_amount: amount, payee_name: payee, or_number: null, external_ref: null, booking_id: null, reservation_id: null, income_stage: null, notes: null, receipt_image_path: null, ocr_confidence: null, created_at: iso(d * DAY), hidden_at: null, archived_at: null,
+    id: U(300 + n), property_id: DEMO_PROPERTY_ID, transaction_date: day(d), txn_type: type, category, status, source, gross_amount: amount, payee_name: payee, or_number: null, external_ref: source === 'airbnb_payout' ? 'HMDEMO0003' : null, booking_id: null, reservation_id: null, income_stage: source === 'airbnb_payout' ? 'payout' : null, notes: null, receipt_image_path: null, ocr_confidence: null, created_at: iso(d * DAY), hidden_at: null, archived_at: null,
   });
   const transactions: Rows = [
     txn(1, -8, 'income', 'accommodation', '11543.00', 'Airbnb payout', 'confirmed', 'airbnb_payout'),
