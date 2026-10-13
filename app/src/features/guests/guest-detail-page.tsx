@@ -236,7 +236,7 @@ export default function GuestDetailPage() {
               </CardContent></Card>
               <Card className="py-4 gap-3"><CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="size-4 text-muted-foreground" aria-hidden /> Record</CardTitle></CardHeader><CardContent className="space-y-2">
                 <Field label="First stay">{formatDate(g.first_stay_date, 'long')}</Field>
-                <Field label="Guest id"><span className="inline-flex items-center gap-1 text-xs">{g.id}<CopyButton value={g.id} /></span></Field>
+                <Field label="Guest id"><span className="inline-flex max-w-full flex-wrap items-center gap-1 break-all text-xs">{g.id}<CopyButton value={g.id} /></span></Field>
                 <Field label="Created">{formatDateTime(g.created_at)}</Field>
                 <Field label="Updated">{formatDateTime(d?.updated_at ?? g.updated_at)}</Field>
                 <Field label="Consent">{timeline.data ? (timeline.data.events.some((e) => e.kind === 'consent') ? 'see timeline' : 'no consent events recorded') : '…'}</Field>

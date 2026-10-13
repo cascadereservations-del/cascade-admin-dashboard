@@ -39,7 +39,7 @@ export default function JournalsPage() {
       <PageHeader title="Journals" description="Plain-language entries prepared by the server as balanced journals. Posted journals never change; corrections are linked reversals." />
       <div className="space-y-6">
         {canPost ? <Section title="Record"><SimpleEntryForm /></Section> : <p className="text-sm text-muted-foreground">Posting needs the finance approval right with a two-factor session. You can review journals below.</p>}
-        <Section title="Posted journals" aside={<div className="flex gap-2"><Input type="date" aria-label="From" className="h-8 w-36 text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} /><Input type="date" aria-label="To (exclusive)" className="h-8 w-36 text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} /></div>}>
+        <Section title="Posted journals" aside={<div className="flex flex-wrap gap-2"><Input type="date" aria-label="From" className="h-8 w-36 text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} /><Input type="date" aria-label="To (exclusive)" className="h-8 w-36 text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} /></div>}>
           <QueryState query={journals}>
             {(d) => d.rows.length === 0 ? <EmptyState title="No journals posted" hint="Accounting starts from approved opening balances (Finance › Accounting setup)." /> : (
               <ul className="space-y-2">

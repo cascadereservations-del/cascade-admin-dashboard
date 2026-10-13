@@ -30,7 +30,7 @@ export default function ReconciliationPage() {
   const metrics = useQuery({ queryKey: ['metrics', s.propertyId, state.from, state.to], queryFn: () => fetchMetrics(s.propertyId, state.from, state.to) });
   return (
     <div>
-      <PageHeader title="Source reconciliation" description="Explains why the reservation-based and payout-e-mail-based totals differ. Every row is an exception until matched." actions={<div className="flex gap-2"><Input type="date" aria-label="From" className="w-40" value={state.from} onChange={(e) => set({ from: e.target.value })} /><Input type="date" aria-label="To (exclusive)" className="w-40" value={state.to} onChange={(e) => set({ to: e.target.value })} /></div>} />
+      <PageHeader title="Source reconciliation" description="Explains why the reservation-based and payout-e-mail-based totals differ. Every row is an exception until matched." actions={<div className="flex flex-wrap gap-2"><Input type="date" aria-label="From" className="w-40" value={state.from} onChange={(e) => set({ from: e.target.value })} /><Input type="date" aria-label="To (exclusive)" className="w-40" value={state.to} onChange={(e) => set({ to: e.target.value })} /></div>} />
       <QueryState query={rows}>
         {(d) => {
           const inWindow = (dt: string | null) => !!dt && dt >= state.from && dt < state.to;

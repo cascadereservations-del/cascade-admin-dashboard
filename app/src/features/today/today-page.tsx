@@ -87,7 +87,7 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
     <section aria-label="Key figures, month to date">
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="text-sm font-semibold">Key figures</h2>
-        <Link to="/insights" className="text-xs text-primary hover:underline">All KPIs and analytics</Link>
+        <Link to="/insights" className="inline-flex min-h-11 items-center text-xs text-primary hover:underline">All KPIs and analytics</Link>
       </div>
       {q.isError ? (
         <p className="text-sm text-muted-foreground">Key figures are not available right now ({(q.error as Error).message}).</p>

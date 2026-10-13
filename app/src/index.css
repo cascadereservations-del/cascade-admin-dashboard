@@ -3,73 +3,75 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Cascade theme v2 (D-299/D-300.10/D-303; DESIGN-cascade-ui-theme-2026-10-05 section 8): the
-   guest guide look - warm cream, espresso ink, deep-bronze action colour, gilt Cormorant
-   display, Raleway UI. Replaces the D-095 teal palette and the inert HIG sheet.
-   Rules: deep bronze is the only tap-me colour; gold (--accent-bronze, --gilt) is display and
-   decoration only (26px+ or hairlines); status colours always travel with a glyph and a label;
-   every pair is AA (DESIGN 8.3). Teal survives only as --chart-2, a data colour. */
+/* Cascade Staff v5 (approved 2026-10-13). Source of every value: docs/design-v5/tokens.css (the one token sheet for the staff
+   shell and every folded surface). The dashboard keeps its shadcn variable names and maps them onto v5: cool mist background,
+   ink text, navy action, champagne gold as the one accent, dark navy theme. Component code is untouched: this file is the re-skin.
+   Rules kept from before: gold is never body text on light (use --accent-bronze-text = v5 gold-text), status colours always travel
+   with a glyph and a word, every text pair is AA in both themes, no hex belongs in a component. Light is :root; dark is .dark
+   (set by use-theme from the shell's theme or the phone's). */
 :root {
-  --radius: 16px;
-  --background: #F9F6F0;
-  --foreground: #2A1F16;
-  --card: #FFFFFF;
-  --card-foreground: #2A1F16;
+  --radius: 20px;
+  --background: #EEF1F4;            /* v5-bg */
+  --foreground: #0F1B2A;            /* v5-ink */
+  --card: #FFFFFF;                  /* v5-surf */
+  --card-foreground: #0F1B2A;
   --popover: #FFFFFF;
-  --popover-foreground: #2A1F16;
-  --primary: #7A5A2B;
-  --primary-foreground: #FBF7EE;
-  --secondary: #F1EBE1;
-  --secondary-foreground: #2A1F16;
-  --muted: #F1EBE1;
-  --muted-foreground: #5C4D3F;
-  --accent: #F3E9D8;
-  --accent-foreground: #7A5A2B;
-  --destructive: #B3261E;
+  --popover-foreground: #0F1B2A;
+  --primary: #17324D;               /* v5-act */
+  --primary-foreground: #FFFFFF;    /* v5-act-fg */
+  --secondary: #E8ECF1;             /* v5-sunk */
+  --secondary-foreground: #0F1B2A;
+  --muted: #E8ECF1;
+  --muted-foreground: #4A5869;      /* v5-ink-2 */
+  --accent: #EBE3D5;                /* v5-gold-soft over the background */
+  --accent-foreground: #17324D;
+  --destructive: #8E1F2A;           /* v5-danger-t: AA as text and as a fill under white */
   --destructive-foreground: #FFFFFF;
-  --border-strong: #957F60;
-  --border: #E6DCCB;
-  --input: #E6DCCB;
-  --ring: #7A5A2B;
+  --border-strong: #A9B4C0;         /* v5-line-2 */
+  --border: #D9DFE6;                /* v5-line */
+  --input: #7B8998;                 /* field outline: v5-line-2 is 2.1:1, this is 3.2:1 or better (WCAG 1.4.11); the one deliberate departure from tokens.css */
+  --ring: #17324D;
   /* Legacy brand aliases kept for the few components that name them. */
-  --champagne: #B58E5F;
-  --mahogany: #2A1F16;
-  --cream: #F6EEE0;
-  --chart-1: #7A5A2B;
-  --chart-2: #146C70;
-  --chart-3: #2F5FA8;
-  --chart-4: #287247;
-  --chart-5: #B3261E;
-  --sidebar: #1F1711;
-  --sidebar-foreground: #EFE6D8;
-  --sidebar-primary: #D7B377;
-  --sidebar-primary-foreground: #2A1E0E;
-  --sidebar-accent: #2E241B;
-  --sidebar-accent-foreground: #EFE6D8;
-  --sidebar-border: rgba(215, 179, 119, 0.14);
-  --sidebar-ring: #D7B377;
-  /* v2 additions (DESIGN 8.2) */
-  --accent-bronze: #B58E5F;
-  --accent-bronze-text: #6E4F22;
-  --accent-bronze-soft: #F6EEE0;
-  --ok: #287247;  --ok-soft: #E2F2E7;
-  --warn: #9C3F0A; --warn-soft: #FCE6D6;
-  --info: #2F5FA8; --info-soft: #E1EAF7;
-  --danger-soft: #FBE3E1;
-  --gilt: linear-gradient(135deg, #A47A45 0%, #7A5A2B 55%, #5C4220 100%);
-  --rule: linear-gradient(90deg, transparent 0%, #B58E5F 50%, transparent 100%);
-  --hairline: rgba(181, 142, 95, 0.28);
-  --shadow-sm: 0 1px 2px rgba(61, 43, 31, 0.05), 0 4px 14px rgba(61, 43, 31, 0.06);
-  --shadow-md: 0 2px 6px rgba(61, 43, 31, 0.07), 0 12px 32px rgba(61, 43, 31, 0.10);
-  --shadow-lg: 0 8px 16px rgba(61, 43, 31, 0.10), 0 28px 56px rgba(61, 43, 31, 0.16);
-  /* Calendar state tokens (s78, audit chip mapping): hue plus a mark per state, never colour alone.
-     booked = champagne, blocked = sand hatch, conflict = terracotta-rose ring, turnover = dusk blue. */
-  --cal-free-bg: #F4F7F2; --cal-free-edge: #6F8E78; --cal-free-fg: #2A1F16;
-  --cal-blocked-bg: #EFE7D9; --cal-blocked-edge: #A08A66; --cal-blocked-fg: #4A3D31; --cal-blocked-stripe: #CDB993; --cal-blocked-icon: #7A6346;
-  --cal-booked-bg: #D9B97A; --cal-booked-edge: #6E5220; --cal-booked-fg: #5A3F15;
-  --cal-conflict-bg: #F9E2DB; --cal-conflict-edge: #B04A35; --cal-conflict-fg: #7A2A1C;
-  --cal-turn-bg: #9DB8D9; --cal-turn-edge: #2F5683; --cal-turn-fg: #22426A; --cal-turn-stripe: #B5CAE3;
-  --cal-past-bg: #F4F0E8; --cal-past-fg: #74665A;
+  --champagne: #E0B872;             /* v5-gold */
+  --mahogany: #0F1B2A;
+  --cream: #EBE3D5;
+  --chart-1: #1F3A68;               /* the one blue family */
+  --chart-2: #2A9DB0;
+  --chart-3: #5B8BD0;
+  --chart-4: #1B5E3F;
+  --chart-5: #D23B4B;
+  --sidebar: #16283C;               /* v5-panel */
+  --sidebar-foreground: #F2F5F8;
+  --sidebar-primary: #E0B872;
+  --sidebar-primary-foreground: #0F1B2A;
+  --sidebar-accent: #223A55;
+  --sidebar-accent-foreground: #F2F5F8;
+  --sidebar-border: rgba(242, 245, 248, 0.14);
+  --sidebar-ring: #E0B872;
+  --accent-bronze: #E0B872;         /* decoration and fills only */
+  --accent-bronze-text: #8A5A12;    /* v5-gold-text: the only gold allowed as text on light */
+  --accent-bronze-soft: #EBE3D5;
+  --ok: #1B5E3F;  --ok-soft: #DEF3E8;
+  --warn: #7A4304; --warn-soft: #FFEED6;
+  --info: #1F4C8F; --info-soft: #E3ECFA;
+  --danger-soft: #FBE4E6;
+  --shadow-sm: 0 1px 2px rgba(20, 40, 70, 0.06), 0 4px 14px rgba(20, 40, 70, 0.08);
+  --shadow-md: 0 2px 6px rgba(20, 40, 70, 0.08), 0 12px 32px rgba(20, 40, 70, 0.12);
+  --shadow-lg: 0 8px 16px rgba(15, 27, 42, 0.12), 0 28px 56px rgba(15, 27, 42, 0.18);
+  /* Calendar: bookings are the one blue family, a shade per guest (--cal-g1..g5); the Airbnb/Direct tag is the letter A or D.
+     Blocked, clash and the notice colours come from v5. */
+  --cal-g1: #1F3A68; --cal-g1-fg: #FFFFFF;
+  --cal-g2: #3563A8; --cal-g2-fg: #FFFFFF;
+  --cal-g3: #5B8BD0; --cal-g3-fg: #0F1B2A;
+  --cal-g4: #8DB2E3; --cal-g4-fg: #0F1B2A;
+  --cal-g5: #27508A; --cal-g5-fg: #FFFFFF;
+  --cal-direct-edge: #E0B872;
+  --cal-free-bg: #F7F9FB; --cal-free-edge: #8FA6BC; --cal-free-fg: #0F1B2A;
+  --cal-blocked-bg: #D5DBE2; --cal-blocked-edge: #4A5869; --cal-blocked-fg: #3B4756; --cal-blocked-stripe: rgba(74, 88, 105, 0.22); --cal-blocked-icon: #3B4756;
+  --cal-conflict-bg: #FBE4E6; --cal-conflict-edge: #E5484D; --cal-conflict-fg: #8E1F2A;
+  --cal-turn-bg: #E3ECFA; --cal-turn-edge: #1F4C8F; --cal-turn-fg: #0F1B2A; --cal-turn-stripe: #B9CCEB;
+  --cal-past-bg: #E8ECF1; --cal-past-fg: #5E6B7A;
+  --notice-power: #EE9B3B; --notice-water: #2A9DB0; --notice-rain: #9A8BDB; --notice-deep: #6CC4A1; --notice-fg: #0F1B2A;
   --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 300ms;
@@ -77,63 +79,64 @@
 }
 
 .dark {
-  /* s77 calm-luxury dark (docs/s77-dark-palette-audit.md): warm near-black, elevation by lightness,
-     neutral hairlines, champagne action colour, softened white, quieter status washes. Same values as the staff app. */
-  --background:#12100D;
-  --foreground:#ECE4D7;
-  --card:#1D1A16;
-  --card-foreground:#ECE4D7;
-  --popover:#1D1A16;
-  --popover-foreground:#ECE4D7;
-  --primary:#D2B788;
-  --primary-foreground:#231A0E;
-  --secondary:#28241F;
-  --secondary-foreground:#ECE4D7;
-  --muted:#28241F;
-  --muted-foreground:#BBB0A1;
-  --accent:#362C1D;
-  --accent-foreground:#D2B788;
-  --destructive:#E8A097;
-  --destructive-foreground:#2A1512;
-  --border-strong:rgba(210, 183, 136, 0.40);
-  --border:rgba(236, 228, 215, 0.09);
-  --input:rgba(236, 228, 215, 0.14);
-  --ring:#E2CB9E;
-  --champagne:#D2B788;
-  --mahogany:#ECE4D7;
-  --cream:#2A241A;
-  --chart-1:#D2B788;
-  --chart-2:#6FBDBE;
-  --chart-3:#A3BCE2;
-  --chart-4:#93C2A0;
-  --chart-5:#E8A097;
-  --sidebar:#0F0D0A;
-  --sidebar-foreground:#ECE4D7;
-  --sidebar-primary:#D2B788;
-  --sidebar-primary-foreground:#231A0E;
-  --sidebar-accent:#211D18;
-  --sidebar-accent-foreground:#ECE4D7;
-  --sidebar-border:rgba(210, 183, 136, 0.12);
-  --sidebar-ring:#D2B788;
-  --accent-bronze:#E2CC9F;
-  --accent-bronze-text:#DCC69C;
-  --accent-bronze-soft:#2A241A;
-  --ok:#93C2A0;  --ok-soft:#1A2820;
-  --warn:#E3AA7C; --warn-soft:#2A2018;
-  --info:#A3BCE2; --info-soft:#1C2330;
-  --danger-soft:#311D1A;
-  --gilt:linear-gradient(135deg, #E8D4AA 0%, #D2B788 50%, #BF9447 100%);
-  --rule:linear-gradient(90deg, transparent 0%, #D2B788 50%, transparent 100%);
-  --hairline:rgba(210, 183, 136, 0.16);
-  --cal-free-bg: #171D18; --cal-free-edge: #6E9079; --cal-free-fg: #ECE4D7;
-  --cal-blocked-bg: #25201A; --cal-blocked-edge: #7D6D55; --cal-blocked-fg: #BBB0A1; --cal-blocked-stripe: #4A3F30; --cal-blocked-icon: #C9B48F;
-  --cal-booked-bg: #4E3F24; --cal-booked-edge: #D2B788; --cal-booked-fg: #F0DDB4;
-  --cal-conflict-bg: #3B201B; --cal-conflict-edge: #E39A85; --cal-conflict-fg: #F4C9BC;
-  --cal-turn-bg: #2E4060; --cal-turn-edge: #8FB0DA; --cal-turn-fg: #DCE7F5; --cal-turn-stripe: #263650;
-  --cal-past-bg: #191612; --cal-past-fg: #968B7D;
+  --background: #0B1420;
+  --foreground: #EEF3F8;
+  --card: #132132;
+  --card-foreground: #EEF3F8;
+  --popover: #1A2B3F;
+  --popover-foreground: #EEF3F8;
+  --primary: #EEF3F8;               /* v5 dark action is the light ink; its text is the dark ink */
+  --primary-foreground: #0F1B2A;
+  --secondary: #1C2C40;
+  --secondary-foreground: #EEF3F8;
+  --muted: #1C2C40;
+  --muted-foreground: #AEBCCB;
+  --accent: #2A2F33;
+  --accent-foreground: #E0B872;
+  --destructive: #F4A3AA;
+  --destructive-foreground: #3B1A1E;
+  --border-strong: #4A5C70;
+  --border: #24364B;
+  --input: #6A7E94;
+  --ring: #EEF3F8;
+  --champagne: #E0B872;
+  --mahogany: #EEF3F8;
+  --cream: #2E3338;
+  --chart-1: #8DB2E3;
+  --chart-2: #4FC3C7;
+  --chart-3: #5B8BD0;
+  --chart-4: #7FD3A0;
+  --chart-5: #F0646F;
+  --sidebar: #0F1A28;
+  --sidebar-foreground: #EEF3F8;
+  --sidebar-primary: #E0B872;
+  --sidebar-primary-foreground: #0F1B2A;
+  --sidebar-accent: #1A2B3F;
+  --sidebar-accent-foreground: #EEF3F8;
+  --sidebar-border: rgba(200, 220, 240, 0.10);
+  --sidebar-ring: #E0B872;
+  --accent-bronze: #E0B872;
+  --accent-bronze-text: #E0B872;
+  --accent-bronze-soft: #2E3338;
+  --ok: #7FD3A0;  --ok-soft: #163628;
+  --warn: #F0B866; --warn-soft: #3A2A12;
+  --info: #A9C4F5; --info-soft: #17284A;
+  --danger-soft: #3B1A1E;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 14px rgba(0, 0, 0, 0.30);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
+  --cal-g1: #8DB2E3; --cal-g1-fg: #0F1B2A;
+  --cal-g2: #5B8BD0; --cal-g2-fg: #0F1B2A;
+  --cal-g3: #3563A8; --cal-g3-fg: #FFFFFF;
+  --cal-g4: #C3D6F0; --cal-g4-fg: #0F1B2A;
+  --cal-g5: #A9C4F5; --cal-g5-fg: #0F1B2A;
+  --cal-direct-edge: #E0B872;
+  --cal-free-bg: #1A2B3F; --cal-free-edge: #4A6580; --cal-free-fg: #EEF3F8;
+  --cal-blocked-bg: #2A3A4E; --cal-blocked-edge: #8C9BAB; --cal-blocked-fg: #C9D3DE; --cal-blocked-stripe: rgba(200, 220, 240, 0.14); --cal-blocked-icon: #C9D3DE;
+  --cal-conflict-bg: #3B1A1E; --cal-conflict-edge: #F0646F; --cal-conflict-fg: #F4A3AA;
+  --cal-turn-bg: #17284A; --cal-turn-edge: #A9C4F5; --cal-turn-fg: #EEF3F8; --cal-turn-stripe: #24406E;
+  --cal-past-bg: #132132; --cal-past-fg: #8C9BAB;
+  --notice-water: #4FC3C7; --notice-rain: #B3A8EA; --notice-deep: #7FD1AE;
 }
 
 @theme inline {
@@ -191,31 +194,29 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: "Raleway", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --font-script: "Style Script", "Cormorant Garamond", cursive;
+  /* v5 type: the phone's own font for everything; DM Serif Display for titles and names only. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
 }
+
+/* DM Serif Display ships with Cascade Staff (fonts/dm-serif-display-400.woff2 at the app root, one self-hosted file). Folded, the
+   dashboard lives at /Cascade-Staff/admin/ so the absolute path resolves; standalone it 404s and Georgia is used. Nothing is fetched
+   from a third party. */
+@font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: local("DM Serif Display"), url("/Cascade-Staff/fonts/dm-serif-display-400.woff2") format("woff2"); }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   html {
-    font-size: 15px;
+    font-size: 15px; /* phones: 16px, see the phone block at the end of this file */
     scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
   }
   body {
     @apply bg-background text-foreground antialiased;
     caret-color: var(--primary);
     line-height: 24px;
-    letter-spacing: 0.01em;
-    font-variant-numeric: lining-nums;
-    font-feature-settings: "lnum" 1;
-  }
-  /* Raleway default figures are old-style; form controls do not inherit lining-nums. */
-  button, input, select, textarea {
-    font-variant-numeric: lining-nums;
-    font-feature-settings: "lnum" 1;
+    -webkit-text-size-adjust: 100%;
   }
   ::selection {
     background: color-mix(in oklch, var(--primary) 22%, transparent);
@@ -228,24 +229,23 @@
     text-wrap: balance;
     letter-spacing: -0.01em;
   }
-  /* Display: Cormorant is for page titles, card titles (22px+) and KPI figures only; the many
-     small uppercase h2 section labels stay Raleway. Gilt text is AA-large, so 26px+ only (DESIGN 8.3). */
+  /* Display: DM Serif Display is for page titles and card titles only (one weight, so no faux bold: see the end of this file). */
   h1 {
     font-family: var(--font-display);
     font-size: 34px;
     line-height: 1.18;
-    font-weight: 600;
-    letter-spacing: 0.005em;
-    color: var(--accent-bronze-text);
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--foreground);
   }
   [data-slot="card-title"] {
     font-family: var(--font-display);
     font-size: 22px;
     line-height: 28px;
-    letter-spacing: 0.005em;
+    font-weight: 400;
   }
   [data-slot="card"] {
-    border-radius: var(--radius);
+    border-radius: 24px; /* v5-r-card */
     box-shadow: var(--shadow-sm);
   }
   .dark [data-slot="card"] {
@@ -253,16 +253,13 @@
   }
   [data-slot="badge"] {
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     font-weight: 600;
     font-size: var(--text-xs);
     border-color: color-mix(in srgb, currentColor 24%, transparent);
   }
   [data-slot="button"][data-variant="default"] {
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.05));
-    letter-spacing: 0.03em;
     font-weight: 600;
-    box-shadow: 0 1px 2px rgba(42, 31, 22, 0.16), 0 4px 12px rgba(122, 90, 43, 0.18);
   }
   [data-slot="button"], [data-slot="input"], [data-slot="select-trigger"] {
     transition-duration: var(--motion-fast);
@@ -308,12 +305,17 @@
   }
 }
 
-/* Admin calendar chips and legend swatches (s78). Blocked is a sand hatch, never a strike-through
-   (strike-through reads as cancelled). Source is told apart by the left edge: bronze = Airbnb, blue = direct. */
+/* Admin calendar chips and legend swatches. Booked chips are the one blue family, a shade per guest (data-shade 1..5, chosen from
+   the guest so the same person is the same blue). The A or D tag says Airbnb or Direct; a direct stay also has a gold left edge.
+   Blocked is a hatch, never a strike-through (strike-through reads as cancelled). Conflict adds a ring, a "!" and the word. */
 @layer components {
-  .cal-chip { background: var(--cal-booked-bg); color: var(--cal-booked-fg); box-shadow: inset 2px 0 0 var(--cal-booked-edge); }
-  .cal-chip[data-source="direct"] { box-shadow: inset 2px 0 0 var(--cal-turn-edge); }
-  .cal-chip[data-state="inquiry"] { background: transparent; outline: 1px dashed var(--cal-booked-edge); outline-offset: -1px; box-shadow: none; color: var(--foreground); }
+  .cal-chip { background: var(--cal-g1); color: var(--cal-g1-fg); }
+  .cal-chip[data-shade="2"] { background: var(--cal-g2); color: var(--cal-g2-fg); }
+  .cal-chip[data-shade="3"] { background: var(--cal-g3); color: var(--cal-g3-fg); }
+  .cal-chip[data-shade="4"] { background: var(--cal-g4); color: var(--cal-g4-fg); }
+  .cal-chip[data-shade="5"] { background: var(--cal-g5); color: var(--cal-g5-fg); }
+  .cal-chip[data-source="direct"] { box-shadow: inset 3px 0 0 var(--cal-direct-edge); }
+  .cal-chip[data-state="inquiry"] { background: transparent; outline: 1px dashed var(--cal-g2); outline-offset: -1px; box-shadow: none; color: var(--foreground); }
   .cal-chip[data-state="conflict"] { background: var(--cal-conflict-bg); color: var(--cal-conflict-fg); box-shadow: inset 0 0 0 2px var(--cal-conflict-edge); }
   .cal-chip[data-state="blocked"] {
     background: repeating-linear-gradient(135deg, transparent 0 5px, var(--cal-blocked-stripe) 5px 7px), var(--cal-blocked-bg);
@@ -321,10 +323,46 @@
   }
   .cal-cell-turn { background: var(--cal-turn-bg); color: var(--cal-turn-fg); box-shadow: inset 0 2px 0 var(--cal-turn-edge); }
   .cal-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; }
-  .cal-swatch-booked { background: var(--cal-booked-bg); box-shadow: inset 2px 0 0 var(--cal-booked-edge); }
-  .cal-swatch-direct { background: var(--cal-booked-bg); box-shadow: inset 2px 0 0 var(--cal-turn-edge); }
-  .cal-swatch-inquiry { outline: 1px dashed var(--cal-booked-edge); outline-offset: -1px; }
+  .cal-swatch-booked { background: var(--cal-g1); }
+  .cal-swatch-direct { background: var(--cal-g1); box-shadow: inset 3px 0 0 var(--cal-direct-edge); }
+  .cal-swatch-inquiry { outline: 1px dashed var(--cal-g2); outline-offset: -1px; }
   .cal-swatch-blocked { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--cal-blocked-stripe) 3px 5px), var(--cal-blocked-bg); box-shadow: inset 0 0 0 1px var(--cal-blocked-edge); }
   .cal-swatch-conflict { background: var(--cal-conflict-bg); box-shadow: inset 0 0 0 2px var(--cal-conflict-edge); }
   .cal-swatch-turn { background: var(--cal-turn-bg); box-shadow: inset 0 2px 0 var(--cal-turn-edge); }
+}
+
+/* Titles and names in DM Serif Display have one weight: never let a font-semibold utility fake a bold. */
+h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); font-weight: 400; }
+
+/* Embed sections row: sibling links of the section you are in, scrolling sideways, never wrapping. */
+.D_embed-sections { display: flex; gap: 6px; overflow-x: auto; padding: 8px 16px 0; scrollbar-width: none; }
+.D_embed-sections::-webkit-scrollbar { display: none; }
+.D_embed-sections a { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.D_embed-sections a[data-active="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.D_embed-sections a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* Phones (under 640 px). Body 17 px, rem scale 16 px (text-xs stays at 12 px or more). Every button, input, select, tab and toggle is at
+   least 44 px tall; tab rows and toggle groups scroll sideways instead of wrapping; a raw table scrolls inside its own box; nothing
+   scrolls the page sideways. Unlayered on purpose, so it wins over the utility classes the components already carry. */
+@media (max-width: 639px) {
+  html { font-size: 16px; }
+  body { font-size: 17px; overflow-x: clip; }
+  main { max-width: 100vw; overflow-x: clip; }
+  /* A Radix trigger with asChild replaces data-slot="button" on its child, so buttons are matched by tag as well. */
+  button:not([role="checkbox"]):not([role="switch"]), a[data-slot="button"], [data-slot="input"], [data-slot="select-trigger"], [data-slot="toggle-group-item"], [data-slot="tabs-trigger"], select { min-height: 44px; }
+  button:has(> svg:only-child):not([role="checkbox"]):not([role="switch"]), [data-slot="toggle-group-item"] { min-width: 44px; }
+  .cal-chip { display: flex; align-items: center; min-height: 44px; }
+  [data-slot="textarea"] { min-height: 88px; }
+  [data-slot="tabs"], main .flex-wrap { min-width: 0; max-width: 100%; } /* a wrapping row never grows past its parent */
+  [data-slot="tabs-list"], [data-slot="toggle-group"] { display: flex; min-width: 0; width: 100%; max-width: 100%; height: auto; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  [data-slot="tabs-list"]::-webkit-scrollbar, [data-slot="toggle-group"]::-webkit-scrollbar { display: none; }
+  [data-slot="tabs-trigger"], [data-slot="toggle-group-item"] { flex: 0 0 auto; }
+  [data-slot="tabs-trigger"] { height: 44px; padding-inline: 14px; }
+  input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; flex-shrink: 0; }
+  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { min-height: 44px; }
+  [data-slot="checkbox"] { width: 22px; height: 22px; }
+  [data-slot="checkbox"], [data-slot="switch"] { position: relative; }
+  [data-slot="checkbox"]::after, [data-slot="switch"]::after { content: ""; position: absolute; inset: -14px; }
+  table:not([data-slot="table"]) { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .D_embed-sections { padding-inline: 12px; }
 }

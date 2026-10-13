@@ -17,6 +17,13 @@ import { sameGuest } from './same-guest';
 
 // A booked chip inside a turnover cell differs from the cell fill by about 1.1:1; the word "Turnover" carries that state.
 const isLive = (st: Stay) => st.kind !== 'blocked' && st.bookingState !== 'inquiry';
+/** One of five blues (1..5), the same for the same guest everywhere: hashed from the guest id, else the lower-cased name. */
+export function guestShade(st: Pick<Stay, 'guestId' | 'guestName'>): number {
+  const key = st.guestId ?? st.guestName.trim().toLowerCase();
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return (h % 5) + 1;
+}
 const chipLabel = (st: Stay) => (st.kind === 'blocked' ? 'Blocked' : st.guestName);
 
 function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: boolean }) {
@@ -25,11 +32,12 @@ function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: boolean 
     <Link
       to={st.href}
       data-state={state}
+      data-shade={guestShade(st)}
       data-source={st.kind === 'direct' ? 'direct' : 'airbnb'}
       className="cal-chip block truncate rounded px-1.5 py-0.5"
       title={`${st.guestName} · ${st.kind === 'blocked' ? 'blocked (not a stay)' : st.kind}${conflict ? ' · overlaps another guest' : ''}`}
     >
-      {st.checkin === day ? '→ ' : ''}{conflict && state === 'conflict' ? '! ' : ''}{st.kind !== 'blocked' && <span className="mr-1 text-[10px] font-semibold opacity-80" aria-label={st.kind === 'direct' ? 'Direct' : 'Airbnb'}>{st.kind === 'direct' ? 'D' : 'A'}</span>}{chipLabel(st)}
+      {st.checkin === day ? '→ ' : ''}{conflict && state === 'conflict' ? '! ' : ''}{st.kind !== 'blocked' && <span className="mr-1 text-xs font-semibold" aria-label={st.kind === 'direct' ? 'Direct' : 'Airbnb'}>{st.kind === 'direct' ? 'D' : 'A'}</span>}{chipLabel(st)}
     </Link>
   );
 }

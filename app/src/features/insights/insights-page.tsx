@@ -234,7 +234,7 @@ function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
   const position = totals.income - totals.expense - totals.drawing;
   const openMonth = (month: string) => nav(`/finance/book?from=${month}-01&to=${nextMonthStart(month)}${toggles.pending ? '&pending=1' : ''}`);
   return (
-    <Section title={`Income vs expenses${periodSuffix(period)}`} aside={<Link to="/finance/book" className="text-xs text-primary hover:underline">Open the account book</Link>}>
+    <Section title={`Income vs expenses${periodSuffix(period)}`} aside={<Link to="/finance/book" className="inline-flex min-h-11 items-center text-xs text-primary hover:underline">Open the account book</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No confirmed transactions in this period.</p>
       ) : (
@@ -458,7 +458,7 @@ function UtilitiesChart({ period, toggles }: { period: Period; toggles: Toggles 
   const excluded = data.reduce((a, m) => a + m.excluded, 0);
   const click = (e: unknown) => { const p = (e as { activePayload?: Array<{ payload: { month: string } }> }).activePayload?.[0]?.payload; if (p) nav(`/operations?from=${p.month}-01&to=${nextMonthStart(p.month)}`); };
   return (
-    <Section title={`Utilities${periodSuffix(period)}`} aside={<Link to="/operations" className="text-xs text-primary hover:underline">Open the cleaning log</Link>}>
+    <Section title={`Utilities${periodSuffix(period)}`} aside={<Link to="/operations" className="inline-flex min-h-11 items-center text-xs text-primary hover:underline">Open the cleaning log</Link>}>
       {q.isPending ? <CardSkeleton /> : q.isError ? <p className="text-sm text-destructive">{(q.error as Error).message}</p> : data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No meter readings in this period.</p>
       ) : (

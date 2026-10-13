@@ -20,7 +20,7 @@ export type Tone = keyof typeof TONE;
 export function StatusBadge({ tone = 'neutral', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   return (
     <Badge variant="outline" className={cn('gap-1 font-normal normal-case', TONE[tone], className)}>
-      <span aria-hidden className="text-[9px]">{GLYPH[tone]}</span>
+      <span aria-hidden className="text-xs">{GLYPH[tone]}</span>
       {children}
     </Badge>
   );
