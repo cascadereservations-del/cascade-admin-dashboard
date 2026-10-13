@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDateTime } from '@/lib/dates';
@@ -14,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { fetchConversations, fetchThread, resumeCassy, sendHostReply, type ConversationRow, type ThreadDetail } from './conversations-api';
 import { GuestReplyButton } from './guest-reply-dialog';
-import { buildTimeline, newestOpenHandoff, replyWindow, speakerOf, turnRisk, windowLabel, type Speaker } from './conversations-window';
+import { buildTimeline, newestOpenHandoff, replyWindow, speakerOf, turnRisk, windowLastHour, windowLeft, windowSentence, type Speaker } from './conversations-window';
 
 // SPEC-42 section 7 (H4): every Cassy thread and its handoffs in one place, and a reply box. Owner/admin only (route guard plus the
 // RPCs and the host-reply function each refuse anyone else). Nothing is sent until the Send button is pressed.
@@ -25,7 +26,20 @@ const BUBBLE: Record<Speaker, { label: string; side: string; tone: string }> = {
   host: { label: 'Host', side: 'ml-auto', tone: 'border-chart-4/40 bg-chart-4/10' },
 };
 
+function useNow(everyMs = 60_000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), everyMs); return () => clearInterval(t); }, [everyMs]);
+  return now;
+}
+
+/** Glyph + words: "6 d 4 h left", "45 min left" (warn), "Closed". */
+function WindowChip({ msLeft }: { msLeft: number }) {
+  const left = windowLeft(msLeft);
+  return <StatusBadge tone={left ? (windowLastHour(msLeft) ? 'warn' : 'neutral') : 'neutral'} className="normal-case tracking-normal"><Clock className="size-3" aria-hidden /> {left ? `${left} left` : 'Closed'}</StatusBadge>;
+}
+
 export default function ConversationsPage() {
+  const now = useNow();
   const [selected, setSelected] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['conversations'], queryFn: () => fetchConversations(30) });
   const psid = selected ?? list.data?.[0]?.psid ?? null;
@@ -36,7 +50,7 @@ export default function ConversationsPage() {
         {(rows) => rows.length === 0 ? <EmptyState title="No Messenger conversations yet" hint="A thread appears here after a guest messages the Page." /> : (
           <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
             <ul className="max-h-[70vh] divide-y overflow-auto rounded-lg border text-sm" aria-label="Conversations">
-              {rows.map((r) => <ThreadRow key={r.psid} row={r} active={r.psid === psid} onPick={() => setSelected(r.psid)} />)}
+              {rows.map((r) => <ThreadRow key={r.psid} row={r} now={now} active={r.psid === psid} onPick={() => setSelected(r.psid)} />)}
             </ul>
             {psid && <ThreadView key={psid} psid={psid} />}
           </div>
@@ -46,7 +60,8 @@ export default function ConversationsPage() {
   );
 }
 
-function ThreadRow({ row, active, onPick }: { row: ConversationRow; active: boolean; onPick: () => void }) {
+function ThreadRow({ row, now, active, onPick }: { row: ConversationRow; now: Date; active: boolean; onPick: () => void }) {
+  const win = replyWindow(row.last_guest_at ? [{ role: 'guest', text: '', at: row.last_guest_at }] : [], now);
   return (
     <li>
       <button type="button" onClick={onPick} aria-current={active ? 'true' : undefined} className={cn('block w-full px-3 py-2 text-left hover:bg-muted/50', active && 'bg-muted')}>
@@ -55,6 +70,7 @@ function ThreadRow({ row, active, onPick }: { row: ConversationRow; active: bool
           {row.open_handoffs > 0 && <StatusBadge tone="warn">{row.open_handoffs} open</StatusBadge>}
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatDateTime(row.updated_at)}</span>
         </span>
+        <span className="mt-1 block"><WindowChip msLeft={win.msLeft} /></span>
         {row.last_text && <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{row.last_role === 'guest' ? '' : 'Cassy: '}{row.last_text}</span>}
       </button>
     </li>
@@ -151,7 +167,7 @@ function Bubble({ turn }: { turn: ThreadDetail['history'][number] }) {
 function ReplyBox({ t }: { t: ThreadDetail }) {
   const qc = useQueryClient();
   const [text, setText] = useState('');
-  const win = replyWindow(t.history, new Date());
+  const win = replyWindow(t.history, useNow());
   const open = newestOpenHandoff(t.handoffs);
   const [markHandoff, setMarkHandoff] = useState(true);
   const send = useMutation({
@@ -169,20 +185,26 @@ function ReplyBox({ t }: { t: ThreadDetail }) {
       void qc.invalidateQueries({ queryKey: ['conversation', t.psid] });
     },
   });
-  if (!win.open) {
-    return <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground" role="status">{win.lastGuestAt ? `The 7-day reply window closed ${formatDateTime(win.closesAt)}.` : 'This guest has no message on record.'} Reply from the Page inbox in Messenger.</p>;
-  }
+  const sentence = windowSentence(win.msLeft);
   return (
-    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (text.trim() && !send.isPending) send.mutate(); }}>
-      <Label htmlFor="host-reply-text">Reply to {t.guest_name ?? 'guest'} <span className="font-normal text-muted-foreground">· window {windowLabel(win.msLeft)}</span></Label>
-      <Textarea id="host-reply-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={1900} rows={3} placeholder="Write the reply. It is signed with your first name." className="text-base" />
+    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (win.open && text.trim() && !send.isPending) send.mutate(); }}>
+      <Label htmlFor="host-reply-text">Reply to {t.guest_name ?? 'guest'}</Label>
+      <p id="D_host-reply-window" role="status" className={cn('flex items-center gap-1.5 text-sm', windowLastHour(win.msLeft) ? 'font-medium text-warn' : 'text-muted-foreground')}>
+        <Clock className="size-4 shrink-0" aria-hidden /> {sentence}
+      </p>
+      {!win.open && (
+        <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          {win.lastGuestAt ? `Messenger accepts a reply only for a while after the guest's last message. That time ended ${formatDateTime(win.closesAt)}.` : 'This guest has no message on record.'} Reply from the Page inbox in Messenger, or wait for the guest to write again.
+        </p>
+      )}
+      <Textarea id="host-reply-text" aria-describedby="D_host-reply-window" disabled={!win.open} value={text} onChange={(e) => setText(e.target.value)} maxLength={1900} rows={3} placeholder="Write the reply. It is signed with your first name." className="text-base" />
       {open && (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={markHandoff} onChange={(e) => setMarkHandoff(e.target.checked)} />
           This answers the open handoff ({formatDateTime(open.created_at)})
         </label>
       )}
-      <div className="flex justify-end"><Button type="submit" disabled={!text.trim() || send.isPending}>{send.isPending ? 'Sending…' : 'Send reply'}</Button></div>
+      <div className="flex justify-end"><Button type="submit" disabled={!win.open || !text.trim() || send.isPending}>{send.isPending ? 'Sending…' : 'Send reply'}</Button></div>
     </form>
   );
 }

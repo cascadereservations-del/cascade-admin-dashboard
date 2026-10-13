@@ -55,12 +55,14 @@ it('leaves the handoff alone when the box is unticked', async () => {
   await waitFor(() => expect(api.sendHostReply).toHaveBeenCalledWith({ psid: 'zz-1', text: 'Hello', handoffId: null }));
 });
 
-it('has no reply box once the 7-day window has closed', async () => {
+it('D_keeps the box but disables Send, and says why, once the reply window has closed', async () => {
   api.fetchThread.mockResolvedValue(thread(new Date(Date.now() - 8 * 86_400_000).toISOString()));
   view();
-  await screen.findByRole('status');
-  expect(screen.queryByRole('button', { name: 'Send reply' })).not.toBeInTheDocument();
-  expect(screen.getByRole('status')).toHaveTextContent(/window closed/i);
+  const status = await screen.findByRole('status');
+  expect(status).toHaveTextContent('The reply window has closed');
+  expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
+  expect(screen.getByLabelText(/Reply to Zz Guest/)).toBeDisabled();
+  expect(screen.getByText(/Reply from the Page inbox/)).toBeInTheDocument();
 });
 
 it('disables Send for an empty reply', async () => {
@@ -122,4 +124,20 @@ it('hides the button without manage_operations', async () => {
   view();
   await screen.findByText(/Cassy paused until/);
   expect(screen.queryByRole('button', { name: 'Let Cassy answer again' })).not.toBeInTheDocument();
+});
+
+it('D_shows the countdown on every conversation row and in the reply box at a frozen clock', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-06T00:00:00Z') });
+  try {
+    const mk = (psid: string, at: string) => ({ ...row, psid, psid_short: psid, guest_name: `G ${psid}`, last_guest_at: at, updated_at: at });
+    api.fetchConversations.mockResolvedValue([mk('a1', '2026-10-05T04:00:00Z'), mk('b2', '2026-09-29T00:45:00Z'), mk('c3', '2026-09-20T00:00:00Z')]);
+    api.fetchThread.mockResolvedValue(thread('2026-10-05T04:00:00Z'));
+    view();
+    expect(await screen.findByText('6 d 4 h left')).toBeInTheDocument(); // inside the window
+    expect(screen.getByText('45 min left')).toBeInTheDocument(); // last hour
+    expect(screen.getByText('Closed')).toBeInTheDocument(); // after 7 days
+    expect(await screen.findByRole('status')).toHaveTextContent('You can reply for 6 d 4 h more');
+  } finally {
+    vi.useRealTimers();
+  }
 });

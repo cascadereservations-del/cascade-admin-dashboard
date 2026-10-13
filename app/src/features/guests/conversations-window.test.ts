@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, newestOpenHandoff, replyWindow, speakerOf, turnRisk, windowLabel, type ThreadHandoff, type Turn } from './conversations-window';
+import { buildTimeline, newestOpenHandoff, REPLY_WINDOW_HOURS, replyWindow, speakerOf, turnRisk, windowLastHour, windowLeft, windowSentence, type ThreadHandoff, type Turn } from './conversations-window';
 
 const NOW = new Date('2026-10-06T00:00:00Z');
 const g = (at: string, text = 'hello', route?: Record<string, unknown>): Turn => ({ role: 'guest', text, at, ...(route ? { route } : {}) });
@@ -28,13 +28,39 @@ describe('replyWindow', () => {
   });
 });
 
-describe('windowLabel', () => {
-  it('reads in days and hours', () => {
-    expect(windowLabel(6 * 86_400_000 + 4 * 3_600_000)).toBe('6 days 4 hours left');
-    expect(windowLabel(86_400_000)).toBe('1 day left');
-    expect(windowLabel(3 * 3_600_000)).toBe('3 hours left');
-    expect(windowLabel(59 * 60_000)).toBe('under 1 hour left');
-    expect(windowLabel(0)).toBe('closed');
+describe('D_reply window length', () => {
+  const H = 3_600_000;
+  it('defaults to 7 days (168 hours), one constant', () => {
+    expect(REPLY_WINDOW_HOURS).toBe(168);
+  });
+  it('inside the window: "You can reply for 6 d 4 h more" at 20 hours after the guest wrote', () => {
+    const w = replyWindow([g('2026-10-05T04:00:00Z')], NOW); // NOW is 2026-10-06T00:00Z, so 20 h have passed
+    expect(w.open).toBe(true);
+    expect(windowSentence(w.msLeft)).toBe('You can reply for 6 d 4 h more');
+    expect(windowLastHour(w.msLeft)).toBe(false);
+  });
+  it('last hour: 45 minutes left reads in minutes and is flagged', () => {
+    const w = replyWindow([g('2026-09-29T00:45:00Z')], NOW);
+    expect(w.open).toBe(true);
+    expect(windowSentence(w.msLeft)).toBe('You can reply for 45 min more');
+    expect(windowLastHour(w.msLeft)).toBe(true);
+    expect(windowLeft(5 * H + 20 * 60_000)).toBe('5 h 20 min');
+    expect(windowLeft(2 * 86_400_000)).toBe('2 d');
+  });
+  it('closed: exactly 7 days after the guest wrote', () => {
+    const w = replyWindow([g('2026-09-29T00:00:00Z')], NOW);
+    expect(w.open).toBe(false);
+    expect(windowSentence(w.msLeft)).toBe('The reply window has closed');
+    expect(windowLeft(0)).toBeNull();
+    expect(windowLastHour(0)).toBe(false);
+  });
+  it('the 24-hour setting: a guest who wrote 20 hours ago has 4 hours, one who wrote 30 hours ago is closed', () => {
+    const day = 24 * H;
+    const inside = replyWindow([g('2026-10-05T04:00:00Z')], NOW, day);
+    expect(windowSentence(inside.msLeft)).toBe('You can reply for 4 h more');
+    const outside = replyWindow([g('2026-10-04T18:00:00Z')], NOW, day);
+    expect(outside.open).toBe(false);
+    expect(windowSentence(outside.msLeft)).toBe('The reply window has closed');
   });
 });
 
