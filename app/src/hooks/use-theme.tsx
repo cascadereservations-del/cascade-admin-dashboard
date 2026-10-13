@@ -1,3 +1,5 @@
+import { DEMO } from '@/lib/demo';
+import { isEmbed } from '@/lib/fold';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
@@ -7,6 +9,15 @@ type Ctx = { theme: Theme; resolved: 'light' | 'dark'; setTheme: (t: Theme) => v
 const ThemeContext = createContext<Ctx | null>(null);
 
 function read(): Theme {
+  if (DEMO) return 'system'; // D_ demo reads and writes no storage
+  // D_ framed in the staff shell: follow the shell's own theme (same origin), else the phone's. The shell owns the toggle.
+  if (isEmbed()) {
+    try {
+      const t = window.parent?.document.documentElement.getAttribute('data-theme');
+      if (t === 'light' || t === 'dark') return t;
+    } catch { /* cross-origin parent */ }
+    return 'system';
+  }
   try {
     const v = localStorage.getItem(KEY);
     if (v === 'light' || v === 'dark' || v === 'system') return v;
@@ -36,11 +47,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle('dark', resolved === 'dark');
     document.documentElement.style.colorScheme = resolved;
     // Both metas get the same value so the browser bar follows the in-app toggle, not just the OS setting.
-    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', resolved === 'dark' ? '#12100D' : '#F9F6F0'));
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', resolved === 'dark' ? '#0B1420' : '#EEF1F4'));
   }, [resolved]);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
+    if (DEMO) return;
     try {
       localStorage.setItem(KEY, t);
     } catch {

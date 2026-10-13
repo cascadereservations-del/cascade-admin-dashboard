@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { foldedAuthStorage, isFolded } from './fold';
+import { foldedAuthStorage, isDemo, isEmbed, isFolded } from './fold';
 import { allowed, isStaffRole, type Action, type StaffRole } from '@/auth/capabilities';
 
 function mem() {
@@ -14,6 +14,38 @@ describe('isFolded', () => {
     expect(isFolded({ pathname: '/Cascade-Staff/admin/', search: '' })).toBe(true);
     expect(isFolded({ pathname: '/cascade-admin-dashboard/', search: '?shell=1' })).toBe(import.meta.env.DEV); // dev-only flag
     expect(isFolded({ pathname: '/cascade-admin-dashboard/', search: '' })).toBe(false);
+  });
+});
+
+describe('D_isEmbed', () => {
+  it('is on when framed, whatever the URL says', () => {
+    expect(isEmbed({ search: '' }, true)).toBe(true);
+  });
+  it('is on for embed=1 in the query or in the hash query', () => {
+    expect(isEmbed({ search: '?embed=1' }, false)).toBe(true);
+    expect(isEmbed({ search: '?demo&embed=1' }, false)).toBe(true);
+    expect(isEmbed({ search: '', hash: '#/bookings?embed=1' }, false)).toBe(true);
+  });
+  it('is off when neither: not framed and no embed=1 (embed=10 and embed=0 do not count)', () => {
+    expect(isEmbed({ search: '' }, false)).toBe(false);
+    expect(isEmbed({ search: '?embed=0' }, false)).toBe(false);
+    expect(isEmbed({ search: '?embed=10' }, false)).toBe(false);
+  });
+  it('folded detection covers embed, so the shell session is shared and the sign-in state is the folded one', () => {
+    expect(isFolded({ pathname: '/anywhere/', search: '?embed=1' }, false)).toBe(true);
+    expect(isFolded({ pathname: '/anywhere/', search: '' }, true)).toBe(true);
+    expect(isFolded({ pathname: '/anywhere/', search: '' }, false)).toBe(false);
+  });
+});
+
+describe('D_isDemo', () => {
+  it('reads ?demo, demo=1 and the hash query, and nothing else', () => {
+    expect(isDemo({ search: '?demo' })).toBe(true);
+    expect(isDemo({ search: '?embed=1&demo=1' })).toBe(true);
+    expect(isDemo({ search: '', hash: '#/today?demo' })).toBe(true);
+    expect(isDemo({ search: '' })).toBe(false);
+    expect(isDemo({ search: '?demonstrate=1' })).toBe(false);
+    expect(isDemo({ search: '?demo=0' })).toBe(false);
   });
 });
 

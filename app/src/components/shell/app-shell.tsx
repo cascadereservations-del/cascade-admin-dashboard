@@ -29,12 +29,14 @@ import { APP_VERSION, EXTERNAL_APPS } from '@/lib/env';
 import { ENABLED_MUTATION_MODULES } from '@/lib/rollout';
 import { NAV } from './nav';
 import { CommandPalette } from './command-palette';
+import { EmbedShell } from './embed-shell';
+import { isEmbed } from '@/lib/fold';
 
 // Apex-style application shell: grouped collapsible sidebar, persistent
 // search, compact header. The sidebar becomes an off-canvas sheet below 768px
 // (shadcn Sidebar handles that).
 
-export function AppShell() {
+function FullShell() {
   const s = useSession();
   const { theme, setTheme } = useTheme();
   const loc = useLocation();
@@ -178,4 +180,9 @@ export function AppShell() {
       <Toaster position="bottom-right" />
     </SidebarProvider>
   );
+}
+
+// D_ embed mode (framed in Cascade Staff, or ?embed=1): the shell supplies the bar and Back, so no header, sidebar or tab bar here.
+export function AppShell() {
+  return isEmbed() ? <EmbedShell /> : <FullShell />;
 }

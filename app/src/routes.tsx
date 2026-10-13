@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createHashRouter, Navigate } from 'react-router';
+import { createHashRouter, Navigate, type RouteObject } from 'react-router';
 import { AppShell } from '@/components/shell/app-shell';
 import { RequireCapability, RequireSession } from '@/auth/require';
 import { SignInPage } from '@/auth/sign-in';
@@ -39,6 +39,7 @@ const GuestContactPage = lazy(() => import('@/features/settings/guest-contact-pa
 const TasksPage = lazy(() => import('@/features/operations/tasks-page'));
 const PayRatesPage = lazy(() => import('@/features/settings/pay-rates-page'));
 const ConversationsPage = lazy(() => import('@/features/guests/conversations-page'));
+const SearchPage = lazy(() => import('@/features/search/search-page'));
 const PriceAdvisorPage = lazy(() => import('@/features/pricing/advisor-page'));
 
 function guard(action: Action, el: ReactNode) {
@@ -49,7 +50,7 @@ function guard(action: Action, el: ReactNode) {
   );
 }
 
-export const router = createHashRouter([
+export const routeObjects: RouteObject[] = [
   { path: '/sign-in', element: <SignInPage /> },
   {
     path: '/',
@@ -91,7 +92,10 @@ export const router = createHashRouter([
       { path: 'settings/audit', element: guard('manage_staff', <AuditPage />) },
       { path: 'settings/guest-contact', element: guard('manage_staff', <GuestContactPage />) },
       { path: 'settings/pay-rates', element: guard('manage_staff', <PayRatesPage />) }, // D-301: append-only pay rates
+      { path: 'search', element: guard('read_operations', <SearchPage />) }, // D_ embed: search has no header box in the staff frame
       { path: '*', element: <Navigate to="/today" replace /> },
     ],
   },
-]);
+];
+
+export const router = createHashRouter(routeObjects);
