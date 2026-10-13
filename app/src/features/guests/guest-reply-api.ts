@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 import { AppError, type AppErrorKind } from '@/lib/errors';
+import { DEMO } from '@/lib/demo';
 
 // "Cassy reply" (S76): paste what a guest sent, or a screenshot of it, and get one or two warm draft replies back.
 // The Edge Function only drafts. Nothing is sent to the guest from here; the host copies a draft and sends it herself.
@@ -41,6 +42,7 @@ export function guestReplyError(code: string | undefined, status: number): AppEr
 
 /** Exactly one of text or image goes to the function. Drafting is read-only, so a failed call is safe to repeat. */
 export async function draftGuestReply(a: GuestReplyInput): Promise<GuestReplyDraft> {
+  if (DEMO) return { guest_name: a.guestName ?? null, platform: a.platform ?? 'messenger', guest_text: a.text ?? '', header: 'Demo', replies: ['Thank you for your message. Check-in is from 2:00 pm and check-out is by 12:00 noon.'] };
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw guestReplyError('authentication_required', 401);
   const name = a.guestName?.trim();

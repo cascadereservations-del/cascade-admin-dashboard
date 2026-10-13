@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
+import { DEMO } from '@/lib/demo';
 import type { GuestContact } from './guest-contact';
 import { CLIENT_ERROR_LIMIT, clientErrorSince } from './client-errors';
 
@@ -12,6 +13,7 @@ import { CLIENT_ERROR_LIMIT, clientErrorSince } from './client-errors';
 export type StaffUser = { user_id: string; name: string; role: string; disabled: boolean; sign_in_name: string | null; is_mailbox_login: boolean; note: string | null; last_sign_in_at: string | null; created_at: string };
 
 async function staffCall(payload: Record<string, unknown>) {
+  if (DEMO) return { ok: true, staff: [{ user_id: 'demo-staff-1', name: 'Demo Owner', role: 'owner', disabled: false, sign_in_name: 'demo-owner', is_mailbox_login: false, note: null, last_sign_in_at: null, created_at: '2026-01-01T00:00:00Z' }] } as { ok?: boolean; error?: string; staff?: StaffUser[] } & Record<string, unknown>;
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw { code: '42501', message: 'Not signed in' };
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/staff-users`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(payload) });

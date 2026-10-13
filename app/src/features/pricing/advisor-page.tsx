@@ -1,3 +1,4 @@
+import { DEMO } from '@/lib/demo';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -24,6 +25,7 @@ const KEY = 'cascade.priceAdvisor.v1';
 type Remembered = { target: string; overhead: string; minPrice: string; maxPrice: string; useExpenses: boolean };
 const load = (): Remembered => {
   const d: Remembered = { target: '', overhead: '', minPrice: '', maxPrice: '', useExpenses: true };
+  if (DEMO) return d; // D_ demo reads no storage
   try {
     const o = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Remembered> | null;
     if (!o || typeof o !== 'object') return d;
@@ -34,7 +36,7 @@ const load = (): Remembered => {
     };
   } catch { return d; }
 };
-const save = (r: Remembered) => { try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* private window or blocked storage: the page works without it */ } };
+const save = (r: Remembered) => { if (DEMO) return; try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* private window or blocked storage: the page works without it */ } };
 
 /** "1,234.5" -> 1234.5; empty or junk -> null (never 0). */
 const pnum = (s: string) => numOrNull(s.replace(/,/g, ''));

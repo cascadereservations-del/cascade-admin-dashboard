@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { rpc } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 import { AppError, type AppErrorKind } from '@/lib/errors';
+import { DEMO } from '@/lib/demo';
 import type { ThreadHandoff, Turn } from './conversations-window';
 
 // Conversations panel adapter (SPEC-42 section 7). Reads go through two owner/admin RPCs (the threads table has no client grant);
@@ -45,7 +46,7 @@ const REPLY_ERRORS: Record<string, [AppErrorKind, string]> = {
   handoff_not_found: ['not_found', 'That handoff no longer exists. Refresh and try again.'],
   handoff_not_open: ['conflict', 'Someone already answered this handoff. Nothing was sent. Refresh to see the reply.'],
   duplicate_reply: ['conflict', 'This exact reply was just sent. Nothing was sent again. Refresh the conversation.'],
-  reply_window_closed: ['conflict', 'The 7-day reply window has closed. Nothing was sent. Reply from the Page inbox instead.'],
+  reply_window_closed: ['conflict', 'The reply window has closed. Nothing was sent. Reply from the Page inbox instead.'],
   messenger_refused: ['unavailable', 'Messenger did not accept the reply, so nothing was sent and nothing was marked. Try again in a minute.'],
   host_reply_unavailable: ['unavailable', 'Sending is not available right now. Nothing was sent.'],
 };
@@ -63,6 +64,7 @@ export type SendResult = { sent_text: string; recorded: boolean; handoff_marked:
 
 /** One tap on Send = one call. Nothing here retries or sends on its own. */
 export async function sendHostReply(a: { psid: string; text: string; handoffId: string | null }): Promise<SendResult> {
+  if (DEMO) return { sent_text: a.text, recorded: true, handoff_marked: false }; // D_ demo: nothing leaves the page
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw replyError('authentication_required', 401);
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/host-reply`, {

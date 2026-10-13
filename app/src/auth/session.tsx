@@ -1,4 +1,5 @@
 import { isFolded, toShell } from '@/lib/fold';
+import { DEMO } from '@/lib/demo';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -111,7 +112,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     qc.clear();
-    if (isFolded()) toShell();
+    if (isFolded() && !DEMO) toShell();
   }, [qc]);
 
   const value = useMemo<SessionState>(() => {

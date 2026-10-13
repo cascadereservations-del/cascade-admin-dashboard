@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
+import { DEMO } from '@/lib/demo';
 
 // Pricing adapter (SPEC-34, D-259, D-261, D-262). The rate card is the ONE price every module reads: the booking
 // site and the concierge through the rate-card function, submit-booking through the same quote(). This tab edits
@@ -65,6 +66,11 @@ export function endPromotion(id: string, reason: string) {
 }
 /** The live quote a guest gets on the booking site for these dates. */
 export async function previewQuote(checkin: string, checkout: string): Promise<Quote> {
+  if (DEMO) {
+    const n = Math.max(1, Math.round((Date.parse(checkout) - Date.parse(checkin)) / 86_400_000));
+    const nights = Array.from({ length: n }, (_, i): QuoteNight => ({ date: new Date(Date.parse(checkin) + i * 86_400_000).toISOString().slice(0, 10), rate: 4400, source: 'tier' }));
+    return { nights, n, total: 4400 * n, standard_total: 4400 * n, tier_pct: 0, tier_rate: 4400, deposit: 2200 * n, last_minute: false, promo_nights: 0, promo_name: null, promo_rate: null };
+  }
   const r = await fetch(`${SUPABASE_URL}/functions/v1/rate-card?checkin=${encodeURIComponent(checkin)}&checkout=${encodeURIComponent(checkout)}`, { headers: { apikey: SUPABASE_PUBLISHABLE_KEY } });
   const j = (await r.json().catch(() => ({}))) as { quote?: Quote; error?: string };
   if (!r.ok || !j.quote) throw { code: String(r.status), message: j.error === 'invalid_stay_length' ? 'A stay is 1 to 60 nights.' : 'The price could not be read just now.' };
