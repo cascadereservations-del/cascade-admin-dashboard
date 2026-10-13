@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { AlertTriangle, Inbox, RefreshCw, ShieldAlert, Unplug } from 'lucide-react';
+import { AlertTriangle, Inbox, RefreshCw, ShieldAlert, Unplug, WifiOff } from 'lucide-react';
 import { toAppError } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,10 +35,12 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const e = toAppError(error);
-  const Icon = e.kind === 'forbidden' ? ShieldAlert : e.kind === 'unavailable' ? Unplug : AlertTriangle;
+  const Icon = e.kind === 'forbidden' ? ShieldAlert : e.kind === 'offline' ? WifiOff : e.kind === 'unavailable' ? Unplug : AlertTriangle;
   const title =
     e.kind === 'forbidden'
       ? 'Not permitted'
+      : e.kind === 'offline'
+        ? 'No connection'
       : e.kind === 'unavailable'
         ? 'Unavailable'
         : e.kind === 'conflict'
@@ -48,11 +50,11 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
     <div role="alert" className="flex flex-col items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 py-8 text-center">
       <Icon className="size-6 text-destructive" aria-hidden />
       <p className="font-medium">{title}</p>
-      <p className="max-w-md text-sm text-muted-foreground">{e.message}</p>
-      {e.detail && <p className="max-w-md break-words text-xs text-muted-foreground/80">{e.detail}</p>}
+      <p className="max-w-md text-sm text-muted-foreground">{e.kind === 'offline' ? 'Check your signal, then try again.' : e.message}</p>
+      {e.detail && e.kind !== 'offline' && <p className="max-w-md break-words text-xs text-muted-foreground/80">{e.detail}</p>}
       {onRetry && e.kind !== 'forbidden' && (
         <Button size="sm" variant="outline" onClick={onRetry}>
-          <RefreshCw className="size-4" aria-hidden /> Retry
+          <RefreshCw className="size-4" aria-hidden /> Try again
         </Button>
       )}
     </div>

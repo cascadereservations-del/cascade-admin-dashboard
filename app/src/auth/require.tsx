@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { ShieldAlert } from 'lucide-react';
 import { useSession } from './session';
+import { toAppError } from '@/lib/errors';
 import type { Action } from './capabilities';
 import { Button } from '@/components/ui/button';
 
@@ -51,10 +52,10 @@ export function RequireSession({ children }: { children: ReactNode }) {
   if (s.status === 'error') {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-16 text-center" role="alert">
-        <h2 className="text-lg font-semibold">Could not load staff access</h2>
-        <p className="text-sm text-muted-foreground">{s.errorMessage}</p>
+        <h2 className="text-lg font-semibold">{toAppError({ message: s.errorMessage }).kind === 'offline' ? 'No connection' : 'Could not load staff access'}</h2>
+        <p className="text-sm text-muted-foreground">{toAppError({ message: s.errorMessage }).kind === 'offline' ? 'Check your signal, then try again.' : s.errorMessage}</p>
         <div className="flex gap-2">
-          <Button onClick={() => void s.refresh()}>Retry</Button>
+          <Button className="min-h-11" onClick={() => void s.refresh()}>Try again</Button>
           <Button variant="outline" onClick={() => void s.signOut()}>
             Sign out
           </Button>

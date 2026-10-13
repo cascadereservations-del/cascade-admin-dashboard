@@ -1,7 +1,7 @@
 // Structured error classes so every screen can render forbidden, validation,
 // conflict and unavailable states distinctly (PRD section 8, UX15).
 
-export type AppErrorKind = 'forbidden' | 'validation' | 'conflict' | 'unavailable' | 'not_found' | 'unknown';
+export type AppErrorKind = 'forbidden' | 'validation' | 'conflict' | 'unavailable' | 'offline' | 'not_found' | 'unknown';
 
 export class AppError extends Error {
   kind: AppErrorKind;
@@ -38,7 +38,8 @@ export function toAppError(err: unknown): AppError {
   }
   if (code === 'PGRST116') return new AppError('not_found', 'Record not found.', msg);
   if (e.status === 503 || e.status === 502 || /fetch failed|Failed to fetch|network/i.test(msg)) {
-    return new AppError('unavailable', 'The backend is unreachable.', msg);
+    // D_ a failed first load reads "No connection" with a Try again button, never an empty list.
+    return new AppError('offline', 'No connection.', msg);
   }
   return new AppError('unknown', msg, e.details ?? e.hint);
 }
