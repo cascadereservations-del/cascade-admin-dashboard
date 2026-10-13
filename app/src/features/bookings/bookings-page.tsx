@@ -75,7 +75,7 @@ export default function BookingsPage() {
 
   const view = state.view || 'all';
   // Compact: the view lives in the sheet so it counts; the visible search text does not.
-  const sheetCount = compact ? activeFilterCount + (state.view ? 1 : 0) - (state.q ? 1 : 0) : activeFilterCount;
+  const sheetCount = compact ? activeFilterCount + (state.view ? 1 : 0) : activeFilterCount;
   const emptyCount = activeFilterCount + (compact && state.view ? 1 : 0);
 
   return (

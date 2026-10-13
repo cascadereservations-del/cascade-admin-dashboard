@@ -7,10 +7,9 @@ import { formatDate } from '@/lib/dates';
 import { formatPHP, fromCentavos } from '@/lib/money';
 import { exportCsv } from '@/lib/export';
 import { PageHeader } from '@/components/data/page-header';
-import { FilterBar } from '@/components/data/filter-bar';
+import { FilterBar, FilterDate } from '@/components/data/filter-bar';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -71,8 +70,8 @@ export default function AccountBookPage() {
         actions={<Button variant="outline" onClick={doExport} disabled={rows.length === 0}>Export CSV</Button>}
       />
       <FilterBar search={state.q} onSearch={(v) => set({ q: v })} searchPlaceholder="Payee, category, reference" activeCount={activeFilterCount} onClear={reset}>
-        <Input type="date" aria-label="From" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
-        <Input type="date" aria-label="To (exclusive)" className="w-40 text-base sm:text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} />
+        <FilterDate label="From" ariaLabel="From" value={state.from} onChange={(v) => set({ from: v })} />
+        <FilterDate label="To (exclusive)" ariaLabel="To (exclusive)" value={state.to} onChange={(v) => set({ to: v })} />
         <div className="flex items-center gap-2">
           <Switch id="pending" checked={includePending} onCheckedChange={(v) => set({ pending: v ? '1' : '0' })} />
           <Label htmlFor="pending" className="text-sm font-normal">Include pending review</Label>

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
+import { toAppError } from '@/lib/errors';
 import { newIdempotencyKey } from '@/lib/idempotency';
 
 // Inventory adapter (P16-P18). Catalogue via get_inventory_catalogue_v1
@@ -40,7 +41,18 @@ export function recordReceipt(itemId: string, packs: string, unitCost: string | 
 }
 
 export type ShoppingItem = { id: string; item_id: string | null; item_name: string; quantity: string; purchase_unit: string | null; estimated_cost: string | null; reason: string | null; status: string; proposed_at: string; approved_at: string | null; approval_note: string | null; received_at: string | null; received_quantity: string | null; supplier: string | null; version: number };
+// S82: the cost columns (estimated_cost, supplier) are no longer granted for direct reads; get_shopping_list_v1 returns them to finance sessions only.
+// The dashboard may ship before the database: when the RPC is missing (PGRST202 / 404) fall back to the old select. Absent cost keys read as null (the page shows a dash).
+const rpcMissing = (e: { code?: string; status?: number; message?: string }) => e.code === 'PGRST202' || e.code === '42883' || e.status === 404 || /could not find the function/i.test(e.message ?? '');
 export async function fetchShoppingList(propertyId: string) {
+  const res = await supabase.rpc('get_shopping_list_v1', { p_property_id: propertyId });
+  if (res.error && !rpcMissing(res.error as { code?: string; status?: number; message?: string })) throw toAppError(res.error);
+  if (!res.error) {
+    const body = res.data as { ok?: boolean; rows?: Array<Partial<ShoppingItem>> } | null;
+    if (!body || body.ok === false) throw toAppError({ code: '42501', message: 'not authorized' });
+    const rows = (body.rows ?? []).map((r) => ({ ...r, estimated_cost: r.estimated_cost ?? null, supplier: r.supplier ?? null }) as ShoppingItem);
+    return { rows, total: rows.length };
+  }
   return unwrapList<ShoppingItem>(await supabase.from('inventory_shopping_list').select('*').eq('property_id', propertyId).order('proposed_at', { ascending: false }).limit(200));
 }
 export function saveShoppingItem(propertyId: string, item: Record<string, unknown>, key = newIdempotencyKey('shop')) {

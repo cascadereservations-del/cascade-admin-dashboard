@@ -70,6 +70,25 @@ describe('D_ fix round: Bookings cards and filters', { timeout: 120_000 }, () =>
   });
 });
 
+describe('D_ fix 2: other pages share the rules', { timeout: 120_000 }, () => {
+  it('Cleaning log: dates labelled in the sheet, search text not counted', async () => {
+    at('/operations?q=Demo', PHONE);
+    await screen.findByRole('heading', { level: 1, name: /Cleaning/ }, T);
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(within(sheet).getByText('From')).toBeInTheDocument();
+    expect(within(sheet).getByText('To')).toBeInTheDocument();
+  });
+  it('Account book: dates labelled in the sheet, search text not counted', async () => {
+    at('/finance/book?q=Demo', PHONE);
+    await screen.findByRole('heading', { level: 1 }, T);
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    expect(within(await screen.findByRole('dialog', { name: 'Filters' })).getByText('From')).toBeInTheDocument();
+  });
+});
+
 describe('D_ fix round: Transactions, Inquiries, Search', { timeout: 120_000 }, () => {
   it('Transactions: select all on this page, and the card shows the stage and reference', async () => {
     at('/finance/transactions', PHONE);

@@ -23,4 +23,9 @@ describe('globalSearch term handling', () => {
       expect(c).not.toContain('(c)');
     }
   });
+  it('a term that is only , ( ) * is too short after stripping: no query at all', async () => {
+    calls.length = 0;
+    for (const t of ['((', ',,', '**', ' (* ']) expect(await globalSearch('p', t, { can: () => true } as never)).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
 });

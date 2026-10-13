@@ -8,12 +8,11 @@ import { useUrlState } from '@/lib/url-state';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
 import { PageHeader } from '@/components/data/page-header';
-import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
+import { FilterBar, FilterDate, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { feeState, fetchCleanings, type CleaningRow } from './api';
 
@@ -58,8 +57,8 @@ export default function CleaningPage() {
       <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest, cleaner or submission" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
         <FilterSelect label="Submission" value={state.state || undefined} onChange={(v) => set({ state: v ?? '' })} options={[{ value: 'complete', label: 'Complete' }, { value: 'incomplete', label: 'Incomplete' }, { value: 'issues', label: 'With issues' }]} />
         {canFees && <FilterSelect label="Fees" value={state.fees || undefined} onChange={(v) => set({ fees: v ?? '' })} options={[{ value: 'unpaid', label: 'Unpaid' }]} />}
-        <Input type="date" aria-label="From" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
-        <Input type="date" aria-label="To" className="w-40 text-base sm:text-sm" value={state.to} onChange={(e) => set({ to: e.target.value })} />
+        <FilterDate label="From" ariaLabel="From" value={state.from} onChange={(v) => set({ from: v })} />
+        <FilterDate label="To" ariaLabel="To" value={state.to} onChange={(v) => set({ to: v })} />
       </FilterBar>
       <QueryState query={query}>
         {(data) =>

@@ -36,6 +36,7 @@ export function FilterBar({
 }) {
   const compact = D_useCompact();
   if (compact) {
+    const shown = Math.max(0, activeCount - (search ? 1 : 0)); // the visible search text is not a hidden filter
     // D_ F17: search stays visible; every other control sits behind one `Filters (n)` button. No density toggle: rows are cards here.
     return (
       <div className="mb-3 flex items-center gap-2">
@@ -48,7 +49,7 @@ export function FilterBar({
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" className="D_filters-button min-h-11 shrink-0">
-              <SlidersHorizontal className="size-4" aria-hidden /> {activeCount > 0 ? `Filters (${activeCount})` : 'Filters'}
+              <SlidersHorizontal className="size-4" aria-hidden /> {shown > 0 ? `Filters (${shown})` : 'Filters'}
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="D_filters-content max-h-[85svh] overflow-y-auto">
@@ -61,7 +62,7 @@ export function FilterBar({
               {children}
               {sheetBottom}
               <div className="flex gap-2 pt-1">
-                {activeCount > 0 && <Button variant="outline" className="min-h-11 flex-1" onClick={onClear}>Clear {activeCount} filter{activeCount > 1 ? 's' : ''}</Button>}
+                {shown > 0 && <Button variant="outline" className="min-h-11 flex-1" onClick={onClear}>Clear {shown} filter{shown > 1 ? 's' : ''}</Button>}
                 <SheetClose asChild><Button className="min-h-11 flex-1">Done</Button></SheetClose>
               </div>
             </div>

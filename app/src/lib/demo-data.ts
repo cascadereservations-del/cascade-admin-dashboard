@@ -185,6 +185,7 @@ export function buildDemoData(now: Date): DemoData {
       run_health_checks_v1: () => ({ ranAt: iso(0), checks: [] }),
       get_data_integrity_report: () => ({ ok: true, checks: [] }),
       get_inventory_catalogue_v1: () => catalogue,
+      get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
       get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } }] }),
       list_guest_companions_v1: () => [],
       staff_inquiry_payments_v1: () => [],

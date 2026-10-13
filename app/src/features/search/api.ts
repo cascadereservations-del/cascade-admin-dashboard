@@ -8,9 +8,9 @@ export type SearchHit = { kind: 'booking' | 'guest' | 'stock' | 'task' | 'cleani
 // D_ opts.kinds (embed Search page): only those sources are queried, and a task hit opens the one task list (D-301).
 export async function globalSearch(propertyId: string, q: string, caps: Capabilities, opts?: { kinds?: Array<SearchHit['kind']> }): Promise<SearchHit[]> {
   const want = (k: SearchHit['kind']) => !opts?.kinds || opts.kinds.includes(k);
-  const term = q.trim();
+  const term = q.trim().replace(/[,()*]/g, '').trim(); // these would end or open a filter group or widen the pattern; strip first, then check the length
   if (term.length < 2) return [];
-  const like = `%${term.replace(/[,()]/g, '').replace(/[\\%_]/g, '\\$&')}%`; // , ( ) would break the .or() filter; backslash, % and _ are escaped for LIKE
+  const like = `%${term.replace(/[\\%_]/g, '\\$&')}%`; // , ( ) would break the .or() filter; backslash, % and _ are escaped for LIKE
   const hits: SearchHit[] = [];
   const jobs: PromiseLike<void>[] = [];
 
