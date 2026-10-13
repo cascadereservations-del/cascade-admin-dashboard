@@ -30,13 +30,15 @@
   --secondary-foreground: #0F1B2A;
   --muted: #E8ECF1;
   --muted-foreground: #4A5869;      /* v5-ink-2 */
-  --accent: #EBE3D5;                /* v5-gold-soft over the background */
+  --accent: var(--v5-gold-wash);    /* v5-gold-soft over the background */
   --accent-foreground: #17324D;
   --destructive: #8E1F2A;           /* v5-danger-t: AA as text and as a fill under white */
   --destructive-foreground: #FFFFFF;
   --border-strong: #A9B4C0;         /* v5-line-2 */
   --border: #D9DFE6;                /* v5-line */
-  --input: #7B8998;                 /* field outline: v5-line-2 is 2.1:1, this is 3.2:1 or better (WCAG 1.4.11); the one deliberate departure from tokens.css */
+  --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8;
+  --v5-t-section: clamp(1.25rem, 1.297rem + 0.904vw, 1.875rem); /* the shell's section scale (tokens.css has the same line) */
+  --input: var(--v5-field-line);    /* field outline: v5-line-2 is 2.1:1, this is 3.2:1 or better (WCAG 1.4.11); the one deliberate departure from tokens.css */
   --ring: #17324D;
   /* Legacy brand aliases kept for the few components that name them. */
   --champagne: #E0B872;             /* v5-gold */
@@ -51,14 +53,14 @@
   --sidebar-foreground: #F2F5F8;
   --sidebar-primary: #E0B872;
   --sidebar-primary-foreground: #0F1B2A;
-  --sidebar-accent: #223A55;
+  --sidebar-accent: var(--v5-sidebar-hover);
   --sidebar-accent-foreground: #F2F5F8;
   --sidebar-border: rgba(242, 245, 248, 0.14);
   --sidebar-ring: #E0B872;
   --accent-bronze: #E0B872;         /* decoration and fills only */
   --accent-bronze-text: #8A5A12;    /* v5-gold-text: the only gold allowed as text on light */
   --accent-bronze-soft: #EBE3D5;
-  --ok: #1B5E3F;  --ok-soft: #DEF3E8;
+  --ok: #1B5E3F;  --ok-soft: var(--v5-ok-wash);
   --warn: #7A4304; --warn-soft: #FFEED6;
   --info: #1F4C8F; --info-soft: #E3ECFA;
   --danger-soft: #FBE4E6;
@@ -76,7 +78,7 @@
   --cal-free-bg: #F7F9FB; --cal-free-edge: #8FA6BC; --cal-free-fg: #0F1B2A;
   --cal-blocked-bg: #D5DBE2; --cal-blocked-edge: #4A5869; --cal-blocked-fg: #3B4756; --cal-blocked-stripe: rgba(74, 88, 105, 0.22); --cal-blocked-icon: #3B4756;
   --cal-conflict-bg: #FBE4E6; --cal-conflict-edge: #E5484D; --cal-conflict-fg: #8E1F2A;
-  --cal-turn-bg: #E3ECFA; --cal-turn-edge: #1F4C8F; --cal-turn-fg: #0F1B2A; --cal-turn-stripe: #B9CCEB;
+  --cal-turn-bg: #E3ECFA; --cal-turn-edge: #1F4C8F; --cal-turn-fg: #0F1B2A; --cal-turn-stripe: var(--v5-turn-stripe);
   --cal-past-bg: #E8ECF1; --cal-past-fg: #5E6B7A;
   --notice-power: #EE9B3B; --notice-water: #2A9DB0; --notice-rain: #9A8BDB; --notice-deep: #6CC4A1; --notice-fg: #0F1B2A;
   --motion-fast: 150ms;
@@ -98,13 +100,14 @@
   --secondary-foreground: #EEF3F8;
   --muted: #1C2C40;
   --muted-foreground: #AEBCCB;
-  --accent: #2A2F33;
+  --accent: var(--v5-gold-wash);
   --accent-foreground: #E0B872;
   --destructive: #F4A3AA;
   --destructive-foreground: #3B1A1E;
   --border-strong: #4A5C70;
   --border: #24364B;
-  --input: #6A7E94;
+  --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
+  --input: var(--v5-field-line);
   --ring: #EEF3F8;
   --champagne: #E0B872;
   --mahogany: #EEF3F8;
@@ -118,14 +121,14 @@
   --sidebar-foreground: #EEF3F8;
   --sidebar-primary: #E0B872;
   --sidebar-primary-foreground: #0F1B2A;
-  --sidebar-accent: #1A2B3F;
+  --sidebar-accent: var(--v5-sidebar-hover);
   --sidebar-accent-foreground: #EEF3F8;
   --sidebar-border: rgba(200, 220, 240, 0.10);
   --sidebar-ring: #E0B872;
   --accent-bronze: #E0B872;
   --accent-bronze-text: #E0B872;
   --accent-bronze-soft: #2E3338;
-  --ok: #7FD3A0;  --ok-soft: #163628;
+  --ok: #7FD3A0;  --ok-soft: var(--v5-ok-wash);
   --warn: #F0B866; --warn-soft: #3A2A12;
   --info: #A9C4F5; --info-soft: #17284A;
   --danger-soft: #3B1A1E;
@@ -141,7 +144,7 @@
   --cal-free-bg: #1A2B3F; --cal-free-edge: #4A6580; --cal-free-fg: #EEF3F8;
   --cal-blocked-bg: #2A3A4E; --cal-blocked-edge: #8C9BAB; --cal-blocked-fg: #C9D3DE; --cal-blocked-stripe: rgba(200, 220, 240, 0.14); --cal-blocked-icon: #C9D3DE;
   --cal-conflict-bg: #3B1A1E; --cal-conflict-edge: #F0646F; --cal-conflict-fg: #F4A3AA;
-  --cal-turn-bg: #17284A; --cal-turn-edge: #A9C4F5; --cal-turn-fg: #EEF3F8; --cal-turn-stripe: #24406E;
+  --cal-turn-bg: #17284A; --cal-turn-edge: #A9C4F5; --cal-turn-fg: #EEF3F8; --cal-turn-stripe: var(--v5-turn-stripe);
   --cal-past-bg: #132132; --cal-past-fg: #8C9BAB;
   --notice-water: #4FC3C7; --notice-rain: #B3A8EA; --notice-deep: #7FD1AE;
 }
@@ -378,3 +381,12 @@ h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); 
   [data-slot="checkbox"]::after, [data-slot="switch"]::after { content: ""; position: absolute; inset: -14px; }
   .D_embed-sections { padding-inline: 12px; }
 }
+
+/* D_ F18 (embed only): titles follow the shell's section scale (--v5-t-section: 20 px at 360 px, never the 28 to 34 px of the desktop h1).
+   Scoped to [data-embed], so the desktop layout is untouched. */
+[data-embed] h1, [data-embed] [data-slot="card-title"] { font-size: var(--v5-t-section); line-height: 1.2; }
+
+/* D_ F17 (embed + narrow): fields in the Filters sheet fill the row; the card list never scrolls the page sideways. */
+.D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet [data-slot="input"], .D_filters-sheet label { width: 100%; }
+.D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet label { min-height: 44px; }
+.D_cards a:focus-visible, .D_cards button:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; border-radius: 12px; }

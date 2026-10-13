@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { D_useCompact } from '@/lib/compact';
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +19,8 @@ export function FilterBar({
   children,
   density,
   onDensity,
+  sheetTop,
+  sheetBottom,
 }: {
   search?: string;
   onSearch?: (v: string) => void;
@@ -26,7 +30,46 @@ export function FilterBar({
   children?: ReactNode;
   density?: 'comfortable' | 'compact';
   onDensity?: (d: 'comfortable' | 'compact') => void;
+  /** Embed + narrow only: extra controls placed first / last inside the Filters sheet (a view switch, an export button). */
+  sheetTop?: ReactNode;
+  sheetBottom?: ReactNode;
 }) {
+  const compact = D_useCompact();
+  if (compact) {
+    // D_ F17: search stays visible; every other control sits behind one `Filters (n)` button. No density toggle: rows are cards here.
+    return (
+      <div className="mb-3 flex items-center gap-2">
+        {onSearch && (
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input aria-label="Search" placeholder={searchPlaceholder} className="pl-8 text-base" value={search ?? ''} onChange={(e) => onSearch(e.target.value)} />
+          </div>
+        )}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="D_filters-button min-h-11 shrink-0">
+              <SlidersHorizontal className="size-4" aria-hidden /> {activeCount > 0 ? `Filters (${activeCount})` : 'Filters'}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85svh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+              <SheetDescription className="sr-only">Narrow the list. Changes apply straight away.</SheetDescription>
+            </SheetHeader>
+            <div className="D_filters-sheet flex flex-col gap-3 px-4 pb-6">
+              {sheetTop}
+              {children}
+              {sheetBottom}
+              <div className="flex gap-2 pt-1">
+                {activeCount > 0 && <Button variant="outline" className="min-h-11 flex-1" onClick={onClear}>Clear {activeCount} filter{activeCount > 1 ? 's' : ''}</Button>}
+                <SheetClose asChild><Button className="min-h-11 flex-1">Done</Button></SheetClose>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       {onSearch && (

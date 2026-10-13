@@ -45,7 +45,7 @@ export function buildDemoData(now: Date): DemoData {
     { id: U(211), property_id: DEMO_PROPERTY_ID, source_kind: 'cleaner', source_ref: null, title: 'Bathroom tap drips', description: 'Slow drip, upstairs bathroom', priority: 'normal', assignee_user_id: null, due_at: iso(2 * DAY), blocks_arrival: false, status: 'open', evidence: [], resolution: null, resolved_at: null, created_at: iso(-DAY), updated_at: iso(-DAY), version: 1 },
   ];
   const notices: Rows = [
-    { id: U(221), property_id: DEMO_PROPERTY_ID, notice_type: 'power', title: 'Brownout 1:00 to 4:00 pm', description: 'Planned maintenance by the power company', effective_date: day(2), effective_time: '13:00', duration_hours: '3', is_active: true, audience: 'staff', expires_at: null, posted_by_name: 'Demo Admin', created_at: iso(-DAY) },
+    { id: U(221), property_id: DEMO_PROPERTY_ID, notice_type: 'brownout', title: 'Brownout 1:00 to 4:00 pm', description: 'Planned maintenance by the power company', effective_date: day(2), effective_time: '13:00', duration_hours: '3', is_active: true, audience: 'staff', expires_at: null, posted_by_name: 'Demo Admin', created_at: iso(-DAY) },
     { id: U(222), property_id: DEMO_PROPERTY_ID, notice_type: 'water', title: 'Water interruption 9:00 am to noon', description: null, effective_date: day(5), effective_time: '09:00', duration_hours: '3', is_active: true, audience: 'staff', expires_at: null, posted_by_name: 'Demo Admin', created_at: iso(-DAY) },
   ];
   const cleaning: Rows = [

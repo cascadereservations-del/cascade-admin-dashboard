@@ -20,7 +20,8 @@ import { fetchNotices, saveNotice, type Notice } from './api';
 // here and are excluded from Today by the server.
 
 type Draft = Partial<Notice> & { title: string; notice_type: string; effective_date: string };
-const TYPES = ['power', 'water', 'maintenance', 'weather', 'general'];
+// Exactly what ops_notices_notice_type_check allows (stay-site migration 20261014000000_s81_notices.sql).
+export const TYPES = ['brownout', 'holiday', 'event', 'reminder', 'water', 'maintenance', 'deep_clean', 'note'];
 
 export default function NoticesPage() {
   const s = useSession();
@@ -52,7 +53,7 @@ export default function NoticesPage() {
   const now = new Date().toISOString();
   return (
     <div>
-      <PageHeader title="Notices" description="Utility interruptions, maintenance windows and general notices with an audience and expiry." actions={canManage && <Button onClick={() => setDraft({ title: '', notice_type: 'general', effective_date: todayManila(), audience: 'staff', is_active: true })}>New notice</Button>} />
+      <PageHeader title="Notices" description="Utility interruptions, maintenance windows and general notices with an audience and expiry." actions={canManage && <Button onClick={() => setDraft({ title: '', notice_type: 'note', effective_date: todayManila(), audience: 'staff', is_active: true })}>New notice</Button>} />
       <QueryState query={query}>
         {(data) =>
           data.rows.length === 0 ? <EmptyState title="No notices" /> : (
@@ -79,8 +80,8 @@ export default function NoticesPage() {
             <div><Label htmlFor="n-title">Title</Label><Input id="n-title" required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} className="text-base" /></div>
             <div><Label htmlFor="n-desc">Description</Label><Textarea id="n-desc" value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} className="text-base" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Type</Label><Select value={draft.notice_type} onValueChange={(v) => setDraft({ ...draft, notice_type: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label>Audience</Label><Select value={draft.audience ?? 'staff'} onValueChange={(v) => setDraft({ ...draft, audience: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['staff', 'cleaners', 'owner', 'all'].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Type</Label><Select value={draft.notice_type} onValueChange={(v) => setDraft({ ...draft, notice_type: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Audience</Label><Select value={draft.audience ?? 'staff'} onValueChange={(v) => setDraft({ ...draft, audience: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['staff', 'cleaners', 'owner', 'all'].map((t) => <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>)}</SelectContent></Select></div>
               <div><Label htmlFor="n-date">Effective date</Label><Input id="n-date" type="date" required value={draft.effective_date} onChange={(e) => setDraft({ ...draft, effective_date: e.target.value })} className="text-base" /></div>
               <div><Label htmlFor="n-exp">Expires</Label><Input id="n-exp" type="datetime-local" value={draft.expires_at ?? ''} onChange={(e) => setDraft({ ...draft, expires_at: e.target.value })} className="text-base" /></div>
             </div>

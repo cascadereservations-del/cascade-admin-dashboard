@@ -5,14 +5,16 @@ export type SearchHit = { kind: 'booking' | 'guest' | 'stock' | 'task' | 'cleani
 
 // UX01 global search. Each source is queried with RLS; a forbidden source is
 // skipped silently because the palette shows only authorised records.
-export async function globalSearch(propertyId: string, q: string, caps: Capabilities): Promise<SearchHit[]> {
+// D_ opts.kinds (embed Search page): only those sources are queried, and a task hit opens the one task list (D-301).
+export async function globalSearch(propertyId: string, q: string, caps: Capabilities, opts?: { kinds?: Array<SearchHit['kind']> }): Promise<SearchHit[]> {
+  const want = (k: SearchHit['kind']) => !opts?.kinds || opts.kinds.includes(k);
   const term = q.trim();
   if (term.length < 2) return [];
   const like = `%${term.replace(/[%_]/g, '\$&')}%`;
   const hits: SearchHit[] = [];
   const jobs: PromiseLike<void>[] = [];
 
-  jobs.push(
+  if (want('booking')) jobs.push(
     supabase
       .from('airbnb_reservations')
       .select('id, confirmation_code, guest_name, checkin_date, checkout_date')
@@ -24,7 +26,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
         for (const r of data ?? []) hits.push({ kind: 'booking', id: r.id, title: `${r.guest_name ?? 'Guest'} · ${r.confirmation_code}`, subtitle: `${r.checkin_date} → ${r.checkout_date}`, href: `/bookings/airbnb/${r.id}` });
       }),
   );
-  jobs.push(
+  if (want('booking')) jobs.push(
     supabase
       .from('booking_inquiries')
       .select('id, guest_name, checkin_date, checkout_date, status')
@@ -36,7 +38,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
         for (const r of data ?? []) hits.push({ kind: 'booking', id: r.id, title: `${r.guest_name} · direct`, subtitle: `${r.checkin_date} → ${r.checkout_date} · ${r.status}`, href: `/bookings/direct/${r.id}` });
       }),
   );
-  if (caps.can('manage_operations')) {
+  if (want('guest') && caps.can('manage_operations')) {
     jobs.push(
       supabase
         .from('guests')
@@ -49,7 +51,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
         }),
     );
   }
-  jobs.push(
+  if (want('stock')) jobs.push(
     supabase
       .from('inventory_items')
       .select('id, name, category, qty_on_hand, unit')
@@ -60,7 +62,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
         for (const i of data ?? []) hits.push({ kind: 'stock', id: i.id, title: i.name, subtitle: `${i.qty_on_hand} ${i.unit} · ${i.category}`, href: `/inventory?q=${encodeURIComponent(i.name)}` });
       }),
   );
-  jobs.push(
+  if (want('cleaning')) jobs.push(
     supabase
       .from('cleaning_sessions')
       .select('id, last_guest_name, cleaner_name, cleaned_at')
@@ -72,7 +74,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
         for (const c of data ?? []) hits.push({ kind: 'cleaning', id: c.id, title: `${c.last_guest_name ?? 'Cleaning'} · ${c.cleaner_name}`, subtitle: c.cleaned_at?.slice(0, 10), href: `/operations/cleaning/${c.id}` });
       }),
   );
-  jobs.push(
+  if (want('task')) jobs.push(
     supabase
       .from('follow_up_tasks')
       .select('id, title, status, due_at')
@@ -80,7 +82,7 @@ export async function globalSearch(propertyId: string, q: string, caps: Capabili
       .ilike('title', like)
       .limit(4)
       .then(({ data }) => {
-        for (const t of data ?? []) hits.push({ kind: 'task', id: t.id, title: t.title, subtitle: `${t.status} · due ${t.due_at?.slice(0, 10) ?? '—'}`, href: `/guests?task=${t.id}` });
+        for (const t of data ?? []) hits.push({ kind: 'task', id: t.id, title: t.title, subtitle: `${t.status} · due ${t.due_at?.slice(0, 10) ?? '—'}`, href: opts?.kinds ? '/operations/tasks' : `/guests?task=${t.id}` });
       }),
   );
   await Promise.allSettled(jobs);

@@ -15,6 +15,7 @@ import { StatusBadge } from '@/components/data/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GuestReplyButton } from '@/features/guests/guest-reply-dialog';
+import { isEmbed } from '@/lib/fold';
 import { BookingsToConfirmCard } from './bookings-to-confirm-card';
 import { dedupeOverlapping } from '@/features/bookings/same-guest';
 import { fetchOverview, type Overview, type OverviewStay } from './api';
@@ -83,6 +84,44 @@ function KpiStrip({ financeVisible }: { financeVisible: boolean }) {
   const trailing = trailingPeriods(p);
   const tqs = useQueries({ queries: trailing.map((tp) => ({ queryKey: ['metrics', s.propertyId, tp.start, tp.endExclusive], queryFn: () => fetchMetrics(s.propertyId, tp.start, tp.endExclusive), staleTime: 300_000 })) });
   const items = STRIP.filter((k) => financeVisible || !k.finance);
+  if (isEmbed()) {
+    // D_ F18: inside the staff shell the six equal tiles become ONE `Key figures` card: label left, number right (tabular), the
+    // coverage note and the 3-month comparison as a small line under their row, and the existing link to all KPIs.
+    return (
+      <Card className="D_key-figures py-4 gap-3" aria-label="Key figures, month to date">
+        <CardHeader className="flex items-baseline justify-between gap-2">
+          <CardTitle>Key figures</CardTitle>
+          <Link to="/insights" className="inline-flex min-h-11 items-center text-sm text-primary hover:underline">All KPIs</Link>
+        </CardHeader>
+        <CardContent>
+          {q.isError ? (
+            <p className="text-sm text-muted-foreground">Key figures are not available right now ({(q.error as Error).message}).</p>
+          ) : (
+            <dl className="divide-y">
+              {items.map((k) => {
+                const m = q.data?.metrics[k.key];
+                const cur = m ? decimalToNumber(m.value) : NaN;
+                const finiteVals = tqs.map((tq) => decimalToNumber(tq.data?.metrics[k.key]?.value)).filter(Number.isFinite);
+                const avg = finiteVals.length > 0 ? finiteVals.reduce((a, v) => a + v, 0) / finiteVals.length : null;
+                const deltaPct = avg !== null && avg !== 0 && Number.isFinite(cur) ? ((cur - avg) / Math.abs(avg)) * 100 : null;
+                const dir = deltaPct === null || Math.abs(deltaPct) < 1 ? null : deltaPct > 5 ? 'up' : deltaPct < -5 ? 'down' : 'flat';
+                return (
+                  <div key={k.key} className="py-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-sm text-muted-foreground">{k.title}</dt>
+                      <dd className={`tabular text-base font-semibold ${!m || m.value === null ? 'text-muted-foreground' : ''}`}>{m ? formatMetricValue(m) : q.isPending ? '…' : 'Not available'}</dd>
+                    </div>
+                    {m && m.coverage !== 'complete' && <p className="text-xs text-muted-foreground capitalize">{m.coverage} coverage</p>}
+                    {dir && <p className={`text-xs ${dir === 'down' ? 'text-destructive' : 'text-muted-foreground'}`}>{dir === 'up' ? '▲' : dir === 'down' ? '▼' : '≈'} {Math.abs(deltaPct!).toFixed(0)}% vs 3-mo avg ({formatByUnit(avg!, m!.unit)})</p>}
+                  </div>
+                );
+              })}
+            </dl>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <section aria-label="Key figures, month to date">
       <div className="mb-2 flex items-baseline justify-between">

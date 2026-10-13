@@ -13,6 +13,8 @@ import { softDelete, useUndoToast } from '@/lib/undo';
 import { PageHeader } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
+import { D_RowCards } from '@/components/data/row-cards';
+import { D_useCompact } from '@/lib/compact';
 import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { DetailSheet } from '@/components/data/detail-sheet';
@@ -52,6 +54,7 @@ export default function TransactionsPage() {
   const undoToast = useUndoToast();
   const { state, set, reset, activeFilterCount } = useUrlState(DEFAULTS);
   const canWrite = s.caps.can('approve_payment');
+  const compact = D_useCompact();
   const query = useQuery({ queryKey: ['transactions', s.propertyId, state], queryFn: () => fetchTransactions(s.propertyId, state) });
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -142,8 +145,9 @@ export default function TransactionsPage() {
   const isVoid = draft?.id ? query.data?.rows.find((r) => r.id === draft.id)?.status === 'void' : false;
   return (
     <div>
-      <PageHeader title="Transactions" description="Historical operational ledger from e-mail ingestion, OCR receipts, Telegram and manual entry. Void and archived rows are kept for audit and hidden until you show them; Export CSV downloads every row the current filters and toggles show (up to 1,000); every change here is undoable from Settings → Audit history." actions={<><Button variant="outline" onClick={() => void doExport()}>Export CSV</Button>{canWrite && <Button onClick={() => open()}>New transaction</Button>}</>} />
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Payee, reference, category" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+      <PageHeader title="Transactions" description="Historical operational ledger from e-mail ingestion, OCR receipts, Telegram and manual entry. Void and archived rows are kept for audit and hidden until you show them; Export CSV downloads every row the current filters and toggles show (up to 1,000); every change here is undoable from Settings → Audit history." actions={<><Button variant="outline" onClick={() => void doExport()}>Export CSV</Button>{canWrite && <Button onClick={() => open()}>New transaction</Button>}</>} compactActions={canWrite ? <Button onClick={() => open()} aria-label="New transaction" className="shrink-0">New</Button> : null} />
+      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Payee, reference, category" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
+        sheetBottom={<Button variant="outline" className="min-h-11" onClick={() => void doExport()}>Export CSV</Button>}>
         <FilterSelect label="Type" value={state.type || undefined} onChange={(v) => set({ type: v ?? '' })} options={[{ value: 'income', label: 'Income' }, { value: 'expense', label: 'Expense' }, { value: 'drawing', label: 'Drawing' }]} />
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['confirmed', 'pending_review'].map((v) => ({ value: v, label: v.replace('_', ' ') }))} />
         <FilterSelect label="Source" value={state.source || undefined} onChange={(v) => set({ source: v ?? '' })} options={SOURCES.map((v) => ({ value: v, label: v }))} />
@@ -167,7 +171,23 @@ export default function TransactionsPage() {
       )}
       <QueryState query={query}>
         {(d) => d.rows.length === 0 ? <EmptyState title="No transactions match" action={<Button size="sm" variant="outline" onClick={reset}>Clear filters</Button>} /> : (
-          <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} caption="Transactions" getRowId={(r) => r.id} onRowClick={canWrite ? (r) => open(r) : undefined} rowClassName={(r) => (r.status === 'void' ? 'text-muted-foreground opacity-60' : r.hidden_at ? 'bg-muted/40' : undefined)} />
+          compact ? (
+            <D_RowCards
+              label="Transactions"
+              items={d.rows.map((t) => ({
+                key: t.id,
+                title: t.payee_name || t.category.replaceAll('_', ' '),
+                sub: `${t.txn_type} · ${t.category.replaceAll('_', ' ')} · ${t.source}`,
+                when: formatDate(t.transaction_date, 'long'),
+                chip: <span className="inline-flex gap-1"><StatusBadge tone={t.status === 'confirmed' ? 'good' : t.status === 'void' ? 'neutral' : 'warn'}>{rowKind(t).replace('_', ' ')}</StatusBadge>{t.hidden_at && <StatusBadge tone="neutral">hidden</StatusBadge>}</span>,
+                amount: formatPHP(t.gross_amount),
+                onOpen: canWrite ? () => open(t) : undefined,
+                lead: canWrite ? <Checkbox aria-label={`Select ${t.transaction_date} ${t.payee_name ?? t.category}`} checked={sel.has(t.id)} onCheckedChange={(v) => toggleRow(t.id, v === true)} /> : undefined,
+                className: t.status === 'void' ? 'text-muted-foreground opacity-60' : t.hidden_at ? 'bg-muted/40' : undefined,
+              }))}
+              total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })}
+            />
+          ) : <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} caption="Transactions" getRowId={(r) => r.id} onRowClick={canWrite ? (r) => open(r) : undefined} rowClassName={(r) => (r.status === 'void' ? 'text-muted-foreground opacity-60' : r.hidden_at ? 'bg-muted/40' : undefined)} />
         )}
       </QueryState>
       <Dialog open={archiveOpen} onOpenChange={(o) => { if (!bulk.isPending) setArchiveOpen(o); }}>

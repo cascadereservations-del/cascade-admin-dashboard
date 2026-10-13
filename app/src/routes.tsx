@@ -5,6 +5,7 @@ import { RequireCapability, RequireSession } from '@/auth/require';
 import { SignInPage } from '@/auth/sign-in';
 import type { Action } from '@/auth/capabilities';
 import { ListSkeleton } from '@/components/data/query-state';
+import { isEmbed } from '@/lib/fold';
 
 // Hash routing keeps GitHub Pages compatibility. Feature modules are lazy so
 // charts, calendars and export libraries stay out of the initial bundle.
@@ -38,6 +39,9 @@ const AuditPage = lazy(() => import('@/features/settings/audit-page'));
 const GuestContactPage = lazy(() => import('@/features/settings/guest-contact-page'));
 const TasksPage = lazy(() => import('@/features/operations/tasks-page'));
 const PayRatesPage = lazy(() => import('@/features/settings/pay-rates-page'));
+const PayRatesHandoff = lazy(() => import('@/features/settings/pay-rates-handoff'));
+// D_ embed mode: the shell's #payrates is the only pay-rates screen, so this copy is not rendered there.
+function D_PayRatesRoute() { return isEmbed() ? <PayRatesHandoff /> : <PayRatesPage />; }
 const ConversationsPage = lazy(() => import('@/features/guests/conversations-page'));
 const SearchPage = lazy(() => import('@/features/search/search-page'));
 const PriceAdvisorPage = lazy(() => import('@/features/pricing/advisor-page'));
@@ -91,7 +95,7 @@ export const routeObjects: RouteObject[] = [
       { path: 'settings/health', element: guard('read_operations', <HealthPage />) },
       { path: 'settings/audit', element: guard('manage_staff', <AuditPage />) },
       { path: 'settings/guest-contact', element: guard('manage_staff', <GuestContactPage />) },
-      { path: 'settings/pay-rates', element: guard('manage_staff', <PayRatesPage />) }, // D-301: append-only pay rates
+      { path: 'settings/pay-rates', element: guard('manage_staff', <D_PayRatesRoute />) }, // D-301: append-only pay rates
       { path: 'search', element: guard('read_operations', <SearchPage />) }, // D_ embed: search has no header box in the staff frame
       { path: '*', element: <Navigate to="/today" replace /> },
     ],

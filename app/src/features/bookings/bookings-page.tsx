@@ -9,6 +9,8 @@ import { formatPHP } from '@/lib/money';
 import { PageHeader } from '@/components/data/page-header';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
+import { D_RowCards } from '@/components/data/row-cards';
+import { D_useCompact } from '@/lib/compact';
 import { EmptyState, PartialBanner, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
 import { StatusBadge, bookingTone, payoutTone } from '@/components/data/status-badge';
@@ -36,6 +38,7 @@ export default function BookingsPage() {
   const query = useQuery({ queryKey: ['stays', s.propertyId], queryFn: () => fetchStays(s.propertyId) });
   const today = todayManila();
   const canFinance = s.caps.can('read_finance');
+  const compact = D_useCompact();
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
 
   const columns = useMemo<ColumnDef<Stay, unknown>[]>(() => {
@@ -79,15 +82,17 @@ export default function BookingsPage() {
         title="Bookings"
         description="Airbnb reservations and direct bookings as one list. Booking, payment and payout states are shown separately."
         actions={<Button variant="outline" asChild><Link to="/bookings/calendar">Calendar</Link></Button>}
+        compactActions={null}
       />
-      <Tabs value={view} onValueChange={(v) => set({ view: v === 'all' ? '' : v })} className="mb-3">
+      {!compact && <Tabs value={view} onValueChange={(v) => set({ view: v === 'all' ? '' : v })} className="mb-3">
         <TabsList className="w-full max-w-full justify-start overflow-x-auto sm:w-fit group-data-[orientation=horizontal]/tabs:max-sm:h-[44px]" aria-label="Booking views">
           {VIEWS.map((v) => (
             <TabsTrigger key={v.value} value={v.value} className="flex-none px-3">{v.label}</TabsTrigger>
           ))}
         </TabsList>
-      </Tabs>
-      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest or code" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
+      </Tabs>}
+      <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest or code" activeCount={activeFilterCount + (compact && state.view ? 1 : 0)} onClear={reset} density={density} onDensity={(d) => set({ density: d })}
+        sheetTop={<FilterSelect label="View" value={state.view || undefined} onChange={(v) => set({ view: v ?? '' })} options={VIEWS.filter((v) => v.value !== 'all').map((v) => ({ value: v.value, label: v.label }))} />}>
         <FilterSelect label="Status" value={state.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={['inquiry', 'confirmed', 'completed', 'cancelled'].map((v) => ({ value: v, label: v }))} />
         <FilterSelect label="Channel" value={state.channel || undefined} onChange={(v) => set({ channel: v ?? '' })} options={[{ value: 'airbnb', label: 'Airbnb' }, { value: 'direct', label: 'Direct' }, { value: 'calendar_only', label: 'Calendar only' }, { value: 'blocked', label: 'Blocked' }]} />
         <Input type="date" aria-label="From date" className="w-40 text-base sm:text-sm" value={state.from} onChange={(e) => set({ from: e.target.value })} />
@@ -116,7 +121,21 @@ export default function BookingsPage() {
                   action={activeFilterCount ? <Button variant="outline" size="sm" onClick={reset}>Clear filters</Button> : undefined}
                 />
               ) : (
-                <DataTable columns={columns} rows={rows} total={filtered.length} page={page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(r.href)} caption="Bookings" getRowId={(r) => r.key} />
+                compact ? (
+                  <D_RowCards
+                    label="Bookings"
+                    items={rows.map((r) => ({
+                      key: r.key,
+                      title: r.guestName,
+                      sub: r.code,
+                      when: `${relativeDay(r.checkin, today)} → ${formatDate(r.checkout, 'weekday')} · ${r.nights}n`,
+                      chip: <StatusBadge tone={bookingTone(r.bookingState)}>{r.bookingState}</StatusBadge>,
+                      amount: canFinance ? formatPHP(r.totalAmount) : undefined,
+                      href: r.href,
+                    }))}
+                    total={filtered.length} page={page} onPageChange={(p) => set({ page: String(p) })}
+                  />
+                ) : <DataTable columns={columns} rows={rows} total={filtered.length} page={page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(r.href)} caption="Bookings" getRowId={(r) => r.key} />
               )}
               <Freshness sourceAsOf={data.sourceAsOf} label="Calendar last synced" />
             </div>

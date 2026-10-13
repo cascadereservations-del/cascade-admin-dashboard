@@ -46,3 +46,11 @@ export function toShell() {
   try { (window.top ?? window).location.href = new URL('../', location.href).href; }
   catch { location.href = new URL('../', location.href).href; }
 }
+
+/** The one pay-rates screen is the shell's top-level `#payrates` route (D-301, session 82). From the folded dashboard `../` is the shell. */
+export const D_SHELL_PAYRATES = '../#payrates';
+export function D_toShellPayRates() {
+  const url = new URL(D_SHELL_PAYRATES, location.href).href;
+  try { (window.parent ?? window).location.href = url; }
+  catch { location.href = url; }
+}

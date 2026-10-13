@@ -9,6 +9,7 @@ import { EmptyState, QueryState } from '@/components/data/query-state';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { D_useCompact } from '@/lib/compact';
 import { fetchStays } from './api';
 import { fetchInquiryPayments } from './confirm-api';
 import { paymentLine } from './confirm-model';
@@ -28,10 +29,11 @@ export default function InquiriesPage() {
   const payments = useQuery({ queryKey: ['inquiry-payments', s.propertyId], queryFn: () => fetchInquiryPayments(s.propertyId), enabled: canSeePayments });
   const [pending, setPending] = useState<Pending | null>(null);
   const canDecide = s.caps.can('approve_payment');
+  const compact = D_useCompact();
 
   return (
     <div>
-      <PageHeader title="Inquiries" description="Direct booking requests awaiting a decision. Confirming rechecks the dates on the server." actions={<Button variant="outline" asChild><Link to="/bookings?view=pending">Open in list</Link></Button>} />
+      <PageHeader title="Inquiries" description="Direct booking requests awaiting a decision. Confirming rechecks the dates on the server." actions={<Button variant="outline" asChild><Link to="/bookings?view=pending">Open in list</Link></Button>} compactActions={null} />
       <QueryState query={query}>
         {(data) => {
           const rows = filterStays(data.stays, { view: 'pending' }, todayManila());
@@ -43,23 +45,23 @@ export default function InquiriesPage() {
                   <CardContent className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <Link to={st.href} className="font-medium hover:underline">{st.guestName}</Link>
+                        <Link to={st.href} className={compact ? 'inline-flex min-h-11 items-center font-medium hover:underline' : 'font-medium hover:underline'}>{st.guestName}</Link>
                         <p className="text-xs text-muted-foreground">{st.code}</p>
                       </div>
                       <StatusBadge tone="warn">inquiry</StatusBadge>
                     </div>
                     <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
                       <dt className="text-muted-foreground">Dates</dt><dd className="tabular">{formatDate(st.checkin)} → {formatDate(st.checkout)} · {st.nights}n</dd>
-                      <dt className="text-muted-foreground">Guests</dt><dd>{st.guestCount ?? '—'}</dd>
+                      {!compact && <><dt className="text-muted-foreground">Guests</dt><dd>{st.guestCount ?? '—'}</dd></>}
                       <dt className="text-muted-foreground">Quoted</dt><dd className="tabular">{formatPHP(st.totalAmount)}</dd>
                       <dt className="text-muted-foreground">Deposit</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
-                      <dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd>
+                      {!compact && <><dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd></>}
                     </dl>
                     {canSeePayments && <p className="text-sm" data-testid="payment-line">{payments.isError ? 'Could not check for a receipt. Reload to try again.' : payments.isPending ? 'Checking for a receipt…' : paymentLine(payments.data?.find((p) => p.id === st.sourceId))}</p>}
                     {canDecide && (
                       <div className="flex gap-2 pt-1">
-                        <Button size="sm" className="min-h-10 flex-1" disabled={!payments.isSuccess} onClick={() => setPending({ stay: st, action: 'confirm' })}>Confirm booking</Button>
-                        <Button size="sm" variant="outline" className="min-h-10 flex-1" onClick={() => setPending({ stay: st, action: 'decline' })}>Decline</Button>
+                        <Button size="sm" className={compact ? 'min-h-11 flex-1' : 'min-h-10 flex-1'} disabled={!payments.isSuccess} onClick={() => setPending({ stay: st, action: 'confirm' })}>Confirm booking</Button>
+                        <Button size="sm" variant="outline" className={compact ? 'min-h-11 flex-1' : 'min-h-10 flex-1'} onClick={() => setPending({ stay: st, action: 'decline' })}>Decline</Button>
                       </div>
                     )}
                   </CardContent>

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useSession } from '@/auth/session';
@@ -7,25 +6,34 @@ import { PageHeader } from '@/components/data/page-header';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/data/query-state';
 import { Input } from '@/components/ui/input';
 import { NAV } from '@/components/shell/nav';
-import { globalSearch } from './api';
+import { isEmbed } from '@/lib/fold';
+import { globalSearch, type SearchHit } from './api';
+
+// D_ MF5: in embed mode this is a real search over bookings, guests and tasks, and `#/search?q=<text>` opens it filled in (the shell links here).
+const D_EMBED_KINDS: Array<SearchHit['kind']> = ['booking', 'guest', 'task'];
 
 // D_ Search as a page: inside the Cascade Staff frame there is no header search box or Ctrl+K, so the same global search
 // (bookings, guests, stock, cleanings, tasks; each source filtered by the server) gets a route of its own: #/search.
 
 export default function SearchPage() {
   const s = useSession();
-  const [q, setQ] = useState('');
+  const [params, setParams] = useSearchParams();
+  const embed = isEmbed();
+  const q = params.get('q') ?? '';
+  const setQ = (v: string) => setParams(v ? { q: v } : {}, { replace: true });
   const term = q.trim();
-  const hits = useQuery({ queryKey: ['search-page', s.propertyId, s.caps.role, term], queryFn: () => globalSearch(s.propertyId, term, s.caps), enabled: term.length >= 2, staleTime: 10_000 });
+  const hits = useQuery({ queryKey: ['search-page', s.propertyId, s.caps.role, term, embed], queryFn: () => globalSearch(s.propertyId, term, s.caps, embed ? { kinds: D_EMBED_KINDS } : undefined), enabled: term.length >= 2, staleTime: 10_000 });
   const pages = NAV.filter((n) => s.caps.can(n.action)).flatMap((n) => [{ to: n.to, label: n.label }, ...(n.children ?? []).filter((c) => !c.action || s.caps.can(c.action)).map((c) => ({ to: c.to, label: `${n.label} › ${c.label}` }))]);
   return (
     <div>
-      <PageHeader title="Search" description="Bookings, guests, stock, cleanings and tasks." />
+      <PageHeader title="Search" description={embed ? 'Bookings, guests and tasks.' : 'Bookings, guests, stock, cleanings and tasks.'} />
       <div className="relative mb-4">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input aria-label="Search" type="search" inputMode="search" autoComplete="off" placeholder="Type a name, code or item" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input aria-label="Search" type="search" inputMode="search" autoComplete="off" placeholder={embed ? 'Type a name or code' : 'Type a name, code or item'} className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {term.length < 2 ? (
+      {term.length < 2 && embed ? (
+        <p className="text-sm text-muted-foreground">Type at least two letters to search bookings, guests and tasks.</p>
+      ) : term.length < 2 ? (
         <ul className="divide-y rounded-lg border text-sm" aria-label="Pages">
           {pages.map((p) => <li key={p.to}><Link to={p.to} className="flex min-h-11 items-center px-3">{p.label}</Link></li>)}
         </ul>

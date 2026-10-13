@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useSession } from '@/auth/session';
 import { NAV } from './nav';
 import { DemoStrip } from './demo-strip';
+import { D_SHELL_PAYRATES } from '@/lib/fold';
 
 // D_ embed frame: no header, sidebar or bottom bar (the Cascade Staff shell draws the bar and Back). The only chrome is a
 // row of sibling links for the section you are in (Bookings: List, Calendar, Inquiries), scrolling sideways on a phone,
@@ -20,7 +21,10 @@ export function EmbedShell() {
       <DemoStrip />
       {section && kids.length > 1 && (
         <nav aria-label={`${section.label} sections`} className="D_embed-sections">
-          {kids.map((c) => (
+          {kids.map((c) => c.to === '/settings/pay-rates' ? (
+            // The shell's #payrates is the only pay-rates screen: this entry leaves the frame for it.
+            <a key={c.to} href={D_SHELL_PAYRATES} target="_parent">{c.label}</a>
+          ) : (
             <Link key={c.to} to={c.to} aria-current={c.to === current ? 'page' : undefined} data-active={c.to === current ? 'true' : undefined}>{c.label}</Link>
           ))}
         </nav>
