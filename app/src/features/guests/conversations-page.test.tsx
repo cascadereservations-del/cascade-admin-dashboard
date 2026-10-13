@@ -25,7 +25,7 @@ function view() {
   return render(<QueryClientProvider client={qc}><ConversationsPage /></QueryClientProvider>);
 }
 beforeEach(() => { Object.values(api).forEach((m) => m.mockReset()); api.fetchConversations.mockResolvedValue([row]); session.can = new Set(['manage_operations']); });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 it('shows the thread and sends nothing until Send is pressed, then sends once with the open handoff', async () => {
   api.fetchThread.mockResolvedValue(thread(recent));
@@ -56,13 +56,15 @@ it('leaves the handoff alone when the box is unticked', async () => {
 });
 
 it('D_keeps the box but disables Send, and says why, once the reply window has closed', async () => {
-  api.fetchThread.mockResolvedValue(thread(new Date(Date.now() - 8 * 86_400_000).toISOString()));
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-06T00:00:00Z') });
+  api.fetchThread.mockResolvedValue(thread('2026-09-28T00:00:00Z')); // 8 days before the frozen clock
   view();
-  const status = await screen.findByRole('status');
-  expect(status).toHaveTextContent('The reply window has closed');
+  const note = await screen.findByText('The reply window has closed');
+  expect(note.getAttribute('role')).toBeNull(); // it changes every minute; it must not be announced every minute
   expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
   expect(screen.getByLabelText(/Reply to Zz Guest/)).toBeDisabled();
   expect(screen.getByText(/Reply from the Page inbox/)).toBeInTheDocument();
+  vi.useRealTimers();
 });
 
 it('disables Send for an empty reply', async () => {
@@ -136,7 +138,8 @@ it('D_shows the countdown on every conversation row and in the reply box at a fr
     expect(await screen.findByText('6 d 4 h left')).toBeInTheDocument(); // inside the window
     expect(screen.getByText('45 min left')).toBeInTheDocument(); // last hour
     expect(screen.getByText('Closed')).toBeInTheDocument(); // after 7 days
-    expect(await screen.findByRole('status')).toHaveTextContent('You can reply for 6 d 4 h more');
+    expect(await screen.findByText('You can reply for 6 d 4 h more')).toBeInTheDocument();
+    expect(document.querySelectorAll('[role="status"]')).toHaveLength(0);
   } finally {
     vi.useRealTimers();
   }

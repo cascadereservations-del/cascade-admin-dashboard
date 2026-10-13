@@ -8,6 +8,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import { useTheme } from "@/hooks/use-theme"
+import "@/lib/demo-toast"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {

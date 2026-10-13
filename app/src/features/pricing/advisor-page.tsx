@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { DEMO } from '@/lib/demo';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -131,7 +132,7 @@ function Advisor({ data, today, canPublish, card }: { data: AdvisorInputs; today
       <Section title="Expenses" aside={<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mem.useExpenses} onChange={(e) => setMem({ ...mem, useExpenses: e.target.checked })} /> Include expenses</label>}>
         {data.expenses.categories.length === 0 ? <p className="text-sm text-muted-foreground">No expenses are on record for the 12 months before this period.</p> : (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-[28rem] text-left text-sm">
+            <ScrollRegion label="Advisor inputs"><table className="w-full min-w-[28rem] text-left text-sm">
               <thead className="text-xs text-muted-foreground"><tr><th className="p-2">Include</th><th>Category</th><th>Per month (PHP)</th><th>On record</th></tr></thead>
               <tbody className="tabular">
                 {expenseLines.map((l) => (
@@ -144,7 +145,7 @@ function Advisor({ data, today, canPublish, card }: { data: AdvisorInputs; today
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></ScrollRegion>
           </div>
         )}
         <p className="text-xs text-muted-foreground">
@@ -156,7 +157,7 @@ function Advisor({ data, today, canPublish, card }: { data: AdvisorInputs; today
 
       <Section title="Month by month">
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+          <ScrollRegion label="Monthly price suggestions"><table className="w-full min-w-[56rem] text-left text-sm">
             <thead className="text-xs text-muted-foreground">
               <tr><th className="p-2">Month</th><th>Last year</th><th>Expected occupancy (%)</th><th>Held nights</th><th>Expected nights</th><th>Paid out per night last year</th><th>Standard rate now</th><th>Suggested price</th></tr>
             </thead>
@@ -187,7 +188,7 @@ function Advisor({ data, today, canPublish, card }: { data: AdvisorInputs; today
                 );
               })}
             </tbody>
-          </table>
+          </table></ScrollRegion>
         </div>
         {result.excluded.length > 0 && <p className="text-xs text-muted-foreground">Left out until you enter an expected occupancy: {result.excluded.map(monthLabel).join(', ')}. Their expenses are left out too.</p>}
       </Section>

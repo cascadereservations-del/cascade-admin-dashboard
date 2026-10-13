@@ -29,7 +29,7 @@ function formatByUnit(v: number, unit: MetricUnit): string {
 }
 
 function StayLink({ st }: { st: OverviewStay & { alsoOn?: string } }) {
-  return <><Link to={`/bookings/${st.kind}/${st.id}`} className="font-medium hover:underline">{st.guest}</Link>{st.alsoOn && <span className="text-xs text-muted-foreground"> (also on {st.alsoOn})</span>}</>;
+  return <><Link to={`/bookings/${st.kind}/${st.id}`} className="font-medium hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{st.guest}</Link>{st.alsoOn && <span className="text-xs text-muted-foreground"> (also on {st.alsoOn})</span>}</>;
 }
 
 function ReadinessCard({ r }: { r: Overview['readiness'] }) {
@@ -168,8 +168,8 @@ export default function TodayPage() {
                     <p className="text-muted-foreground">Not available for your role.</p>
                   ) : (
                     <ul className="space-y-1">
-                      <li><Link to="/finance" className="hover:underline">{o.finance.pendingReviewCount} {o.finance.pendingReviewCount === 1 ? 'transaction awaits' : 'transactions await'} review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>
-                      <li><Link to="/operations?fees=unpaid" className="hover:underline">{o.finance.unpaidCleanerFees} cleaner fees unpaid</Link></li>
+                      <li><Link to="/finance" className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{o.finance.pendingReviewCount} {o.finance.pendingReviewCount === 1 ? 'transaction awaits' : 'transactions await'} review</Link> · {formatPHP(o.finance.pendingReviewAmount)}</li>
+                      <li><Link to="/operations?fees=unpaid" className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{o.finance.unpaidCleanerFees} cleaner fees unpaid</Link></li>
                     </ul>
                   )}
                 </CardContent>
@@ -185,7 +185,7 @@ export default function TodayPage() {
                     <li key={`${a.kind}-${a.sourceId ?? i}`} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                       <span className="tabular w-6 text-center text-xs font-semibold text-muted-foreground" aria-label={`priority ${a.priority}`}>P{a.priority}</span>
                       <div className="min-w-0 flex-1">
-                        <Link to={a.href} className="font-medium hover:underline">{a.title}</Link>
+                        <Link to={a.href} className="font-medium hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{a.title}</Link>
                         <div className="text-xs text-muted-foreground">
                           {a.reason}{a.dueAt ? ` · due ${a.dueAt.length > 10 ? formatDateTime(a.dueAt) : formatDate(a.dueAt, 'weekday')}` : ''} · source: {a.sourceKind.replaceAll('_', ' ')}
                         </div>
@@ -201,7 +201,7 @@ export default function TodayPage() {
               <Section title="Low stock">
                 {o.lowStock.length === 0 ? <p className="text-sm text-muted-foreground">No items at or below their reorder level.</p> : (
                   <ul className="space-y-1 text-sm">
-                    {o.lowStock.map((i) => <li key={i.id}><Link to="/inventory?attention=low" className="hover:underline">{i.name}</Link> · {i.out ? 'out' : `${i.qty} ${i.unit}`} (reorder below {i.reorderBelow})</li>)}
+                    {o.lowStock.map((i) => <li key={i.id}><Link to="/inventory?attention=low" className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{i.name}</Link> · {i.out ? 'out' : `${i.qty} ${i.unit}`} (reorder below {i.reorderBelow})</li>)}
                   </ul>
                 )}
               </Section>
@@ -210,15 +210,15 @@ export default function TodayPage() {
                   <p className="text-sm text-muted-foreground">No open follow-ups{o.handoffs === null ? ' (handoffs need an admin role)' : ' or Messenger handoffs'}.</p>
                 ) : (
                   <ul className="space-y-1 text-sm">
-                    {o.followUps.map((f) => <li key={f.id}><Link to={`/guests/${f.guestId ?? ''}?task=${f.id}`} className="hover:underline">{f.title}</Link> · {f.purpose.replaceAll('_', ' ')}</li>)}
-                    {o.handoffs?.map((h) => <li key={h.id}><Link to="/guests?tab=handoffs" className="hover:underline">Messenger: {h.guest ?? 'guest'}</Link> · {h.risk ?? 'risk unknown'} · {formatDateTime(h.createdAt)}</li>)}
+                    {o.followUps.map((f) => <li key={f.id}><Link to={`/guests/${f.guestId ?? ''}?task=${f.id}`} className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{f.title}</Link> · {f.purpose.replaceAll('_', ' ')}</li>)}
+                    {o.handoffs?.map((h) => <li key={h.id}><Link to="/guests?tab=handoffs" className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">Messenger: {h.guest ?? 'guest'}</Link> · {h.risk ?? 'risk unknown'} · {formatDateTime(h.createdAt)}</li>)}
                   </ul>
                 )}
               </Section>
               <Section title="Notices">
                 {o.notices.length === 0 ? <p className="text-sm text-muted-foreground">No active notices.</p> : (
                   <ul className="space-y-1 text-sm">
-                    {o.notices.map((n) => <li key={n.id}><Link to="/operations/notices" className="hover:underline">{n.title}</Link> · {n.type} · {formatDate(n.effectiveDate, 'weekday')}</li>)}
+                    {o.notices.map((n) => <li key={n.id}><Link to="/operations/notices" className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">{n.title}</Link> · {n.type} · {formatDate(n.effectiveDate, 'weekday')}</li>)}
                   </ul>
                 )}
               </Section>

@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -90,9 +91,9 @@ export default function AccountingSetupPage() {
               {draft && (
                 <form className="mt-3 space-y-3 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
                   <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="ob-start">Accounting start (first of month)</Label><Input id="ob-start" type="date" required value={draft.accounting_start} onChange={(e) => setDraft({ ...draft, accounting_start: e.target.value })} className="text-base" /></div><div><Label htmlFor="ob-refs">Supporting references (required)</Label><Textarea id="ob-refs" required rows={1} value={draft.reference_notes ?? ''} onChange={(e) => setDraft({ ...draft, reference_notes: e.target.value })} className="text-base" /></div></div>
-                  <table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted-foreground"><th>Account</th><th>Debit</th><th>Credit</th><th>Memo</th></tr></thead><tbody>
+                  <ScrollRegion label="Opening balance lines"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-muted-foreground"><th>Account</th><th>Debit</th><th>Credit</th><th>Memo</th></tr></thead><tbody>
                     {draft.lines.map((l, i) => <tr key={i}><td><select aria-label="Account" className="h-9 w-full rounded-md border bg-transparent px-2 text-base sm:text-sm" value={l.account_code} onChange={(e) => updateLine(i, { account_code: e.target.value })}><option value="">—</option>{accounts.data?.rows.map((a) => <option key={a.code} value={a.code}>{a.code} {a.name}</option>)}</select></td><td><Input inputMode="decimal" aria-label="Debit" className="w-32 text-base sm:text-sm" value={l.debit} onChange={(e) => updateLine(i, { debit: e.target.value })} /></td><td><Input inputMode="decimal" aria-label="Credit" className="w-32 text-base sm:text-sm" value={l.credit} onChange={(e) => updateLine(i, { credit: e.target.value })} /></td><td><Input aria-label="Memo" className="text-base sm:text-sm" value={l.memo ?? ''} onChange={(e) => updateLine(i, { memo: e.target.value })} /></td></tr>)}
-                  </tbody></table>
+                  </tbody></table></ScrollRegion>
                   <p className="tabular text-sm">Debits {formatPHP(sum(draft.lines, 'debit'))} · Credits {formatPHP(sum(draft.lines, 'credit'))} · Difference <strong>{formatPHP(addDecimal(sum(draft.lines, 'debit'), `-${sum(draft.lines, 'credit')}`))}</strong> (must be zero to approve)</p>
                   <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setDraft({ ...draft, lines: [...draft.lines, { account_code: '', debit: '', credit: '' }] })}>Add line</Button><Button type="submit" size="sm" disabled={save.isPending}>Save draft</Button><Button type="button" size="sm" variant="ghost" onClick={() => setDraft(null)}>Cancel</Button></div>
                 </form>

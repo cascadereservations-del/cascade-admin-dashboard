@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -262,10 +263,10 @@ function MoneyTrend({ period, toggles }: { period: Period; toggles: Toggles }) {
             <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Drawings</p><p className="tabular text-xl font-semibold">{formatPHP(totals.drawing)}</p></div>
             <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Position (income − expenses − drawings)</p><p className={`tabular text-xl font-semibold ${position < 0 ? 'text-destructive' : ''}`}>{formatPHP(position)}</p></div>
             <div className="overflow-x-auto rounded-lg border bg-card">
-              <table className="w-full text-xs">
+              <ScrollRegion label="Monthly figures"><table className="w-full text-xs">
                 <thead><tr className="text-left text-muted-foreground"><th className="px-3 py-1.5">Month</th><th className="px-3 py-1.5 text-right">Net</th></tr></thead>
                 <tbody>{data.slice(-6).reverse().map((m) => <tr key={m.month} className="cursor-pointer border-t hover:bg-muted/40" onClick={() => openMonth(m.month)}><td className="px-3 py-1.5">{m.label}</td><td className={`tabular px-3 py-1.5 text-right ${m.net < 0 ? 'text-destructive' : ''}`}>{formatPHP(m.net)}</td></tr>)}</tbody>
-              </table>
+              </table></ScrollRegion>
             </div>
           </div>
         </div>
@@ -646,7 +647,7 @@ export default function InsightsPage() {
       <DetailSheet open={!!token} onOpenChange={(o) => !o && setToken(null)} title="Supporting records" description={token ? `Metric ${token.split('|')[0]} · ${formatDate(token.split('|')[3], 'long')} to ${formatDate(token.split('|')[4], 'long')} · re-authorised on the server` : undefined}>
         {drill.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : drill.isError ? <p className="text-sm text-destructive">{(drill.error as Error).message}</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs"><thead><tr className="text-left text-muted-foreground">{Object.keys(drill.data.rows[0] ?? {}).map((k) => <th key={k} className="pr-2">{k}</th>)}</tr></thead><tbody>{drill.data.rows.map((r, i) => <tr key={i} className="border-t">{Object.entries(r).map(([k, v], j) => <td key={j} className="tabular py-1 pr-2">{k === 'id' && typeof v === 'string' && r.kind ? <Link to={`/bookings/${String(r.kind)}/${v}`} className="underline">{v.slice(0, 8)}</Link> : String(v ?? '')}</td>)}</tr>)}</tbody></table>
+            <ScrollRegion label="Drill-down rows"><table className="w-full text-xs"><thead><tr className="text-left text-muted-foreground">{Object.keys(drill.data.rows[0] ?? {}).map((k) => <th key={k} className="pr-2">{k}</th>)}</tr></thead><tbody>{drill.data.rows.map((r, i) => <tr key={i} className="border-t">{Object.entries(r).map(([k, v], j) => <td key={j} className="tabular py-1 pr-2">{k === 'id' && typeof v === 'string' && r.kind ? <Link to={`/bookings/${String(r.kind)}/${v}`} className="underline">{v.slice(0, 8)}</Link> : String(v ?? '')}</td>)}</tr>)}</tbody></table></ScrollRegion>
             {drill.data.rows.length === 0 && <p className="text-sm text-muted-foreground">No supporting records.</p>}
           </div>
         )}

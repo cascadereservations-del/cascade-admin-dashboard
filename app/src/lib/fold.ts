@@ -1,8 +1,8 @@
 // Folded mode: the dashboard is published inside Cascade Staff at
 // /Cascade-Staff/admin/ and opened in a same-origin frame by that shell.
 // `?shell=1` forces it in dev builds only (never in production). One helper, used everywhere.
-export function isFolded(loc: { pathname: string; search: string; hash?: string } = location, framed: boolean = isFramed()): boolean {
-  return loc.pathname.includes('/Cascade-Staff/') || (import.meta.env.DEV && /[?&]shell=1(&|$)/.test(loc.search)) || isEmbed(loc, framed);
+export function isFolded(loc: { pathname: string; search: string } = location, framed: boolean = isFramed()): boolean {
+  return loc.pathname.includes('/Cascade-Staff/') || (import.meta.env.DEV && /[?&]shell=1(&|$)/.test(loc.search)) || framed;
 }
 
 /** The page sits inside another window (the staff shell frames it). A cross-origin parent throws on access; that counts as framed. */
@@ -10,15 +10,16 @@ export function isFramed(): boolean {
   try { return window.self !== window.top; } catch { return true; }
 }
 
-/** Embed mode (Lane D): framed, or `embed=1` in the query or the hash query. The shell supplies the bar and Back, so the dashboard hides its own chrome. */
+/** Embed mode (Lane D): framed, or `embed=1` in the query or the hash query. LAYOUT ONLY: the shell supplies the bar and Back, so the
+ *  dashboard hides its own chrome. The session and sign-in behaviour stays with isFolded (staff path or actually framed). */
 export function isEmbed(loc: { search: string; hash?: string } = location, framed: boolean = isFramed()): boolean {
   return framed || /[?&]embed=1(&|$)/.test(loc.search) || /[?&]embed=1(&|$)/.test(loc.hash ?? '');
 }
 
-/** Demo mode: `?demo` (or `demo=1`) in the query or hash query. Synthetic data only; no network call, no storage. */
-export function isDemo(loc: { search: string; hash?: string } = location): boolean {
-  const re = /[?&]demo(=1|=true)?(&|$)/;
-  return re.test(loc.search) || re.test(loc.hash ?? '');
+/** Demo mode: `?demo` (or `demo=1`) in the QUERY STRING only. The hash form is not accepted: the router rewrites the hash on the
+ *  first navigation and a reload would silently go live. Synthetic data only; no network call, no storage. */
+export function isDemo(loc: { search: string } = location): boolean {
+  return /[?&]demo(=1|=true)?(&|$)/.test(loc.search);
 }
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { length: number; key(i: number): string | null };

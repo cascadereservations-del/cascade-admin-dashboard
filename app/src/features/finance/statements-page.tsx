@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
@@ -22,8 +23,8 @@ const money = (v: unknown) => (v === null || v === undefined ? '—' : formatPHP
 
 function Rows({ rows, cols }: { rows: Row[]; cols: Array<[string, string, boolean?]> }) {
   return (
-    <table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-muted-foreground">{cols.map(([k, l, num]) => <th key={k} className={num ? 'text-right' : ''}>{l}</th>)}</tr></thead>
-      <tbody>{(rows ?? []).map((r, i) => <tr key={i} className="border-b last:border-0">{cols.map(([k, , num]) => <td key={k} className={`py-1 ${num ? 'tabular text-right' : ''}`}>{num ? money(r[k]) : String(r[k] ?? '')}</td>)}</tr>)}</tbody></table>
+    <ScrollRegion label="Statement figures"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-muted-foreground">{cols.map(([k, l, num]) => <th key={k} className={num ? 'text-right' : ''}>{l}</th>)}</tr></thead>
+      <tbody>{(rows ?? []).map((r, i) => <tr key={i} className="border-b last:border-0">{cols.map(([k, , num]) => <td key={k} className={`py-1 ${num ? 'tabular text-right' : ''}`}>{num ? money(r[k]) : String(r[k] ?? '')}</td>)}</tr>)}</tbody></table></ScrollRegion>
   );
 }
 

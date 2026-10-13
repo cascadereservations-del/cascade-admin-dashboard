@@ -4,6 +4,7 @@ import { Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDateTime } from '@/lib/dates';
+import { DEMO, DEMO_SENT } from '@/lib/demo';
 import { toAppError } from '@/lib/errors';
 import { PageHeader } from '@/components/data/page-header';
 import { EmptyState, ListSkeleton, QueryState } from '@/components/data/query-state';
@@ -35,7 +36,7 @@ function useNow(everyMs = 60_000) {
 /** Glyph + words: "6 d 4 h left", "45 min left" (warn), "Closed". */
 function WindowChip({ msLeft }: { msLeft: number }) {
   const left = windowLeft(msLeft);
-  return <StatusBadge tone={left ? (windowLastHour(msLeft) ? 'warn' : 'neutral') : 'neutral'} className="normal-case tracking-normal"><Clock className="size-3" aria-hidden /> {left ? `${left} left` : 'Closed'}</StatusBadge>;
+  return <StatusBadge tone={left ? (windowLastHour(msLeft) ? 'warn' : 'neutral') : 'neutral'} className="normal-case tracking-normal">{left ? `${left} left` : 'Closed'}</StatusBadge>;
 }
 
 export default function ConversationsPage() {
@@ -173,7 +174,7 @@ function ReplyBox({ t }: { t: ThreadDetail }) {
   const send = useMutation({
     mutationFn: () => sendHostReply({ psid: t.psid, text: text.trim(), handoffId: open && markHandoff ? open.id : null }),
     onSuccess: (r) => {
-      toast.success(r.recorded ? 'Reply sent' : 'Reply sent, but it could not be saved to the thread history');
+      toast.success(DEMO ? DEMO_SENT : r.recorded ? 'Reply sent' : 'Reply sent, but it could not be saved to the thread history');
       setText('');
       void qc.invalidateQueries({ queryKey: ['conversations'] });
       void qc.invalidateQueries({ queryKey: ['conversation', t.psid] });
@@ -189,7 +190,7 @@ function ReplyBox({ t }: { t: ThreadDetail }) {
   return (
     <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (win.open && text.trim() && !send.isPending) send.mutate(); }}>
       <Label htmlFor="host-reply-text">Reply to {t.guest_name ?? 'guest'}</Label>
-      <p id="D_host-reply-window" role="status" className={cn('flex items-center gap-1.5 text-sm', windowLastHour(win.msLeft) ? 'font-medium text-warn' : 'text-muted-foreground')}>
+      <p id="D_host-reply-window" className={cn('flex items-center gap-1.5 text-sm', windowLastHour(win.msLeft) ? 'font-medium text-warn' : 'text-muted-foreground')}>
         <Clock className="size-4 shrink-0" aria-hidden /> {sentence}
       </p>
       {!win.open && (

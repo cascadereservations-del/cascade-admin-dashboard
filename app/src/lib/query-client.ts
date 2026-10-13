@@ -2,7 +2,8 @@ import { QueryClient } from '@tanstack/react-query';
 import { toAppError } from './errors';
 
 // Query keys are scoped by property and user capability in each adapter.
-// Forbidden and validation errors are not retried; unavailable ones are, briefly.
+// Forbidden, validation, not_found and unavailable (a missing function, or a server that did not answer) are not retried; offline and
+// unknown errors get up to 2 retries. Mutations never retry (mutations: { retry: false } below): a save or send runs once per tap.
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

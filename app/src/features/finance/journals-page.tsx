@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -50,7 +51,7 @@ export default function JournalsPage() {
                       <StatusBadge tone={j.status === 'reversed' ? 'neutral' : j.reversal_of ? 'info' : 'good'}>{j.reversal_of ? 'reversal' : j.status}</StatusBadge>
                       {canPost && j.status === 'posted' && !j.reversal_of && <Button size="sm" variant="outline" onClick={() => setReversing({ id: j.id, reason: '' })}>Reverse</Button>}
                     </div>
-                    <table className="mt-2 w-full text-xs"><tbody>{[...j.lines].sort((a, b) => a.line_no - b.line_no).map((l) => <tr key={l.line_no}><td className="tabular w-16">{l.account.code}</td><td>{l.account.name}</td><td className="tabular w-28 text-right">{Number(l.debit) ? formatPHP(l.debit) : ''}</td><td className="tabular w-28 text-right">{Number(l.credit) ? formatPHP(l.credit) : ''}</td><td className="text-muted-foreground">{l.memo}</td></tr>)}</tbody></table>
+                    <ScrollRegion label="Journal lines"><table className="mt-2 w-full text-xs"><tbody>{[...j.lines].sort((a, b) => a.line_no - b.line_no).map((l) => <tr key={l.line_no}><td className="tabular w-16">{l.account.code}</td><td>{l.account.name}</td><td className="tabular w-28 text-right">{Number(l.debit) ? formatPHP(l.debit) : ''}</td><td className="tabular w-28 text-right">{Number(l.credit) ? formatPHP(l.credit) : ''}</td><td className="text-muted-foreground">{l.memo}</td></tr>)}</tbody></table></ScrollRegion>
                     <p className="mt-1 text-xs text-muted-foreground">Posted {formatDateTime(j.posted_at)}{j.source_table ? ` · source ${j.source_table}/${j.source_id} (${j.event_kind})` : ''}{j.evidence_ref ? ` · evidence ${j.evidence_ref}` : ''}{j.reversal_reason ? ` · reason: ${j.reversal_reason}` : ''}</p>
                     {reversing?.id === j.id && (
                       <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); reverse.mutate(); }}>

@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,7 +30,7 @@ import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, r
 function PrintTable({ title, rows, qtyHeader }: { title: string; rows: Item[]; qtyHeader: string }) {
   if (rows.length === 0) return null;
   return (
-    <table className="mb-6 w-full border-collapse text-xs">
+    <ScrollRegion label="Stock table"><table className="mb-6 w-full border-collapse text-xs">
       <caption className="mb-1 text-left text-sm font-semibold">{title} ({rows.length})</caption>
       <thead><tr className="border-b border-black"><th className="py-1 text-left">Item</th><th className="py-1 text-left">Category</th><th className="py-1 text-right">{qtyHeader}</th><th className="py-1 text-left">Reorder below</th><th className="py-1 text-left">State</th></tr></thead>
       <tbody>
@@ -43,7 +44,7 @@ function PrintTable({ title, rows, qtyHeader }: { title: string; rows: Item[]; q
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></ScrollRegion>
   );
 }
 

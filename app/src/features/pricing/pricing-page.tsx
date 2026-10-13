@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -83,7 +84,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
         {(card.upcoming ?? []).map((u) => (
           <p key={u.version_id} className="mt-1"><StatusBadge tone="info">scheduled</StatusBadge> {formatPHP(u.base, { whole: true })} per night · fee {u.deposit_pct}% · for stays checking in from {u.effective_from} · {u.tiers.map((t) => `${t.pct}% from ${t.min_nights} nights`).join(', ') || 'no length-of-stay discounts'}</p>
         ))}
-        <table className="mt-3 w-full max-w-md text-left">
+        <ScrollRegion label="Rate tiers"><table className="mt-3 w-full max-w-md text-left">
           <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Stay length</th><th>% off</th><th>Per night</th></tr></thead>
           <tbody className="tabular">
             <tr><td className="py-1">1 night{sortedCur[0] && sortedCur[0].min_nights > 2 ? `-${sortedCur[0].min_nights - 1} nights` : ''}</td><td>—</td><td>{formatPHP(card.base, { whole: true })}</td></tr>
@@ -91,7 +92,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
               <tr key={t.min_nights}><td className="py-1">{t.min_nights}{nx ? `-${nx.min_nights - 1}` : '+'} nights</td><td>{t.pct}%</td><td>{formatPHP(tierRate(card.base, t.pct), { whole: true })}</td></tr>
             ); })}
           </tbody>
-        </table>
+        </table></ScrollRegion>
       </div>
       {editing && (
         <div className="space-y-3 rounded-lg border border-dashed p-4">

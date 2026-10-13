@@ -1,3 +1,4 @@
+import { ScrollRegion } from '@/components/data/scroll-region';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -96,8 +97,8 @@ export function SimpleEntryForm({ initial, onDone }: { initial?: { kind?: string
       {prepared && (
         <div className="rounded-lg border p-3 text-sm">
           <p className="font-medium">{initial?.description ?? prepared.description}</p>
-          <table className="mt-2 w-full text-xs"><thead><tr className="text-left text-muted-foreground"><th>Account</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th>Memo</th></tr></thead>
-            <tbody>{prepared.lines.map((l, i) => <tr key={i}><td className="tabular">{l.account_code} {accounts.data?.rows.find((a) => a.code === l.account_code)?.name ?? ''}</td><td className="tabular text-right">{Number(l.debit) ? formatPHP(l.debit) : ''}</td><td className="tabular text-right">{Number(l.credit) ? formatPHP(l.credit) : ''}</td><td className="text-muted-foreground">{l.memo}</td></tr>)}</tbody></table>
+          <ScrollRegion label="Entry lines"><table className="mt-2 w-full text-xs"><thead><tr className="text-left text-muted-foreground"><th>Account</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th>Memo</th></tr></thead>
+            <tbody>{prepared.lines.map((l, i) => <tr key={i}><td className="tabular">{l.account_code} {accounts.data?.rows.find((a) => a.code === l.account_code)?.name ?? ''}</td><td className="tabular text-right">{Number(l.debit) ? formatPHP(l.debit) : ''}</td><td className="tabular text-right">{Number(l.credit) ? formatPHP(l.credit) : ''}</td><td className="text-muted-foreground">{l.memo}</td></tr>)}</tbody></table></ScrollRegion>
           <p className="mt-2 text-xs text-muted-foreground">{prepared.balanced ? 'Balanced.' : 'Not balanced; cannot post.'} {prepared.source ? `Source: ${prepared.source.source_table}/${prepared.source.source_id} (${prepared.source.event_kind}) posts once.` : 'No source link: this is a manual entry.'}</p>
           {prepared.warnings.map((w) => <p key={w} className="mt-1 text-xs text-destructive">{w}</p>)}
         </div>

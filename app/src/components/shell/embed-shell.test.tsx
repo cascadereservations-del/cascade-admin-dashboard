@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createHashRouter, createMemoryRouter } from 'react-router';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 // its route; without a shell session the folded sign-in state shows (no second sign-in form).
 
 const state = vi.hoisted(() => ({ signedOut: false }));
-vi.mock('@/lib/demo', () => ({ DEMO: true, demoOffline: () => { throw new Error('offline'); } }));
+vi.mock('@/lib/demo', () => ({ DEMO: true, DEMO_SAVED: 'Sample mode: nothing was saved.', DEMO_SENT: 'Sample mode: nothing was sent.', DEMO_STRIP: 'Sample data. Nothing here is real and nothing is saved.' }));
 vi.mock('@/lib/supabase', async () => {
   const { createDemoClient } = await import('@/lib/demo-client');
   const client = createDemoClient(new Date('2026-10-13T02:00:00Z'));
@@ -76,13 +76,25 @@ describe('D_embed mode chrome', { timeout: 90_000 }, () => {
     expect(screen.queryByRole('banner')).toBeNull();
   });
 
-  it('without a shell session it shows the Cascade Staff sign-in state, never its own form', async () => {
+  it('framed with no shell session: the Cascade Staff sign-in state, never its own form', async () => {
+    state.signedOut = true;
+    window.history.replaceState({}, '', '/?embed=1');
+    Object.defineProperty(window, 'top', { value: {}, configurable: true }); // jsdom has no frame: pretend the shell is the top window
+    try {
+      at('/today');
+      await screen.findByText('Sign in from Cascade Staff', undefined, { timeout: 60_000 });
+      expect(screen.getByRole('button', { name: 'Open Cascade Staff' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('4-digit PIN')).toBeNull();
+    } finally {
+      Object.defineProperty(window, 'top', { value: window, configurable: true });
+    }
+  });
+
+  it('embed=1 in a normal tab changes layout only: its own sign-in form still shows', async () => {
     state.signedOut = true;
     window.history.replaceState({}, '', '/?embed=1');
     at('/today');
-    await screen.findByText('Sign in from Cascade Staff', undefined, { timeout: 60_000 });
-    expect(screen.getByRole('button', { name: 'Open Cascade Staff' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByLabelText('4-digit PIN')).toBeNull());
-    expect(screen.queryByRole('form')).toBeNull();
+    await screen.findByLabelText('4-digit PIN', undefined, { timeout: 60_000 });
+    expect(screen.queryByText('Sign in from Cascade Staff')).toBeNull();
   });
 });

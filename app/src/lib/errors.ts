@@ -38,8 +38,9 @@ export function toAppError(err: unknown): AppError {
   }
   if (code === 'PGRST116') return new AppError('not_found', 'Record not found.', msg);
   if (e.status === 503 || e.status === 502 || /fetch failed|Failed to fetch|network/i.test(msg)) {
-    // D_ a failed first load reads "No connection" with a Try again button, never an empty list.
-    return new AppError('offline', 'No connection.', msg);
+    // D_ a failed first load is never an empty list. The phone really is offline: "No connection". Otherwise the server did not answer.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return new AppError('offline', 'No connection.', msg);
+    return new AppError('unavailable', 'The server did not answer. Try again.', msg);
   }
   return new AppError('unknown', msg, e.details ?? e.hint);
 }

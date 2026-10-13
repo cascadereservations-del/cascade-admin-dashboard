@@ -9,6 +9,13 @@
    Rules kept from before: gold is never body text on light (use --accent-bronze-text = v5 gold-text), status colours always travel
    with a glyph and a word, every text pair is AA in both themes, no hex belongs in a component. Light is :root; dark is .dark
    (set by use-theme from the shell's theme or the phone's). */
+/* Values here that tokens.css does not have yet (proposed additions, same name light / dark; the rest map 1:1 to --v5-*):
+     --v5-field-line      #7B8998 / #6A7E94   field outline, 3:1 non-text contrast (v5-line-2 is 2.1:1 / 2.4:1). Used as --input.
+     --v5-gold-wash       #EBE3D5 / #2A2F33   solid gold-soft over the page, for hover and accent fills (--accent). --cream: #EBE3D5 / #2E3338.
+     --v5-sidebar-hover   #223A55 / #1A2B3F   sidebar item hover (--sidebar-accent); dark --sidebar #0F1A28 is the top of v5-ambient.
+     --v5-turn-stripe     #B9CCEB / #24406E   turnover cell stripe (--cal-turn-stripe).
+     --v5-ok-wash         #DEF3E8 / #163628   opaque v5-ok-w (--ok-soft).
+     --v5-r-field-md      radius 20px base (--radius), so md = 14px = v5-r-field; cards are fixed at v5-r-card 24px in the base layer. */
 :root {
   --radius: 20px;
   --background: #EEF1F4;            /* v5-bg */
@@ -199,10 +206,10 @@
   --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
 }
 
-/* DM Serif Display ships with Cascade Staff (fonts/dm-serif-display-400.woff2 at the app root, one self-hosted file). Folded, the
-   dashboard lives at /Cascade-Staff/admin/ so the absolute path resolves; standalone it 404s and Georgia is used. Nothing is fetched
-   from a third party. */
-@font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: local("DM Serif Display"), url("/Cascade-Staff/fonts/dm-serif-display-400.woff2") format("woff2"); }
+/* DM Serif Display ships with Cascade Staff: one self-hosted file at <staff root>/fonts/dm-serif-display-400.woff2. The built CSS sits in
+   <staff root>/admin/assets/, so ../../fonts/ reaches it (kept as written: the file is not part of this build). Standalone, the URL 404s and
+   Georgia is used. Nothing is fetched from a third party. */
+@font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: local("DM Serif Display"), url("../../fonts/dm-serif-display-400.woff2") format("woff2"); }
 
 @layer base {
   * {
@@ -331,6 +338,12 @@
   .cal-swatch-turn { background: var(--cal-turn-bg); box-shadow: inset 0 2px 0 var(--cal-turn-edge); }
 }
 
+/* Demo label (both shells): fixed height from first paint so nothing shifts; the sticky header sits under it. */
+:root { --D_demo-strip-h: 40px; }
+.D_demo-strip { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 8px; height: var(--D_demo-strip-h); padding: 0 12px; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid var(--warn); font-size: 14px; font-weight: 600; line-height: 18px; text-align: center; }
+html[data-demo] header.sticky { top: var(--D_demo-strip-h); }
+@media (max-width: 639px) { :root { --D_demo-strip-h: 56px; } }
+
 /* Titles and names in DM Serif Display have one weight: never let a font-semibold utility fake a bold. */
 h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); font-weight: 400; }
 
@@ -363,6 +376,5 @@ h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); 
   [data-slot="checkbox"] { width: 22px; height: 22px; }
   [data-slot="checkbox"], [data-slot="switch"] { position: relative; }
   [data-slot="checkbox"]::after, [data-slot="switch"]::after { content: ""; position: absolute; inset: -14px; }
-  table:not([data-slot="table"]) { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .D_embed-sections { padding-inline: 12px; }
 }

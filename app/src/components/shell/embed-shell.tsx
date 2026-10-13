@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import { Toaster } from '@/components/ui/sonner';
 import { useSession } from '@/auth/session';
 import { NAV } from './nav';
+import { DemoStrip } from './demo-strip';
 
 // D_ embed frame: no header, sidebar or bottom bar (the Cascade Staff shell draws the bar and Back). The only chrome is a
 // row of sibling links for the section you are in (Bookings: List, Calendar, Inquiries), scrolling sideways on a phone,
@@ -16,6 +17,7 @@ export function EmbedShell() {
   const current = kids.filter((c) => pathname === c.to || pathname.startsWith(c.to + '/')).sort((a, b) => b.to.length - a.to.length)[0]?.to;
   return (
     <div data-embed className="min-h-svh">
+      <DemoStrip />
       {section && kids.length > 1 && (
         <nav aria-label={`${section.label} sections`} className="D_embed-sections">
           {kids.map((c) => (

@@ -51,7 +51,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
       <Icon className="size-6 text-destructive" aria-hidden />
       <p className="font-medium">{title}</p>
       <p className="max-w-md text-sm text-muted-foreground">{e.kind === 'offline' ? 'Check your signal, then try again.' : e.message}</p>
-      {e.detail && e.kind !== 'offline' && <p className="max-w-md break-words text-xs text-muted-foreground/80">{e.detail}</p>}
+      {e.detail && e.kind !== 'offline' && <p className="max-w-md break-words text-xs text-muted-foreground">{e.detail}</p>}
       {onRetry && e.kind !== 'forbidden' && (
         <Button size="sm" variant="outline" onClick={onRetry}>
           <RefreshCw className="size-4" aria-hidden /> Try again

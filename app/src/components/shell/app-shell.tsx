@@ -30,6 +30,8 @@ import { ENABLED_MUTATION_MODULES } from '@/lib/rollout';
 import { NAV } from './nav';
 import { CommandPalette } from './command-palette';
 import { EmbedShell } from './embed-shell';
+import { DemoStrip } from './demo-strip';
+import { DEMO } from '@/lib/demo';
 import { isEmbed } from '@/lib/fold';
 
 // Apex-style application shell: grouped collapsible sidebar, persistent
@@ -108,10 +110,11 @@ function FullShell() {
         </SidebarContent>
         <SidebarFooter className="text-xs text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
           v{APP_VERSION} · Asia/Manila · PHP
-          <div>{ENABLED_MUTATION_MODULES.length === 0 ? 'Read-only rollout · writes via legacy admin' : `Writes enabled: ${ENABLED_MUTATION_MODULES.join(', ')}`}</div>
+          {!DEMO && <div>{ENABLED_MUTATION_MODULES.length === 0 ? 'Read-only rollout · writes via legacy admin' : `Writes enabled: ${ENABLED_MUTATION_MODULES.join(', ')}`}</div>}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
+        <DemoStrip />
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <SidebarTrigger className="size-9" aria-label="Toggle navigation" />
           <Button variant="outline" className="h-9 min-w-0 flex-1 max-w-md justify-start gap-2 text-muted-foreground sm:w-72 sm:flex-none" onClick={() => setPaletteOpen(true)}>

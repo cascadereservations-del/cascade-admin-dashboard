@@ -31,18 +31,18 @@ describe('D_isEmbed', () => {
     expect(isEmbed({ search: '?embed=0' }, false)).toBe(false);
     expect(isEmbed({ search: '?embed=10' }, false)).toBe(false);
   });
-  it('folded detection covers embed, so the shell session is shared and the sign-in state is the folded one', () => {
-    expect(isFolded({ pathname: '/anywhere/', search: '?embed=1' }, false)).toBe(true);
-    expect(isFolded({ pathname: '/anywhere/', search: '' }, true)).toBe(true);
-    expect(isFolded({ pathname: '/anywhere/', search: '' }, false)).toBe(false);
+  it('embed=1 alone changes layout only: it does not make the page "folded" (no shell sign-in, no redirect to ../)', () => {
+    expect(isFolded({ pathname: '/anywhere/', search: '?embed=1' }, false)).toBe(false);
+    expect(isFolded({ pathname: '/anywhere/', search: '' }, true)).toBe(true); // actually framed
+    expect(isFolded({ pathname: '/Cascade-Staff/admin/', search: '' }, false)).toBe(true); // under the staff app
   });
 });
 
 describe('D_isDemo', () => {
-  it('reads ?demo, demo=1 and the hash query, and nothing else', () => {
+  it('reads ?demo and demo=1 in the query string only (the hash form would drop to live on reload)', () => {
     expect(isDemo({ search: '?demo' })).toBe(true);
     expect(isDemo({ search: '?embed=1&demo=1' })).toBe(true);
-    expect(isDemo({ search: '', hash: '#/today?demo' })).toBe(true);
+    expect(isDemo({ search: '', hash: '#/today?demo' } as never)).toBe(false);
     expect(isDemo({ search: '' })).toBe(false);
     expect(isDemo({ search: '?demonstrate=1' })).toBe(false);
     expect(isDemo({ search: '?demo=0' })).toBe(false);

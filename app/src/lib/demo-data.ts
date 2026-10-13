@@ -4,7 +4,7 @@
 export type Rows = Record<string, unknown>[];
 export type DemoData = { tables: Record<string, Rows>; rpcs: Record<string, (args: Record<string, unknown>) => unknown> };
 
-export const DEMO_PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd';
+export const DEMO_PROPERTY_ID = '00000000-0000-4000-8000-0000000000b1'; // synthetic: not the real property id
 export const DEMO_USER_ID = '00000000-0000-4000-8000-0000000000a1';
 /** Demo reply window shown on the three sample threads: 6 d 4 h left, 45 min left, closed. */
 export const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
