@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { todayManila } from '@/lib/dates';
+import { readCalendarEvent, readCalendarEvents } from './calendar-reads';
 import { mergeStays, type CalendarRow, type InquiryRow, type ReservationRow, type Stay } from './model';
 
 // Adapter for the bookings module. Reads go through RLS-protected tables and
@@ -24,12 +25,7 @@ export async function fetchStays(propertyId: string): Promise<StaysResult> {
       .eq('property_id', propertyId)
       .order('checkin_date', { ascending: false })
       .limit(500),
-    supabase
-      .from('calendar_events')
-      .select('id, uid, source, checkin_date, checkout_date, guest_name, status, linked_reservation_id, synced_at, raw_summary')
-      .eq('property_id', propertyId)
-      .order('checkin_date', { ascending: false })
-      .limit(1000),
+    readCalendarEvents<CalendarRow>(propertyId),
     supabase.from('calendar_sync_log').select('synced_at, status').order('synced_at', { ascending: false }).limit(1),
   ]);
   const res = unwrapList<ReservationRow>(r);
@@ -63,7 +59,7 @@ export async function fetchStayDetail(propertyId: string, kind: string, id: stri
   const [r, i, c] = await Promise.all([
     kind === 'airbnb' ? supabase.from('airbnb_reservations').select('*').eq('id', id).maybeSingle() : none,
     kind === 'direct' ? supabase.from('booking_inquiries').select('*').eq('id', id).maybeSingle() : none,
-    stay?.calendar ? supabase.from('calendar_events').select('*').eq('id', stay.calendar.id).maybeSingle() : none,
+    stay?.calendar ? readCalendarEvent<CalendarRow>(stay.calendar.id) : none,
   ]);
   const reservation = (r.data as ReservationRow | null) ?? null;
   const inquiry = (i.data as InquiryRow | null) ?? null;
