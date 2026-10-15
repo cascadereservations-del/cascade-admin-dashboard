@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { rpc, unwrapList } from '@/lib/rpc';
+import { toAppError } from '@/lib/errors';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env';
 import { DEMO } from '@/lib/demo';
 import type { GuestContact } from './guest-contact';
@@ -50,6 +51,16 @@ export type StaffDetails = {
 };
 export async function listStaffDetails() {
   return rpc<StaffDetails[]>('list_staff_details_v1', {});
+}
+// s85 pay details: owner/admin read of one person's payout label and QR. Null when the RPC is not deployed yet (the label field then hides itself).
+export type StaffPayoutDetails = { payout_bank_label: string | null; has_qr: boolean; qr_payload: string | null };
+export async function getStaffPayoutDetails(userId: string): Promise<StaffPayoutDetails | null> {
+  try {
+    return await rpc<StaffPayoutDetails>('staff_payout_details_v1', { p_user_id: userId });
+  } catch (e) {
+    if (toAppError(e).kind === 'unavailable') return null;
+    throw e;
+  }
 }
 export function saveStaffDetails(userId: string, patch: Record<string, unknown>, expectedVersion: number | undefined, reason: string) {
   return rpc<{ ok: boolean; userId: string; version: number }>('save_staff_details_v1', { p_user_id: userId, p_patch: patch, p_expected_version: expectedVersion ?? null, p_reason: reason });

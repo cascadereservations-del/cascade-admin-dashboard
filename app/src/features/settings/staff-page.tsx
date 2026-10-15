@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PayoutQrField } from './payout-qr-field';
+import { PayoutLabelField } from './payout-label-field';
 import { STAFF_PIN_PREFIX, STAFF_PIN_RE, STAFF_ROLES, createStaff, listStaff, listStaffDetails, saveStaffDetails, staffAction, type StaffDetails, type StaffUser } from './api';
 
 // OPS03: named staff through the deployed staff-users function: create with a
@@ -71,6 +72,7 @@ export default function StaffPage() {
     const { version, ...rest } = detailsDraft;
     const patch: Record<string, unknown> = { ...rest };
     delete patch.payout_qrph; // the payout QR saves through its own field, never with this form
+    delete patch.payout_bank_label; // likewise the bank or wallet name (the list row carries it; a stale copy must never be written back)
     saveDetails.mutate({ userId: draft.user_id, patch, version });
   };
   const editing = draft?.user_id ? staff.data?.find((u) => u.user_id === draft.user_id) : undefined;
@@ -151,7 +153,13 @@ export default function StaffPage() {
         )}
         {draft?.user_id && detailsDraft && (s.caps.role === 'owner' || s.caps.role === 'admin') && (() => {
           const stored = details.data?.find((x) => x.user_id === draft.user_id);
-          return <PayoutQrField userId={draft.user_id} payload={stored?.payout_qrph ?? null} version={stored?.version ?? detailsDraft.version} onSaved={refresh} />;
+          const version = stored?.version ?? detailsDraft.version;
+          return (
+            <>
+              <PayoutLabelField userId={draft.user_id} version={version} qrPayload={stored?.payout_qrph ?? null} onSaved={refresh} />
+              <PayoutQrField userId={draft.user_id} payload={stored?.payout_qrph ?? null} version={version} onSaved={refresh} />
+            </>
+          );
         })()}
       </DetailSheet>
     </div>

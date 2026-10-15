@@ -72,3 +72,11 @@ export function describeLine(payload: string | null | undefined): string {
   if (!d.ok) return 'Payout QR · saved, but its checksum does not verify';
   return ['Payout QR', d.bank, d.name, d.accountMasked ? `account ${d.accountMasked}` : null, 'checksum OK'].filter(Boolean).join(' · ');
 }
+
+/** The bank or wallet label saved with a payout QR: trimmed, 2 to 40 characters, or empty to clear. Same rule as save_staff_details_v1. */
+export function checkPayoutLabel(raw: string): { ok: true; value: string | null } | { ok: false; message: string } {
+  const v = raw.trim();
+  if (!v) return { ok: true, value: null };
+  if (v.length < 2 || v.length > 40) return { ok: false, message: 'Use 2 to 40 characters for the bank or wallet name.' };
+  return { ok: true, value: v };
+}
