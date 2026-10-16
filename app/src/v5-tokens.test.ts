@@ -11,7 +11,8 @@ const vendored = readFileSync(resolve(__dirname, 'v5-tokens.css'), 'utf8');
 describe('v5 tokens', () => {
   it('the vendored copy matches the Staff app tokens.css (run: node scripts/sync-tokens.mjs)', () => {
     if (!existsSync(staff)) return; // separate repos: only checked where both are checked out
-    expect(vendored).toBe(derive(readFileSync(staff, 'utf8')));
+    const lf = (x: string) => x.split('\r\n').join('\n'); // autocrlf checkouts
+    expect(lf(vendored)).toBe(lf(derive(lf(readFileSync(staff, 'utf8')))));
   });
   it('has a light :root and a .dark block with the key tokens', () => {
     for (const t of ['--v5-bg', '--v5-ink', '--v5-k1', '--v5-k8', '--v5-field-line', '--v5-gold-text']) expect(vendored).toContain(t + ':');
