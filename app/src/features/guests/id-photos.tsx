@@ -34,18 +34,22 @@ export function IdPhotoProvider({ guestId, guestName, children }: { guestId: str
   const rotations = useMemo(() => new Map(refs.map((r) => [r.companionId, r.rotation])), [refs]);
   // Quick taps on Rotate send one write: the last turn per photo goes out 600 ms after the final tap.
   const qc = useQueryClient();
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  useEffect(() => { const t = timers.current; return () => t.forEach(clearTimeout); }, []);
-  const saveTurn = (path: string, rotation: number) => {
-    clearTimeout(timers.current.get(path));
-    timers.current.set(path, setTimeout(() => {
-      timers.current.delete(path);
-      void supabase.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: rotation }).then(({ error }) => {
-        if (error) toast.error('Could not save the turn');
-        else void qc.invalidateQueries({ queryKey: ['companions', guestId] });
-      });
-    }, 600));
+  const pending = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; rotation: number; done: (ok: boolean) => void }>());
+  const send = async (path: string, rotation: number) => {
+    const { data, error } = await supabase.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: rotation });
+    const ok = !error && (data as { ok?: boolean } | null)?.ok !== false;
+    if (ok) void qc.invalidateQueries({ queryKey: ['companions', guestId] });
+    else toast.error('Could not save the turn');
+    return ok;
   };
+  const flush = (path: string) => { const p = pending.current.get(path); if (!p) return; clearTimeout(p.timer); pending.current.delete(path); void send(path, p.rotation).then(p.done); };
+  // Leaving within the debounce window still saves the last turn.
+  useEffect(() => { const m = pending.current; return () => { for (const path of [...m.keys()]) flush(path); }; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveTurn = (path: string, rotation: number) => new Promise<boolean>((resolve) => {
+    pending.current.get(path)?.done(true); // superseded by this tap; the newest turn decides success
+    clearTimeout(pending.current.get(path)?.timer);
+    pending.current.set(path, { rotation, done: resolve, timer: setTimeout(() => flush(path), 600) });
+  });
   const ctx: Ctx = { rotations, urls: urls.data, loading: paths.length > 0 && urls.isPending, open: (id) => { const k = viewable.findIndex((r) => r.companionId === id); if (k >= 0) setViewer(k); } };
   return (
     <IdPhotoContext.Provider value={ctx}>
@@ -60,15 +64,16 @@ const tile = 'flex aspect-[8/5] shrink-0 flex-col items-center justify-center ga
 export function IdPhotoThumb({ companionId, path, name, className = 'w-28' }: { companionId: string; path: string; name: string; className?: string }) {
   const ctx = useContext(IdPhotoContext);
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
-  const [nat, setNat] = useState<{ w: number; h: number }>();
+  const [loaded, setLoaded] = useState<{ url: string; w: number; h: number }>();
   if (!ctx) return null;
   const url = ctx.urls?.get(path);
+  const nat = loaded?.url === url ? loaded : undefined; // a replaced photo never reuses the old size
   if (ctx.loading) return <div className={`${tile} ${className} animate-pulse`} aria-label="Loading ID photo" />;
   if (!url || brokenUrl === url) return <div className={`${tile} ${className} border-destructive/40`} title="A photo is recorded for this person but the file could not be loaded." role="img" aria-label={`ID photo for ${name} could not be loaded`}><ImageOff className="size-4" aria-hidden />Photo file not found</div>;
   return (
     <button type="button" title="Open the full photo" className={`group relative aspect-[8/5] shrink-0 overflow-hidden rounded-lg border bg-muted p-1 ${className} focus-visible:outline-2 focus-visible:outline-ring`} onClick={() => ctx.open(companionId)} aria-label={`Open ID photo of ${name}`}>
-      <span className="relative block size-full" style={{ containerType: 'size' }}>
-        <img src={url} alt="" loading="lazy" className="absolute top-1/2 left-1/2 object-contain" style={turnStyle(idPhotoTurn(ctx.rotations.get(companionId), nat))} onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} onError={() => setBrokenUrl(url)} />
+      <span key={path} className="relative block size-full" style={{ containerType: 'size' }}>
+        <img src={url} alt="" loading="lazy" className="absolute top-1/2 left-1/2 max-w-none object-contain" style={{ ...turnStyle(idPhotoTurn(ctx.rotations.get(companionId), nat)), visibility: nat || ctx.rotations.get(companionId) != null ? undefined : 'hidden' }} onLoad={(e) => setLoaded({ url: url!, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} onError={() => setBrokenUrl(url)} />
       </span>
       <span aria-hidden className="absolute right-1 bottom-1 rounded bg-black/60 p-1 text-white opacity-70 group-hover:opacity-100"><Maximize2 className="size-3.5" /></span>
     </button>

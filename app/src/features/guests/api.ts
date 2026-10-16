@@ -134,14 +134,9 @@ export async function fetchInquiries(propertyId: string) {
 // Companions (Lloyd, 2026-09-14): people on a stay besides the booker. ID
 // photo bytes are uploaded straight from the browser to the private
 // guest-id-photos bucket; only the resulting storage path is saved on the row.
-export type Companion = { id: string; guest_id: string; name: string; contact_number: string | null; id_type: string | null; id_number: string | null; id_photo_path: string | null; id_photo_rotation?: number | null; notes: string | null; created_at: string; updated_at: string; version: number };
+export type Companion = { id: string; guest_id: string; name: string; contact_number: string | null; id_type: string | null; id_number: string | null; id_photo_path: string | null; id_photo_rotation: number | null; notes: string | null; created_at: string; updated_at: string; version: number };
 export async function listGuestCompanions(guestId: string) {
-  const rows = await rpc<Companion[]>('list_guest_companions_v1', { p_guest_id: guestId });
-  // The turn saved from the Staff app (0/90/180/270, null = never turned) is a plain column; read it
-  // directly so the list RPC need not change. A failed read just means no saved turn.
-  const { data } = await supabase.from('guest_companions').select('id,id_photo_rotation').eq('guest_id', guestId);
-  const turns = new Map((data ?? []).map((r) => [r.id as string, (r.id_photo_rotation ?? null) as number | null]));
-  return rows.map((c) => (c.id_photo_rotation === undefined && turns.has(c.id) ? { ...c, id_photo_rotation: turns.get(c.id) } : c));
+  return rpc<Companion[]>('list_guest_companions_v1', { p_guest_id: guestId });
 }
 export function saveGuestCompanion(guestId: string, companionId: string | null, patch: Record<string, unknown>, expectedVersion: number | undefined, reason: string) {
   return rpc<{ ok: boolean; id: string; version: number }>('save_guest_companion_v1', { p_guest_id: guestId, p_companion_id: companionId, p_patch: patch, p_expected_version: expectedVersion ?? null, p_reason: reason });

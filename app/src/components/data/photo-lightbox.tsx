@@ -18,7 +18,7 @@ export function turnStyle(turn: number) {
   return { width: side ? '100cqh' : '100cqw', height: side ? '100cqw' : '100cqh', transform: `translate(-50%, -50%) rotate(${turn}deg)` };
 }
 
-export function PhotoLightbox({ items, index, onIndexChange, onClose, onTurn }: { items: LightboxItem[]; index: number | null; onIndexChange: (i: number) => void; onClose: () => void; onTurn?: (path: string, rotation: number) => void }) {
+export function PhotoLightbox({ items, index, onIndexChange, onClose, onTurn }: { items: LightboxItem[]; index: number | null; onIndexChange: (i: number) => void; onClose: () => void; onTurn?: (path: string, rotation: number) => Promise<boolean> | void }) {
   const n = items.length;
   const open = index !== null && n > 0;
   const i = open ? wrapIndex(index, n) : 0;
@@ -28,7 +28,7 @@ export function PhotoLightbox({ items, index, onIndexChange, onClose, onTurn }: 
   const [local, setLocal] = useState<Record<string, number>>({});
   const [nat, setNat] = useState<Record<string, { w: number; h: number }>>({});
   const turn = item?.path ? (local[item.path] ?? idPhotoTurn(item.turn, nat[item.src])) : 0;
-  const rotate = () => { if (!item?.path) return; const next = (turn + 90) % 360; setLocal((l) => ({ ...l, [item.path!]: next })); onTurn?.(item.path, next); };
+  const rotate = () => { if (!item?.path) return; const next = (turn + 90) % 360; setLocal((l) => ({ ...l, [item.path!]: next })); const path = item.path; void Promise.resolve(onTurn?.(path, next)).then((ok) => { if (ok === false) setLocal((l) => { const { [path]: _, ...rest } = l; return rest; }); }); };
   const go = (d: number) => onIndexChange(wrapIndex(i + d, n));
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function PhotoLightbox({ items, index, onIndexChange, onClose, onTurn }: 
               onPointerCancel={() => { down.current = null; }}
             >
               {item.path
-                ? <img key={item.src} src={item.src} alt={item.label} draggable={false} onLoad={(e) => setNat((m) => ({ ...m, [item.src]: { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight } }))} className="absolute top-1/2 left-1/2 object-contain" style={turnStyle(turn)} />
+                ? <img key={item.src} src={item.src} alt={item.label} draggable={false} onLoad={(e) => setNat((m) => ({ ...m, [item.src]: { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight } }))} className="absolute top-1/2 left-1/2 max-w-none object-contain" style={turnStyle(turn)} />
                 : <img key={item.src} src={item.src} alt={item.label} draggable={false} className="max-h-full max-w-full object-contain" />}
               {n > 1 && (
                 <>
