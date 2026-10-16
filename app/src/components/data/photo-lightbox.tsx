@@ -1,21 +1,34 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, X } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { ChevronLeft, ChevronRight, ExternalLink, RotateCw, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { idPhotoTurn } from '@/features/guests/id-photo';
 import { counterText, swipeStep, wrapIndex } from '@/lib/lightbox';
 
 // One photo viewer for the whole dashboard (cleaning log, guest and companion ID photos):
 // full-size image, Left/Right/Esc, swipe, "3 / 24", a label per photo and a thumbnail strip
 // so a whole set can be checked in sequence without opening files one by one.
 
-export type LightboxItem = { src: string; thumb?: string; label: string; sub?: string; href?: string };
+export type LightboxItem = { src: string; thumb?: string; label: string; sub?: string; href?: string;
+  /** Guest ID photos only: the storage path (enables Rotate) and the turn saved so far (null = never turned). */
+  path?: string; turn?: number | null };
 
-export function PhotoLightbox({ items, index, onIndexChange, onClose }: { items: LightboxItem[]; index: number | null; onIndexChange: (i: number) => void; onClose: () => void }) {
+/** Centre the picture in its (container-size) frame and turn it; a sideways turn swaps width and height so the turned picture fits. */
+export function turnStyle(turn: number) {
+  const side = turn === 90 || turn === 270;
+  return { width: side ? '100cqh' : '100cqw', height: side ? '100cqw' : '100cqh', transform: `translate(-50%, -50%) rotate(${turn}deg)` };
+}
+
+export function PhotoLightbox({ items, index, onIndexChange, onClose, onTurn }: { items: LightboxItem[]; index: number | null; onIndexChange: (i: number) => void; onClose: () => void; onTurn?: (path: string, rotation: number) => void }) {
   const n = items.length;
   const open = index !== null && n > 0;
   const i = open ? wrapIndex(index, n) : 0;
   const item = items[i];
   const down = useRef<{ x: number; y: number } | null>(null);
   const strip = useRef<HTMLDivElement>(null);
+  const [local, setLocal] = useState<Record<string, number>>({});
+  const [nat, setNat] = useState<Record<string, { w: number; h: number }>>({});
+  const turn = item?.path ? (local[item.path] ?? idPhotoTurn(item.turn, nat[item.src])) : 0;
+  const rotate = () => { if (!item?.path) return; const next = (turn + 90) % 360; setLocal((l) => ({ ...l, [item.path!]: next })); onTurn?.(item.path, next); };
   const go = (d: number) => onIndexChange(wrapIndex(i + d, n));
 
   useEffect(() => {
@@ -43,16 +56,20 @@ export function PhotoLightbox({ items, index, onIndexChange, onClose }: { items:
                 <p className="truncate font-medium">{item.label}</p>
                 {item.sub && <p className="truncate text-xs text-white/60">{item.sub}</p>}
               </div>
+              {item.path && onTurn && <button type="button" onClick={rotate} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-white/80 hover:bg-white/10" aria-label="Rotate the photo a quarter turn clockwise"><RotateCw className="size-3.5" aria-hidden /> Rotate</button>}
               <a href={item.href ?? item.src} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-white/80 hover:bg-white/10" aria-label="Open the original in a new tab"><ExternalLink className="size-3.5" aria-hidden /> Original</a>
               <button type="button" onClick={onClose} className="rounded p-1.5 hover:bg-white/10" aria-label="Close viewer"><X className="size-5" aria-hidden /></button>
             </div>
             <div
               className="relative flex h-[62vh] touch-pan-y select-none items-center justify-center"
+              style={item.path ? { containerType: 'size' } : undefined}
               onPointerDown={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
               onPointerUp={(e) => { const s = down.current; down.current = null; if (s) { const step = swipeStep(e.clientX - s.x, e.clientY - s.y); if (step) go(step); } }}
               onPointerCancel={() => { down.current = null; }}
             >
-              <img key={item.src} src={item.src} alt={item.label} draggable={false} className="max-h-full max-w-full object-contain" />
+              {item.path
+                ? <img key={item.src} src={item.src} alt={item.label} draggable={false} onLoad={(e) => setNat((m) => ({ ...m, [item.src]: { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight } }))} className="absolute top-1/2 left-1/2 object-contain" style={turnStyle(turn)} />
+                : <img key={item.src} src={item.src} alt={item.label} draggable={false} className="max-h-full max-w-full object-contain" />}
               {n > 1 && (
                 <>
                   <button type="button" onClick={() => go(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2.5 hover:bg-black/80 focus-visible:outline-2 focus-visible:outline-white" aria-label="Previous photo"><ChevronLeft className="size-6" aria-hidden /></button>

@@ -1,16 +1,17 @@
-import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ImageOff, Maximize2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { toAppError } from '@/lib/errors';
-import { PhotoLightbox } from '@/components/data/photo-lightbox';
+import { PhotoLightbox, turnStyle } from '@/components/data/photo-lightbox';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { companionIdPhotoUrls, listGuestCompanions, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type ProfileDetails } from './api';
-import { ID_TYPES, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
+import { ID_TYPES, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
 import { validateIdPhoto } from './local-records';
 
 // ID photos on the guest page (Lloyd 2026-10-02: show the photo itself, full size on a click - not a
@@ -18,7 +19,7 @@ import { validateIdPhoto } from './local-records';
 // (object-contain); a click opens one shared viewer that steps through the guest's own photo and every
 // companion's. Signed URLs last 15 minutes and are fetched once per page.
 
-type Ctx = { urls: Map<string, string | null> | undefined; loading: boolean; open: (companionId: string) => void };
+type Ctx = { rotations: Map<string, number | null>; urls: Map<string, string | null> | undefined; loading: boolean; open: (companionId: string) => void };
 const IdPhotoContext = createContext<Ctx | null>(null);
 
 export function IdPhotoProvider({ guestId, guestName, children }: { guestId: string; guestName: string; children: ReactNode }) {
@@ -29,28 +30,46 @@ export function IdPhotoProvider({ guestId, guestName, children }: { guestId: str
   // Links last 15 minutes; renew at 10 so a tile or the viewer opened later never holds a dead link.
   const urls = useQuery({ queryKey: ['id-photo-urls', guestId, paths.join('|')], queryFn: () => companionIdPhotoUrls(paths), enabled: paths.length > 0, staleTime: 10 * 60_000, refetchInterval: 10 * 60_000 });
   const viewable = refs.filter((r) => urls.data?.get(r.path));
-  const items = viewable.map((r) => ({ src: urls.data!.get(r.path)!, label: idPhotoLabel(r), sub: r.idType ? r.idType.replaceAll('_', ' ') : undefined }));
-  const ctx: Ctx = { urls: urls.data, loading: paths.length > 0 && urls.isPending, open: (id) => { const k = viewable.findIndex((r) => r.companionId === id); if (k >= 0) setViewer(k); } };
+  const items = viewable.map((r) => ({ src: urls.data!.get(r.path)!, label: idPhotoLabel(r), sub: r.idType ? r.idType.replaceAll('_', ' ') : undefined, path: r.path, turn: r.rotation }));
+  const rotations = useMemo(() => new Map(refs.map((r) => [r.companionId, r.rotation])), [refs]);
+  // Quick taps on Rotate send one write: the last turn per photo goes out 600 ms after the final tap.
+  const qc = useQueryClient();
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => { const t = timers.current; return () => t.forEach(clearTimeout); }, []);
+  const saveTurn = (path: string, rotation: number) => {
+    clearTimeout(timers.current.get(path));
+    timers.current.set(path, setTimeout(() => {
+      timers.current.delete(path);
+      void supabase.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: rotation }).then(({ error }) => {
+        if (error) toast.error('Could not save the turn');
+        else void qc.invalidateQueries({ queryKey: ['companions', guestId] });
+      });
+    }, 600));
+  };
+  const ctx: Ctx = { rotations, urls: urls.data, loading: paths.length > 0 && urls.isPending, open: (id) => { const k = viewable.findIndex((r) => r.companionId === id); if (k >= 0) setViewer(k); } };
   return (
     <IdPhotoContext.Provider value={ctx}>
       {children}
-      <PhotoLightbox items={items} index={viewer} onIndexChange={setViewer} onClose={() => setViewer(null)} />
+      <PhotoLightbox items={items} index={viewer} onIndexChange={setViewer} onClose={() => setViewer(null)} onTurn={saveTurn} />
     </IdPhotoContext.Provider>
   );
 }
 
-const tile = 'flex aspect-[4/3] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border bg-muted p-2 text-center text-xs leading-tight text-muted-foreground';
+const tile = 'flex aspect-[8/5] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border bg-muted p-2 text-center text-xs leading-tight text-muted-foreground';
 
 export function IdPhotoThumb({ companionId, path, name, className = 'w-28' }: { companionId: string; path: string; name: string; className?: string }) {
   const ctx = useContext(IdPhotoContext);
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const [nat, setNat] = useState<{ w: number; h: number }>();
   if (!ctx) return null;
   const url = ctx.urls?.get(path);
   if (ctx.loading) return <div className={`${tile} ${className} animate-pulse`} aria-label="Loading ID photo" />;
   if (!url || brokenUrl === url) return <div className={`${tile} ${className} border-destructive/40`} title="A photo is recorded for this person but the file could not be loaded." role="img" aria-label={`ID photo for ${name} could not be loaded`}><ImageOff className="size-4" aria-hidden />Photo file not found</div>;
   return (
-    <button type="button" title="Open the full photo" className={`group relative aspect-[4/3] shrink-0 overflow-hidden rounded-lg border bg-muted ${className} focus-visible:outline-2 focus-visible:outline-ring`} onClick={() => ctx.open(companionId)} aria-label={`Open ID photo of ${name}`}>
-      <img src={url} alt="" loading="lazy" className="size-full object-contain" onError={() => setBrokenUrl(url)} />
+    <button type="button" title="Open the full photo" className={`group relative aspect-[8/5] shrink-0 overflow-hidden rounded-lg border bg-muted p-1 ${className} focus-visible:outline-2 focus-visible:outline-ring`} onClick={() => ctx.open(companionId)} aria-label={`Open ID photo of ${name}`}>
+      <span className="relative block size-full" style={{ containerType: 'size' }}>
+        <img src={url} alt="" loading="lazy" className="absolute top-1/2 left-1/2 object-contain" style={turnStyle(idPhotoTurn(ctx.rotations.get(companionId), nat))} onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} onError={() => setBrokenUrl(url)} />
+      </span>
       <span aria-hidden className="absolute right-1 bottom-1 rounded bg-black/60 p-1 text-white opacity-70 group-hover:opacity-100"><Maximize2 className="size-3.5" /></span>
     </button>
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Companion } from './api';
-import { companionFlags, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
+import { companionFlags, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
 
 const c = (o: Partial<Companion>): Companion => ({ id: 'x', guest_id: 'g', name: 'Test Person', contact_number: null, id_type: null, id_number: null, id_photo_path: null, notes: null, created_at: '', updated_at: '', version: 1, ...o });
 const rows = [c({ id: 'a', name: 'Co One', id_photo_path: 'a/1.jpg' }), c({ id: 'b', name: ' test person ', id_photo_path: 'b/1.jpg', id_type: 'passport' }), c({ id: 'd', name: 'Test Person' })];
@@ -58,5 +58,19 @@ describe('guest ID photos', () => {
     expect(idPhotoFormError(f, 'ab')).toMatch(/reason/);
     expect(idPhotoFormError(f, 'a'.repeat(501))).toMatch(/500/);
     expect(idPhotoFormError(f, 'ID collected at check-in')).toBeNull();
+  });
+});
+
+describe('idPhotoTurn', () => {
+  it('uses a saved turn, including 0', () => {
+    expect(idPhotoTurn(90, { w: 100, h: 300 })).toBe(90);
+    expect(idPhotoTurn(0, { w: 100, h: 300 })).toBe(0);
+  });
+  it('turns an upright photo 270 when never turned, else 0', () => {
+    expect(idPhotoTurn(null, { w: 100, h: 200 })).toBe(270);
+    expect(idPhotoTurn(undefined, { w: 100, h: 104 })).toBe(0);
+    expect(idPhotoTurn(null, { w: 200, h: 100 })).toBe(0);
+    expect(idPhotoTurn(null)).toBe(0);
+    expect(idPhotoTurn(45, { w: 100, h: 200 })).toBe(270);
   });
 });

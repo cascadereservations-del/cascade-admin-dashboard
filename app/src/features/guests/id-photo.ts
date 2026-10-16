@@ -41,14 +41,21 @@ export function companionFlags(rows: { guest_id: string; name: string; id_photo_
   return { companions, photos };
 }
 
-export type IdPhotoRef = { companionId: string; path: string; name: string; idType: string | null; isSelf: boolean };
+export type IdPhotoRef = { companionId: string; path: string; name: string; idType: string | null; isSelf: boolean; rotation: number | null };
+
+/** Degrees to turn an ID photo clockwise: the saved turn if valid, else 270 for a photo taken upright
+ *  (taller than wide - an ID card is landscape), else 0. Same rule as the Staff app. */
+export function idPhotoTurn(saved: number | null | undefined, natural?: { w: number; h: number }): number {
+  if (saved === 0 || saved === 90 || saved === 180 || saved === 270) return saved;
+  return natural && natural.h > natural.w * 1.05 ? 270 : 0;
+}
 
 /** Every ID photo for the viewer: the guest's own first, then companions in list order. */
 export function idPhotoRefs(rows: Companion[] | undefined, guestName: string): IdPhotoRef[] {
   const self = findSelfCompanion(rows, guestName);
   const withPhoto = (rows ?? []).filter((c) => c.id_photo_path);
   const ordered = [...withPhoto.filter((c) => c.id === self?.id), ...withPhoto.filter((c) => c.id !== self?.id)];
-  return ordered.map((c) => ({ companionId: c.id, path: c.id_photo_path!, name: c.name, idType: c.id_type, isSelf: c.id === self?.id }));
+  return ordered.map((c) => ({ companionId: c.id, path: c.id_photo_path!, name: c.name, idType: c.id_type, isSelf: c.id === self?.id, rotation: c.id_photo_rotation ?? null }));
 }
 
 /** Patch for the audited companion save that creates or updates the guest's own row. */
