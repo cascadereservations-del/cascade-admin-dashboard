@@ -1,152 +1,91 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./v5-tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* Cascade Staff v5 (approved 2026-10-13). Source of every value: docs/design-v5/tokens.css (the one token sheet for the staff
-   shell and every folded surface). The dashboard keeps its shadcn variable names and maps them onto v5: cool mist background,
-   ink text, navy action, champagne gold as the one accent, dark navy theme. Component code is untouched: this file is the re-skin.
-   Rules kept from before: gold is never body text on light (use --accent-bronze-text = v5 gold-text), status colours always travel
-   with a glyph and a word, every text pair is AA in both themes, no hex belongs in a component. Light is :root; dark is .dark
-   (set by use-theme from the shell's theme or the phone's). */
-/* Values here that tokens.css does not have yet (proposed additions, same name light / dark; the rest map 1:1 to --v5-*):
-     --v5-field-line      #7B8998 / #6A7E94   field outline, 3:1 non-text contrast (v5-line-2 is 2.1:1 / 2.4:1). Used as --input.
-     --v5-gold-wash       #EBE3D5 / #2A2F33   solid gold-soft over the page, for hover and accent fills (--accent). --cream: #EBE3D5 / #2E3338.
-     --v5-sidebar-hover   #223A55 / #1A2B3F   sidebar item hover (--sidebar-accent); dark --sidebar #0F1A28 is the top of v5-ambient.
-     --v5-turn-stripe     #B9CCEB / #24406E   turnover cell stripe (--cal-turn-stripe).
-     --v5-ok-wash         #DEF3E8 / #163628   opaque v5-ok-w (--ok-soft).
-     --v5-r-field-md      radius 20px base (--radius), so md = 14px = v5-r-field; cards are fixed at v5-r-card 24px in the base layer. */
+/* Cascade Staff v5. The one token sheet is the Staff app's tokens.css, vendored as v5-tokens.css (generated: node scripts/sync-tokens.mjs;
+   a test fails when the copy has drifted). This file only maps the shadcn variable names onto var(--v5-*), so no hex is copied by hand:
+   change a colour in tokens.css and re-sync. Light is :root; dark is .dark (set by use-theme from the shell's theme or the phone's), and
+   v5-tokens.css keys the v5 dark values to .dark, so every mapping below follows the theme with no per-theme copy.
+   Rules kept: gold is never body text on light (use --accent-bronze-text = v5 gold-text), status colours always travel with a glyph and a
+   word, every text pair is AA in both themes, no hex belongs in a component. The few hex values left have no v5 token (marked). */
 :root {
-  --radius: 20px;
-  --background: #EEF1F4;            /* v5-bg */
-  --foreground: #0F1B2A;            /* v5-ink */
-  --card: #FFFFFF;                  /* v5-surf */
-  --card-foreground: #0F1B2A;
-  --popover: #FFFFFF;
-  --popover-foreground: #0F1B2A;
-  --primary: #17324D;               /* v5-act */
-  --primary-foreground: #FFFFFF;    /* v5-act-fg */
-  --secondary: #E8ECF1;             /* v5-sunk */
-  --secondary-foreground: #0F1B2A;
-  --muted: #E8ECF1;
-  --muted-foreground: #4A5869;      /* v5-ink-2 */
-  --accent: var(--v5-gold-wash);    /* v5-gold-soft over the background */
-  --accent-foreground: #17324D;
-  --destructive: #8E1F2A;           /* v5-danger-t: AA as text and as a fill under white */
-  --destructive-foreground: #FFFFFF;
-  --border-strong: #A9B4C0;         /* v5-line-2 */
-  --border: #D9DFE6;                /* v5-line */
-  --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8;
-  --v5-t-section: clamp(1.25rem, 1.297rem + 0.904vw, 1.875rem); /* the shell's section scale (tokens.css has the same line) */
-  --input: var(--v5-field-line);    /* field outline: v5-line-2 is 2.1:1, this is 3.2:1 or better (WCAG 1.4.11); the one deliberate departure from tokens.css */
-  --ring: #17324D;
+  --radius: var(--v5-r-card);       /* 16px: sm = 8 (v5-r-sm), md = 12 (v5-r-field), lg = 16 (v5-r-card) */
+  --background: var(--v5-bg);
+  --foreground: var(--v5-ink);
+  --card: var(--v5-surf);
+  --card-foreground: var(--v5-ink);
+  --popover: var(--v5-surf);
+  --popover-foreground: var(--v5-ink);
+  --primary: var(--v5-act);
+  --primary-foreground: var(--v5-act-fg);
+  --secondary: var(--v5-sunk);
+  --secondary-foreground: var(--v5-ink);
+  --muted: var(--v5-sunk);
+  --muted-foreground: var(--v5-ink-2);
+  --accent: var(--v5-gold-wash);    /* solid gold-soft over the page, for hover and accent fills */
+  --accent-foreground: var(--v5-act);
+  --destructive: var(--v5-danger-t);/* AA as text and as a fill under --destructive-foreground */
+  --destructive-foreground: #FFFFFF;/* no token: white on light danger-t */
+  --border-strong: var(--v5-line-2);
+  --border: var(--v5-line);
+  --input: var(--v5-field-line);    /* field outline: v5-line-2 is about 2:1, field-line is 3:1 or better (WCAG 1.4.11) */
+  --ring: var(--v5-act);
   /* Legacy brand aliases kept for the few components that name them. */
-  --champagne: #E0B872;             /* v5-gold */
-  --mahogany: #0F1B2A;
-  --cream: #EBE3D5;
-  --chart-1: #1F3A68;               /* the one blue family */
+  --champagne: var(--v5-gold);
+  --mahogany: var(--v5-ink);
+  --cream: var(--v5-gold-wash);
+  --chart-1: #1F3A68;               /* no token: the one blue family, with a teal, a green and a red */
   --chart-2: #2A9DB0;
   --chart-3: #5B8BD0;
   --chart-4: #1B5E3F;
   --chart-5: #D23B4B;
-  --sidebar: #16283C;               /* v5-panel */
-  --sidebar-foreground: #F2F5F8;
-  --sidebar-primary: #E0B872;
-  --sidebar-primary-foreground: #0F1B2A;
+  --sidebar: var(--v5-panel);
+  --sidebar-foreground: var(--v5-panel-fg);
+  --sidebar-primary: var(--v5-gold);
+  --sidebar-primary-foreground: var(--v5-gold-fg);
   --sidebar-accent: var(--v5-sidebar-hover);
-  --sidebar-accent-foreground: #F2F5F8;
+  --sidebar-accent-foreground: var(--v5-panel-fg);
   --sidebar-border: rgba(242, 245, 248, 0.14);
-  --sidebar-ring: #E0B872;
-  --accent-bronze: #E0B872;         /* decoration and fills only */
-  --accent-bronze-text: #8A5A12;    /* v5-gold-text: the only gold allowed as text on light */
-  --accent-bronze-soft: #EBE3D5;
-  --ok: #1B5E3F;  --ok-soft: var(--v5-ok-wash);
-  --warn: #7A4304; --warn-soft: #FFEED6;
-  --info: #1F4C8F; --info-soft: #E3ECFA;
-  --danger-soft: #FBE4E6;
-  --shadow-sm: 0 1px 2px rgba(20, 40, 70, 0.06), 0 4px 14px rgba(20, 40, 70, 0.08);
+  --sidebar-ring: var(--v5-gold);
+  --accent-bronze: var(--v5-gold);  /* decoration and fills only */
+  --accent-bronze-text: var(--v5-gold-text); /* the only gold allowed as text */
+  --accent-bronze-soft: var(--v5-gold-wash);
+  --ok: var(--v5-ok-t);  --ok-soft: var(--v5-ok-wash);
+  --warn: var(--v5-warn-t); --warn-soft: var(--v5-warn-w);
+  --info: var(--v5-info-t); --info-soft: var(--v5-info-w);
+  --danger-soft: var(--v5-danger-w);
+  --shadow-sm: var(--v5-shadow-card);
   --shadow-md: 0 2px 6px rgba(20, 40, 70, 0.08), 0 12px 32px rgba(20, 40, 70, 0.12);
   --shadow-lg: 0 8px 16px rgba(15, 27, 42, 0.12), 0 28px 56px rgba(15, 27, 42, 0.18);
-  /* Calendar: bookings are the one blue family, a shade per guest (--cal-g1..g5); the Airbnb/Direct tag is the letter A or D.
-     Blocked, clash and the notice colours come from v5. */
-  --cal-g1: #1F3A68; --cal-g1-fg: #FFFFFF;
-  --cal-g2: #3563A8; --cal-g2-fg: #FFFFFF;
-  --cal-g3: #5B8BD0; --cal-g3-fg: #0F1B2A;
-  --cal-g4: #8DB2E3; --cal-g4-fg: #0F1B2A;
-  --cal-g5: #27508A; --cal-g5-fg: #FFFFFF;
-  --cal-direct-edge: #E0B872;
-  --cal-free-bg: #F7F9FB; --cal-free-edge: #8FA6BC; --cal-free-fg: #0F1B2A;
-  --cal-blocked-bg: #D5DBE2; --cal-blocked-edge: #4A5869; --cal-blocked-fg: #3B4756; --cal-blocked-stripe: rgba(74, 88, 105, 0.22); --cal-blocked-icon: #3B4756;
-  --cal-conflict-bg: #FBE4E6; --cal-conflict-edge: #E5484D; --cal-conflict-fg: #8E1F2A;
-  --cal-turn-bg: #E3ECFA; --cal-turn-edge: #1F4C8F; --cal-turn-fg: #0F1B2A; --cal-turn-stripe: var(--v5-turn-stripe);
-  --cal-past-bg: #E8ECF1; --cal-past-fg: #5E6B7A;
-  --notice-power: #EE9B3B; --notice-water: #2A9DB0; --notice-rain: #9A8BDB; --notice-deep: #6CC4A1; --notice-fg: #0F1B2A;
+  /* Calendar: each GUEST has one of the eight booking colours --v5-k1..k8 (same rule as the Staff calendar, see calendar-shade.ts);
+     the Airbnb/Direct tag is the letter A or D. Blocked, clash and the notice colours come from v5. */
+  --cal-direct-edge: var(--v5-gold);
+  --cal-free-bg: var(--v5-surf); --cal-free-edge: var(--v5-cal-free-edge); --cal-free-fg: var(--v5-ink);
+  --cal-blocked-bg: var(--v5-cal-blocked); --cal-blocked-edge: var(--v5-line-2); --cal-blocked-fg: var(--v5-cal-blocked-fg); --cal-blocked-stripe: var(--v5-cal-hatch); --cal-blocked-icon: var(--v5-cal-blocked-fg);
+  --cal-conflict-bg: var(--v5-danger-w); --cal-conflict-edge: var(--v5-cal-clash-ring); --cal-conflict-fg: var(--v5-danger-t);
+  --cal-turn-bg: var(--v5-cal-2nd); --cal-turn-edge: var(--v5-cal-2nd-bar); --cal-turn-fg: var(--v5-cal-2nd-fg); --cal-turn-stripe: var(--v5-cal-hatch);
+  --cal-past-bg: var(--v5-surf-2); --cal-past-fg: var(--v5-cal-past-fg);
+  --notice-power: var(--v5-power-solid); --notice-water: var(--v5-water-solid); --notice-rain: var(--v5-rain-solid); --notice-deep: var(--v5-deep-solid); --notice-fg: var(--v5-notice-fg);
   --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 300ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Only what has no v5 token differs by theme here; every var(--v5-*) above already follows .dark. */
 .dark {
-  --background: #0B1420;
-  --foreground: #EEF3F8;
-  --card: #132132;
-  --card-foreground: #EEF3F8;
-  --popover: #1A2B3F;
-  --popover-foreground: #EEF3F8;
-  --primary: #EEF3F8;               /* v5 dark action is the light ink; its text is the dark ink */
-  --primary-foreground: #0F1B2A;
-  --secondary: #1C2C40;
-  --secondary-foreground: #EEF3F8;
-  --muted: #1C2C40;
-  --muted-foreground: #AEBCCB;
-  --accent: var(--v5-gold-wash);
-  --accent-foreground: #E0B872;
-  --destructive: #F4A3AA;
   --destructive-foreground: #3B1A1E;
-  --border-strong: #4A5C70;
-  --border: #24364B;
-  --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
-  --input: var(--v5-field-line);
-  --ring: #EEF3F8;
-  --champagne: #E0B872;
-  --mahogany: #EEF3F8;
-  --cream: #2E3338;
   --chart-1: #8DB2E3;
   --chart-2: #4FC3C7;
   --chart-3: #5B8BD0;
   --chart-4: #7FD3A0;
   --chart-5: #F0646F;
-  --sidebar: #0F1A28;
-  --sidebar-foreground: #EEF3F8;
-  --sidebar-primary: #E0B872;
-  --sidebar-primary-foreground: #0F1B2A;
-  --sidebar-accent: var(--v5-sidebar-hover);
-  --sidebar-accent-foreground: #EEF3F8;
   --sidebar-border: rgba(200, 220, 240, 0.10);
-  --sidebar-ring: #E0B872;
-  --accent-bronze: #E0B872;
-  --accent-bronze-text: #E0B872;
-  --accent-bronze-soft: #2E3338;
-  --ok: #7FD3A0;  --ok-soft: var(--v5-ok-wash);
-  --warn: #F0B866; --warn-soft: #3A2A12;
-  --info: #A9C4F5; --info-soft: #17284A;
-  --danger-soft: #3B1A1E;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 14px rgba(0, 0, 0, 0.30);
+  --shadow-sm: none;
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
-  --cal-g1: #8DB2E3; --cal-g1-fg: #0F1B2A;
-  --cal-g2: #5B8BD0; --cal-g2-fg: #0F1B2A;
-  --cal-g3: #3563A8; --cal-g3-fg: #FFFFFF;
-  --cal-g4: #C3D6F0; --cal-g4-fg: #0F1B2A;
-  --cal-g5: #A9C4F5; --cal-g5-fg: #0F1B2A;
-  --cal-direct-edge: #E0B872;
-  --cal-free-bg: #1A2B3F; --cal-free-edge: #4A6580; --cal-free-fg: #EEF3F8;
-  --cal-blocked-bg: #2A3A4E; --cal-blocked-edge: #8C9BAB; --cal-blocked-fg: #C9D3DE; --cal-blocked-stripe: rgba(200, 220, 240, 0.14); --cal-blocked-icon: #C9D3DE;
-  --cal-conflict-bg: #3B1A1E; --cal-conflict-edge: #F0646F; --cal-conflict-fg: #F4A3AA;
-  --cal-turn-bg: #17284A; --cal-turn-edge: #A9C4F5; --cal-turn-fg: #EEF3F8; --cal-turn-stripe: var(--v5-turn-stripe);
-  --cal-past-bg: #132132; --cal-past-fg: #8C9BAB;
-  --notice-water: #4FC3C7; --notice-rain: #B3A8EA; --notice-deep: #7FD1AE;
 }
 
 @theme inline {
@@ -205,14 +144,14 @@
   --color-info-soft: var(--info-soft);
   --color-danger-soft: var(--danger-soft);
   /* v5 type: the phone's own font for everything; DM Serif Display for titles and names only. */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
-  --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --font-sans: var(--v5-font-ui);
+  --font-display: var(--v5-font-display);
 }
 
-/* DM Serif Display ships with Cascade Staff: one self-hosted file at <staff root>/fonts/dm-serif-display-400.woff2. The built CSS sits in
-   <staff root>/admin/assets/, so ../../fonts/ reaches it (kept as written: the file is not part of this build). Standalone, the URL 404s and
-   Georgia is used. Nothing is fetched from a third party. */
-@font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: local("DM Serif Display"), url("../../fonts/dm-serif-display-400.woff2") format("woff2"); }
+/* The Staff app's two fonts, self-hosted (copies of staff-app/fonts, in app/public/fonts): Inter for the UI, DM Serif Display for titles and names.
+   Nothing is fetched from a third party. */
+@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url("/fonts/inter-var.woff2") format("woff2"); }
+@font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: local("DM Serif Display"), url("/fonts/dm-serif-display-400.woff2") format("woff2"); }
 
 @layer base {
   * {
@@ -255,11 +194,9 @@
     font-weight: 400;
   }
   [data-slot="card"] {
-    border-radius: 24px; /* v5-r-card */
-    box-shadow: var(--shadow-sm);
-  }
-  .dark [data-slot="card"] {
-    box-shadow: none;
+    border-radius: var(--v5-r-card);
+    border-color: transparent;       /* the Staff card has no border: its shadow carries a 1px --v5-line ring */
+    box-shadow: var(--v5-shadow-card);
   }
   [data-slot="badge"] {
     text-transform: uppercase;
@@ -315,17 +252,19 @@
   }
 }
 
-/* Admin calendar chips and legend swatches. Booked chips are the one blue family, a shade per guest (data-shade 1..5, chosen from
-   the guest so the same person is the same blue). The A or D tag says Airbnb or Direct; a direct stay also has a gold left edge.
+/* Admin calendar chips and legend swatches. Booked chips are the one blue family, one of eight colours per guest (data-col 1..8, chosen by guestColours() in calendar-shade.ts, the Staff calendar's rule). The A or D tag says Airbnb or Direct; a direct stay also has a gold left edge.
    Blocked is a hatch, never a strike-through (strike-through reads as cancelled). Conflict adds a ring, a "!" and the word. */
 @layer components {
-  .cal-chip { background: var(--cal-g1); color: var(--cal-g1-fg); }
-  .cal-chip[data-shade="2"] { background: var(--cal-g2); color: var(--cal-g2-fg); }
-  .cal-chip[data-shade="3"] { background: var(--cal-g3); color: var(--cal-g3-fg); }
-  .cal-chip[data-shade="4"] { background: var(--cal-g4); color: var(--cal-g4-fg); }
-  .cal-chip[data-shade="5"] { background: var(--cal-g5); color: var(--cal-g5-fg); }
+  .cal-chip { background: var(--v5-k1); color: var(--v5-k1-fg); }
+  .cal-chip[data-col="2"] { background: var(--v5-k2); color: var(--v5-k2-fg); }
+  .cal-chip[data-col="3"] { background: var(--v5-k3); color: var(--v5-k3-fg); }
+  .cal-chip[data-col="4"] { background: var(--v5-k4); color: var(--v5-k4-fg); }
+  .cal-chip[data-col="5"] { background: var(--v5-k5); color: var(--v5-k5-fg); }
+  .cal-chip[data-col="6"] { background: var(--v5-k6); color: var(--v5-k6-fg); }
+  .cal-chip[data-col="7"] { background: var(--v5-k7); color: var(--v5-k7-fg); }
+  .cal-chip[data-col="8"] { background: var(--v5-k8); color: var(--v5-k8-fg); }
   .cal-chip[data-source="direct"] { box-shadow: inset 3px 0 0 var(--cal-direct-edge); }
-  .cal-chip[data-state="inquiry"] { background: transparent; outline: 1px dashed var(--cal-g2); outline-offset: -1px; box-shadow: none; color: var(--foreground); }
+  .cal-chip[data-state="inquiry"] { background: transparent; outline: 1px dashed var(--v5-k1); outline-offset: -1px; box-shadow: none; color: var(--foreground); }
   .cal-chip[data-state="conflict"] { background: var(--cal-conflict-bg); color: var(--cal-conflict-fg); box-shadow: inset 0 0 0 2px var(--cal-conflict-edge); }
   .cal-chip[data-state="blocked"] {
     background: repeating-linear-gradient(135deg, transparent 0 5px, var(--cal-blocked-stripe) 5px 7px), var(--cal-blocked-bg);
@@ -333,9 +272,9 @@
   }
   .cal-cell-turn { background: var(--cal-turn-bg); color: var(--cal-turn-fg); box-shadow: inset 0 2px 0 var(--cal-turn-edge); }
   .cal-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; }
-  .cal-swatch-booked { background: var(--cal-g1); }
-  .cal-swatch-direct { background: var(--cal-g1); box-shadow: inset 3px 0 0 var(--cal-direct-edge); }
-  .cal-swatch-inquiry { outline: 1px dashed var(--cal-g2); outline-offset: -1px; }
+  .cal-swatch-booked { background: var(--v5-k1); }
+  .cal-swatch-direct { background: var(--v5-k1); box-shadow: inset 3px 0 0 var(--cal-direct-edge); }
+  .cal-swatch-inquiry { outline: 1px dashed var(--v5-k1); outline-offset: -1px; }
   .cal-swatch-blocked { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--cal-blocked-stripe) 3px 5px), var(--cal-blocked-bg); box-shadow: inset 0 0 0 1px var(--cal-blocked-edge); }
   .cal-swatch-conflict { background: var(--cal-conflict-bg); box-shadow: inset 0 0 0 2px var(--cal-conflict-edge); }
   .cal-swatch-turn { background: var(--cal-turn-bg); box-shadow: inset 0 2px 0 var(--cal-turn-edge); }
@@ -384,7 +323,19 @@ h1, [data-slot="card-title"], .font-display { font-family: var(--font-display); 
 
 /* D_ F18 (embed only): titles follow the shell's section scale (--v5-t-section: about 24 px at 360 px by the clamp, never the 28 to 34 px of the desktop h1).
    Scoped to [data-embed], so the desktop layout is untouched. */
-[data-embed] h1, [data-embed] [data-slot="card-title"] { font-size: var(--v5-t-section); line-height: 1.2; }
+[data-embed] h1 { font-size: var(--v5-t-section); line-height: 1.2; }
+/* Embed look = the Staff app (staff-app/styles.css): Inter body at the fluid body size, serif page title (above), card titles in Inter 650 like the Staff
+   .card-head h3, cards padded by --v5-pad with an uppercase 700 section label, list rows hairline-separated. Scoped to [data-embed]. */
+body:has([data-embed]) { font-family: var(--v5-font-ui); font-size: var(--v5-t-body); line-height: 1.5; letter-spacing: 0; }
+[data-embed] [data-slot="card"] { gap: var(--v5-gap); padding-block: var(--v5-pad); }
+[data-embed] [data-slot="card-header"], [data-embed] [data-slot="card-content"], [data-embed] [data-slot="card-footer"] { padding-inline: var(--v5-pad); }
+[data-embed] [data-slot="card-title"] { font-family: var(--v5-font-ui); font-size: var(--v5-t-num); line-height: 1.25; font-weight: 650; letter-spacing: 0; }
+[data-embed] [data-slot="card-description"] { color: var(--v5-ink-2); font-size: var(--v5-t-label); }
+[data-embed] [data-slot="table-head"], [data-embed] th { font-size: var(--v5-t-label); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-2); }
+[data-embed] [data-slot="table-row"], [data-embed] tr { border-color: var(--v5-sep); }
+[data-embed] [data-slot="button"] { border-radius: var(--v5-r-md); }
+[data-embed] [data-slot="input"], [data-embed] [data-slot="select-trigger"], [data-embed] [data-slot="textarea"] { border-radius: var(--v5-r-field); }
+[data-embed] .D_embed-sections a { border-color: var(--v5-line); }
 
 /* D_ F17 (embed + narrow): fields in the Filters sheet fill the row; the card list never scrolls the page sideways. */
 .D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet [data-slot="input"], .D_filters-sheet label { width: 100%; }

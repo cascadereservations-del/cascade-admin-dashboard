@@ -14,25 +14,19 @@ import { Button } from '@/components/ui/button';
 import { fetchStays } from './api';
 import type { Stay } from './model';
 import { sameGuest } from './same-guest';
+import { guestColours } from './calendar-shade';
 
 // A booked chip inside a turnover cell differs from the cell fill by about 1.1:1; the word "Turnover" carries that state.
 const isLive = (st: Stay) => st.kind !== 'blocked' && st.bookingState !== 'inquiry';
-/** One of five blues (1..5), the same for the same guest everywhere: hashed from the guest id, else the lower-cased name. */
-export function guestShade(st: Pick<Stay, 'guestId' | 'guestName'>): number {
-  const key = st.guestId ?? st.guestName.trim().toLowerCase();
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return (h % 5) + 1;
-}
 const chipLabel = (st: Stay) => (st.kind === 'blocked' ? 'Blocked' : st.guestName);
 
-function Chip({ st, day, conflict }: { st: Stay; day: string; conflict: boolean }) {
+function Chip({ st, day, conflict, col }: { st: Stay; day: string; conflict: boolean; col: number }) {
   const state = st.kind === 'blocked' ? 'blocked' : st.bookingState === 'inquiry' ? 'inquiry' : conflict ? 'conflict' : 'booked';
   return (
     <Link
       to={st.href}
       data-state={state}
-      data-shade={guestShade(st)}
+      data-col={col}
       data-source={st.kind === 'direct' ? 'direct' : 'airbnb'}
       className="cal-chip block truncate rounded px-1.5 py-0.5"
       title={`${st.guestName} · ${st.kind === 'blocked' ? 'blocked (not a stay)' : st.kind}${conflict ? ' · overlaps another guest' : ''}`}
@@ -100,6 +94,8 @@ export default function BookingCalendarPage() {
       />
       <QueryState query={query}>
         {(data) => {
+          // One colour per guest, the Staff calendar's rule (calendar-shade.ts). Blocked, inquiry and cancelled stays take none.
+          const colour = guestColours(data.stays.filter((x) => isLive(x) && x.bookingState !== 'cancelled'));
           const byDay = new Map<string, Stay[]>();
           for (const st of data.stays) {
             if (st.bookingState === 'cancelled') continue;
@@ -131,7 +127,7 @@ export default function BookingCalendarPage() {
                   <li key={d} className={cn('flex gap-3 px-3 py-2 text-sm', turn && 'cal-cell-turn', d === today && 'bg-cream')}>
                     <div className="tabular w-14 shrink-0 text-xs font-medium">{format(parseIso(d), 'EEE d')}{turn && <div className="font-normal">Turnover</div>}</div>
                     <ul className="min-w-0 flex-1 space-y-1">
-                      {items.map((st) => <li key={st.key}><Chip st={st} day={d} conflict={conflict && isLive(st)} /></li>)}
+                      {items.map((st) => <li key={st.key}><Chip st={st} day={d} conflict={conflict && isLive(st)} col={colour(st)} /></li>)}
                     </ul>
                   </li>
                 ))}
@@ -148,7 +144,7 @@ export default function BookingCalendarPage() {
                       <div key={d} className={cn('min-h-24 border-r border-b p-1 text-xs', !inMonth && 'bg-muted/30 text-muted-foreground', d === today && 'bg-cream', turn && 'cal-cell-turn')}>
                         <div className={cn('tabular mb-1 flex justify-between px-1', d === today && 'font-semibold')}><span>{Number(d.slice(8, 10))}</span>{turn && <span className="font-normal">Turnover</span>}</div>
                         <ul className="space-y-0.5">
-                          {items.slice(0, 3).map((st) => <li key={st.key}><Chip st={st} day={d} conflict={conflict && isLive(st)} /></li>)}
+                          {items.slice(0, 3).map((st) => <li key={st.key}><Chip st={st} day={d} conflict={conflict && isLive(st)} col={colour(st)} /></li>)}
                           {items.length > 3 && <li className="px-1 text-muted-foreground">+{items.length - 3} more</li>}
                         </ul>
                       </div>
