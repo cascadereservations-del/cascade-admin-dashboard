@@ -76,6 +76,7 @@
 
 /* Only what has no v5 token differs by theme here; every var(--v5-*) above already follows .dark. */
 .dark {
+  --sidebar-accent: #24364B; /* s92 review: v5 dark sidebar-hover equals v5-panel (1.00:1); a visibly lighter active/hover row */
   --destructive-foreground: #3B1A1E;
   --chart-1: #8DB2E3;
   --chart-2: #4FC3C7;
