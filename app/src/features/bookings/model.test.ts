@@ -17,6 +17,11 @@ const inq = (o: Partial<InquiryRow>): InquiryRow => ({
 });
 
 describe('mergeStays', () => {
+  it('a confirmed direct booking mirrored as DIRECT:<id> is one stay, the direct one', () => {
+    const stays = mergeStays([res({ id: 'r9', confirmation_code: 'DIRECT:i1', checkin_date: '2026-10-01', checkout_date: '2026-10-03' })], [inq({ status: 'confirmed' })], [], '2026-09-13');
+    expect(stays).toHaveLength(1);
+    expect(stays[0]!.kind).toBe('direct');
+  });
   it('an Airbnb reservation and its linked calendar event are one stay', () => {
     const stays = mergeStays([res({})], [], [cal({ linked_reservation_id: 'r1' })], '2026-09-13');
     expect(stays).toHaveLength(1);

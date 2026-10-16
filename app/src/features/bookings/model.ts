@@ -112,8 +112,11 @@ export function mergeStays(res: ReservationRow[], inq: InquiryRow[], cal: Calend
     byDates.set(k, [...(byDates.get(k) ?? []), c]);
   }
 
+  // A confirmed direct booking is mirrored into airbnb_reservations as DIRECT:<inquiry id>; the inquiry is the stay, so skip the mirror.
+  const inqIds = new Set(inq.map((q) => q.id));
   for (const r of res) {
     if (!r.checkin_date || !r.checkout_date) continue;
+    if (r.confirmation_code?.startsWith('DIRECT:') && inqIds.has(r.confirmation_code.slice(7))) continue;
     let calRow: CalendarRow | undefined = byLinked.get(r.id);
     let match: 'linked' | 'date_match' = 'linked';
     if (!calRow) {
