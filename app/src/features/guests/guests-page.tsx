@@ -19,6 +19,7 @@ import { FollowUpForm } from './follow-up-form';
 import { LocalRecordsPanel } from './local-records-panel';
 import { displayContact, isMissingDetails } from './contact';
 import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
+import { tierLabel } from './tier';
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
 // guests stay separate rows here; merging is a reviewed action on the detail.
@@ -63,11 +64,11 @@ export default function GuestsPage() {
   const [taskSheet, setTaskSheet] = useState<{ open: boolean; existing: FollowUp | null }>({ open: false, existing: null });
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
-    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${row.original.tier}` : ''}</div></div> },
+    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${tierLabel(row.original.tier)}` : ''}</div></div> },
     { id: 'contact', header: 'Contact', accessorFn: (r) => displayContact(r) ?? '', cell: ({ row }) => { const c = displayContact(row.original); return <span className="inline-flex items-center gap-1 text-xs">{c ?? '—'}{c && <CopyButton value={c} />}</span>; } },
     { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
-    { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{row.original.tier}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
+    { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{tierLabel(row.original.tier)}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
     { id: 'flags', header: 'Flags', accessorFn: () => '', cell: ({ row }) => {
       const r = row.original;
       const soon = r.birthday && daysToNextBirthday(r.birthday) <= 30;
@@ -90,7 +91,7 @@ export default function GuestsPage() {
 
         <TabsContent value="crm">
           <FilterBar search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} searchPlaceholder="Name, phone or e-mail" activeCount={(search ? 1 : 0) + (state.tier ? 1 : 0) + (state.flag ? 1 : 0)} onClear={clearFilters} density={density} onDensity={(d) => set({ density: d })}>
-            <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'vip', label: 'VIP' }]} />
+            <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'regular', label: 'Regular' }, { value: 'vip', label: 'VIP' }]} />
             <FilterSelect label="Flags" value={state.flag || undefined} onChange={(v) => { set({ flag: v ?? '', page: '1' }); }} options={FLAG_OPTIONS} />
           </FilterBar>
           <QueryState query={query}>

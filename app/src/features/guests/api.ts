@@ -9,7 +9,7 @@ import { companionFlags } from './id-photo';
 // Guests adapter (P19/P20). Profiles extend `guests` via guest_profile_details;
 // the timeline is server-assembled and permission-filtered.
 
-export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; has_id_photo?: boolean; contact_number?: string | null };
+export type GuestRow = { id: string; name: string; phone: string | null; email: string | null; source: string; tier: string | null; tier_manual?: string | null; total_stays: number | null; total_nights_stayed: number | null; first_stay_date: string | null; last_stay_date: string | null; is_active: boolean; created_at: string; updated_at: string; notes?: string | null; id_on_file?: boolean; birthday?: string | null; has_companions?: boolean; has_id_photo?: boolean; contact_number?: string | null };
 export type ProfileDetails = { guest_id: string; display_name: string | null; preferred_channel: string | null; language: string | null; messenger_psid: string | null; messenger_link: string | null; stay_preferences: string | null; tags: string[]; vip: boolean; vip_reason: string | null; contact_provenance: Record<string, unknown>; updated_at: string; version: number; contact_number?: string | null; birthday?: string | null; address?: string | null; airbnb_profile_id?: string | null; id_on_file?: boolean; id_type?: string | null; id_number?: string | null; id_drive_url?: string | null; id_verified_at?: string | null };
 
 export type GuestFlag = 'id_on_file' | 'id_no_photo' | 'missing_details' | 'upcoming_birthday' | 'repeat' | 'has_companions';
@@ -102,6 +102,11 @@ export async function fetchGuest(id: string) {
 export type TimelineEvent = { kind: string; at: string; source: string; body: Record<string, unknown> };
 export function fetchTimeline(guestId: string) {
   return rpc<{ guestId: string; financeVisible: boolean; events: TimelineEvent[] }>('get_guest_timeline_v1', { p_guest_id: guestId });
+}
+
+// SPEC-46: owner/admin pin a tier by hand (null = back to automatic); the server writes the history row.
+export function setGuestTier(guestId: string, tier: string | null, reason: string) {
+  return rpc<{ ok: boolean; tier: string | null; computed: string | null; manual: string | null }>('admin_set_guest_tier_v1', { p_guest_id: guestId, p_tier: tier, p_reason: reason });
 }
 
 export function saveProfile(guestId: string, patch: Record<string, unknown>, expectedVersion: number | null, reason: string) {

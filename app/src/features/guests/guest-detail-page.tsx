@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TierCard } from './tier-card';
+import { tierLabel } from './tier';
 import { FollowUpForm } from './follow-up-form';
 import { ImportantNotes, ProfileExtraFields, PrivateGuestDetails, isPlausiblePHMobile, phNetworkHint } from './profile-extras';
 import { safeMessengerUrl, validateIdPhoto } from './local-records';
@@ -185,7 +187,7 @@ export default function GuestDetailPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-[28px] leading-[34px] font-semibold">{d?.display_name ?? g.name}</h1>
                     <StatusBadge tone="neutral">{g.source}</StatusBadge>
-                    {g.tier && <StatusBadge tone={g.tier === 'vip' ? 'warn' : 'info'}>{g.tier}</StatusBadge>}
+                    {g.tier && <StatusBadge tone={g.tier === 'vip' ? 'warn' : 'info'}>{tierLabel(g.tier)}</StatusBadge>}
                     {d?.vip && <StatusBadge tone="warn">VIP</StatusBadge>}
                   </div>
                   {(d?.display_name && d.display_name !== g.name) && <p className="mt-0.5 text-sm text-muted-foreground">{g.name}</p>}
@@ -243,6 +245,8 @@ export default function GuestDetailPage() {
                 {g.notes && <Field label="Notes">{g.notes}</Field>}
               </CardContent></Card>
             </div>
+
+            <TierCard key={`tier-${id}`} guestId={id} tier={g.tier} manual={g.tier_manual ?? null} events={timeline.data?.events} />
 
             <PrivateGuestDetails key={`private-${id}`} details={d} />
             <CompanionsSection key={`companions-${id}`} guestId={id} guestName={g.name} />

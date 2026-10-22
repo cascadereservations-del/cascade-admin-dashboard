@@ -40,6 +40,7 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   save_guest_profile_v1: 'follow_ups',
   save_follow_up_v1: 'follow_ups',
   merge_guests_v1: 'follow_ups',
+  admin_set_guest_tier_v1: 'follow_ups', // SPEC-46: guest detail, Tier and benefits (owner/admin)
   admin_save_transaction_v1: 'finance',
   admin_transactions_bulk_v1: 'finance',
   post_journal_v1: 'finance',
