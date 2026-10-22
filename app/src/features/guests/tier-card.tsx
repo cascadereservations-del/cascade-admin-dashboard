@@ -15,16 +15,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { setGuestTier, type TimelineEvent } from './api';
 import { TIER_OPTIONS, tierBenefits, tierHistory, tierLabel, tierReasonProblem } from './tier';
 
+const SAVE_REFUSALS: Record<string, string> = {
+  guest_not_found: 'This guest no longer exists. Refresh the page.',
+  bad_reason: 'Add a reason of 3 to 200 characters.',
+  bad_tier: 'Pick a tier from the list.',
+};
+
 // SPEC-46: the tier is computed nightly from completed stays; an owner or admin can pin it by hand.
 export function TierCard({ guestId, tier, manual, events }: { guestId: string; tier: string | null; manual: string | null; events: TimelineEvent[] | undefined }) {
   const s = useSession();
   const qc = useQueryClient();
-  const canEdit = s.caps.role === 'owner' || s.caps.role === 'admin';
+  const canEdit = s.caps.can('manage_staff');
   const [choice, setChoice] = useState(manual ?? 'auto');
   const [reason, setReason] = useState('');
   const problem = tierReasonProblem(reason);
   const save = useMutation({
-    mutationFn: () => setGuestTier(guestId, choice === 'auto' ? null : choice, reason.trim()),
+    mutationFn: async () => {
+      const res = await setGuestTier(guestId, choice === 'auto' ? null : choice, reason.trim());
+      // The RPC reports refusals as {ok:false, reason} without raising.
+      if (!res.ok) throw new Error(SAVE_REFUSALS[(res as { reason?: string }).reason ?? ''] ?? 'Could not save the tier.');
+      return res;
+    },
     onSuccess: () => {
       toast.success('Tier saved');
       setReason('');

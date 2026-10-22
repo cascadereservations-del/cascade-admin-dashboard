@@ -8,11 +8,13 @@ import type { TimelineEvent } from './api';
 
 const role = vi.hoisted(() => ({ value: 'owner' as string }));
 const setGuestTier = vi.hoisted(() => vi.fn());
-vi.mock('@/auth/session', () => ({ useSession: () => ({ caps: { role: role.value } }) }));
+const toastSuccess = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/session', () => ({ useSession: () => ({ caps: { role: role.value, can: () => role.value === 'owner' || role.value === 'admin' } }) }));
 vi.mock('./api', () => ({ setGuestTier }));
+vi.mock('sonner', () => ({ toast: { success: toastSuccess } }));
 // jsdom lacks the pointer/scroll APIs Radix Select calls.
 Object.assign(Element.prototype, { hasPointerCapture: () => false, releasePointerCapture: () => {}, setPointerCapture: () => {}, scrollIntoView: () => {} });
-afterEach(() => { cleanup(); setGuestTier.mockReset(); role.value = 'owner'; });
+afterEach(() => { cleanup(); setGuestTier.mockReset(); toastSuccess.mockReset(); role.value = 'owner'; });
 
 const ev = (reason: unknown, kind = 'profile_change'): TimelineEvent => ({ kind, at: '2026-10-23T01:00:00Z', source: 'guest_profile_history', body: { reason } });
 
@@ -53,7 +55,7 @@ it('shows tier, benefits and history; saving needs a reason and calls the RPC wi
   await user.type(screen.getByLabelText('Reason'), 'c');
   await user.click(save);
   await waitFor(() => expect(setGuestTier).toHaveBeenCalledWith('g1', null, 'abc'));
-});
+}, 20000);
 
 it('shows the server error plainly', async () => {
   const user = userEvent.setup();
@@ -71,4 +73,16 @@ it('hides the form for roles other than owner/admin', () => {
   renderCard();
   expect(screen.queryByRole('button', { name: 'Save tier' })).not.toBeInTheDocument();
   expect(screen.getByText(/Returning guest:/)).toBeInTheDocument();
+});
+
+it('an ok:false answer shows a plain error and no success toast', { timeout: 20000 }, async () => {
+  const user = userEvent.setup();
+  setGuestTier.mockResolvedValue({ ok: false, reason: 'guest_not_found' });
+  renderCard();
+  await user.click(screen.getByLabelText('Set by hand'));
+  await user.click(await screen.findByRole('option', { name: 'Regular' }));
+  await user.type(screen.getByLabelText('Reason'), 'owner asked');
+  await user.click(screen.getByRole('button', { name: 'Save tier' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('This guest no longer exists. Refresh the page.');
+  expect(toastSuccess).not.toHaveBeenCalled();
 });

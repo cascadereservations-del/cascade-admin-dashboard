@@ -31,5 +31,6 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    testTimeout: 20000, // Radix-driven tests exceed 5s when several lanes load the machine
   },
 });
