@@ -14,6 +14,7 @@ import { EmptyState, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
+import { ReportBlocksCard } from './report-blocks-card';
 import { feeState, fetchCleanings, type CleaningRow } from './api';
 
 // CLN01/CLN03: the register shows submission completeness, evidence, review
@@ -54,6 +55,7 @@ export default function CleaningPage() {
   return (
     <div>
       <PageHeader title="Cleaning log" description="Every submission with its checklist, evidence, review and payment states shown separately." actions={<Button variant="outline" asChild><Link to="/operations/work-orders">Work orders</Link></Button>} />
+      <ReportBlocksCard />
       <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Guest, cleaner or submission" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
         <FilterSelect label="Submission" value={state.state || undefined} onChange={(v) => set({ state: v ?? '' })} options={[{ value: 'complete', label: 'Complete' }, { value: 'incomplete', label: 'Incomplete' }, { value: 'issues', label: 'With issues' }]} />
         {canFees && <FilterSelect label="Fees" value={state.fees || undefined} onChange={(v) => set({ fees: v ?? '' })} options={[{ value: 'unpaid', label: 'Unpaid' }]} />}
