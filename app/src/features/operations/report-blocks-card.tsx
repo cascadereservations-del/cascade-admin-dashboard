@@ -31,6 +31,8 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
       toast.success('Answered. The next cleaning report can go through.');
       void qc.invalidateQueries({ queryKey: ['report-blocks'] });
       void qc.invalidateQueries({ queryKey: ['cleanings'] });
+      void qc.invalidateQueries({ queryKey: ['cleaning'] });
+      void qc.invalidateQueries({ queryKey: ['meter-baseline'] });
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
@@ -100,7 +102,10 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
 
 export function ReportBlocksCard() {
   const s = useSession();
-  const q = useQuery({ queryKey: ['report-blocks', s.propertyId], queryFn: () => fetchReportBlocks(s.propertyId), refetchInterval: 60_000 });
+  // Same gate as the server (inspect_cleaning): a cleaner must never see buttons that clear her own hold.
+  const canInspect = s.caps.can('inspect_cleaning');
+  const q = useQuery({ queryKey: ['report-blocks', s.propertyId], queryFn: () => fetchReportBlocks(s.propertyId), refetchInterval: 60_000, enabled: canInspect });
+  if (!canInspect) return null;
   return (
     <div className="mb-6">
       <Section title="Cleaning reports on hold">

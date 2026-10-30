@@ -9,7 +9,8 @@ const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/rpc', () => ({ rpc: rpcMock }));
 vi.mock('@/lib/supabase', () => ({ supabase: { storage: { from: () => ({ createSignedUrls: signed }) } } }));
-vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1' }) }));
+const caps = vi.hoisted(() => ({ inspect: true }));
+vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { can: (c: string) => c === 'inspect_cleaning' && caps.inspect } }) }));
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 import { ReportBlocksCard } from './report-blocks-card';
@@ -29,7 +30,7 @@ function mount() {
 const listThen = (rows: unknown[]) => rpcMock.mockImplementation(async (fn: string) => (fn === 'admin_report_blocks_v1' ? rows : { ok: true, action: 'x', reading_id: 'r1' }));
 
 beforeEach(() => { signed.mockResolvedValue({ data: [{ path: 'p/e.jpg', signedUrl: 'https://x/e' }, { path: 'p/w.jpg', signedUrl: 'https://x/w' }] }); });
-afterEach(() => { cleanup(); rpcMock.mockReset(); signed.mockReset(); toastSuccess.mockReset(); toastError.mockReset(); });
+afterEach(() => { caps.inspect = true; cleanup(); rpcMock.mockReset(); signed.mockReset(); toastSuccess.mockReset(); toastError.mockReset(); });
 
 describe('report blocks api', () => {
   it('unknown stays null, never 0', () => {
@@ -120,6 +121,23 @@ describe('ReportBlocksCard', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Typed numbers are right' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed.');
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('a cleaner (no inspect_cleaning) sees nothing of the card and the list is never asked for', async () => {
+    caps.inspect = false;
+    listThen([ROW]);
+    mount();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('Cleaning reports on hold')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Typed numbers are right' })).toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('an inspector sees the card with both answers', async () => {
+    listThen([ROW]);
+    mount();
+    expect(await screen.findByRole('button', { name: 'Typed numbers are right' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Correct the numbers' })).toBeInTheDocument();
   });
 
   it('shows the server message when the list itself is refused', async () => {
