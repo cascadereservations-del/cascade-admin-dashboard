@@ -31,8 +31,10 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
   const problem = fixing ? correctionProblem(row, electric, water) : null;
   const answer = useMutation({
     mutationFn: (action: ReportBlockAction) => resolveReportBlock(row.reading_id, action, action === 'correct_numbers' ? Number(electric) : null, action === 'correct_numbers' ? Number(water) : null, note),
-    onSuccess: () => {
-      toast.success(row.reason === 'photo_date' ? 'Saved. The photo date is noted.' : 'Saved. The meter reading is checked.');
+    onSuccess: (res) => {
+      // A server note (e.g. usage left empty) outranks the generic line and is shown as a warning.
+      if (res.note) toast.warning(res.note);
+      else toast.success(row.reason === 'photo_date' ? 'Saved. The photo date is noted.' : 'Saved. The meter reading is checked.');
       void qc.invalidateQueries({ queryKey: ['report-blocks'] });
       void qc.invalidateQueries({ queryKey: ['cleanings'] });
       void qc.invalidateQueries({ queryKey: ['cleaning'] });
@@ -112,6 +114,7 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
           </>
         )}
       </div>
+      {row.previous_answer && <p className="text-muted-foreground">Cleaner answered: {row.previous_answer}</p>}
       {row.resend_requested_at && <p className="text-muted-foreground">Asked {formatDateTime(row.resend_requested_at)}</p>}
       {resend.isError && !noResend && <p className="text-xs text-destructive" role="alert">{toAppError(resend.error).message}</p>}
       {answer.isError && <p className="text-xs text-destructive" role="alert">{toAppError(answer.error).message}</p>}

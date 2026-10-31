@@ -11,7 +11,7 @@ export type ReportBlock = {
   photo_electric: number | null; photo_water: number | null; photo_note_electric: string | null; photo_note_water: string | null;
   photo_path_electric: string | null; photo_path_water: string | null;
   // s104: optional so the card still works against the older SQL that does not return them.
-  reason?: 'mismatch' | 'photo_date' | 'meter_order' | null; resend_requested_at?: string | null; photo_date_lines?: string[] | null; photo_archived?: boolean | null;
+  reason?: 'mismatch' | 'photo_date' | 'meter_order' | null; resend_requested_at?: string | null; previous_answer?: string | null; photo_date_lines?: string[] | null; photo_archived?: boolean | null;
 };
 export type ReportBlockRow = ReportBlock & { electric_url: string | null; water_url: string | null };
 
@@ -57,7 +57,7 @@ export async function fetchReportBlocks(propertyId: string): Promise<ReportBlock
   }));
 }
 
-export type ResolveResult = { ok: boolean; action?: string; reading_id?: string; reason?: string; message?: string };
+export type ResolveResult = { ok: boolean; action?: string; reading_id?: string; reason?: string; message?: string; note?: string | null };
 
 export async function resolveReportBlock(readingId: string, action: ReportBlockAction, electric: number | null, water: number | null, note: string): Promise<ResolveResult> {
   const res = await rpc<ResolveResult>('admin_resolve_report_block_v1', { p_reading_id: readingId, p_action: action, p_electric: electric, p_water: water, p_note: note.trim() || null });

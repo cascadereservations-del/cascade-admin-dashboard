@@ -7,11 +7,12 @@ const rpcMock = vi.hoisted(() => vi.fn());
 const signed = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
+const toastWarning = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/rpc', () => ({ rpc: rpcMock }));
 vi.mock('@/lib/supabase', () => ({ supabase: { storage: { from: () => ({ createSignedUrls: signed }) } } }));
 const caps = vi.hoisted(() => ({ inspect: true }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { can: (c: string) => c === 'inspect_cleaning' && caps.inspect } }) }));
-vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }));
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError, warning: toastWarning } }));
 
 import { ReportBlocksCard } from './report-blocks-card';
 import { alignRead, correctionProblem, fetchReportBlocks, num } from './report-blocks-api';
@@ -30,7 +31,7 @@ function mount() {
 const listThen = (rows: unknown[]) => rpcMock.mockImplementation(async (fn: string) => (fn === 'admin_report_blocks_v1' ? rows : { ok: true, action: 'x', reading_id: 'r1' }));
 
 beforeEach(() => { signed.mockResolvedValue({ data: [{ path: 'p/e.jpg', signedUrl: 'https://x/e' }, { path: 'p/w.jpg', signedUrl: 'https://x/w' }] }); });
-afterEach(() => { caps.inspect = true; cleanup(); rpcMock.mockReset(); signed.mockReset(); toastSuccess.mockReset(); toastError.mockReset(); });
+afterEach(() => { caps.inspect = true; cleanup(); rpcMock.mockReset(); signed.mockReset(); toastSuccess.mockReset(); toastError.mockReset(); toastWarning.mockReset(); });
 
 describe('report blocks api', () => {
   it('unknown stays null, never 0', () => {
@@ -144,6 +145,25 @@ describe('ReportBlocksCard', () => {
     mount();
     await userEvent.click(await screen.findByRole('button', { name: 'Ask cleaner to resend' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Ask cleaner to resend' })).toBeNull());
+  });
+
+  it('a note in the answer is shown as a warning toast instead of the success line', async () => {
+    rpcMock.mockImplementation(async (fn: string) => (fn === 'admin_report_blocks_v1' ? [ROW] : { ok: true, note: 'Usage was left empty. Use Correct the numbers.' }));
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: 'Typed numbers are right' }));
+    await waitFor(() => expect(toastWarning).toHaveBeenCalledWith('Usage was left empty. Use Correct the numbers.'));
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('previous_answer shows under the row; absent shows nothing', async () => {
+    listThen([{ ...ROW, previous_answer: 'Meter was replaced' }]);
+    mount();
+    expect(await screen.findByText('Cleaner answered: Meter was replaced')).toBeInTheDocument();
+    cleanup();
+    listThen([ROW]);
+    mount();
+    await screen.findByRole('button', { name: 'Correct the numbers' });
+    expect(screen.queryByText(/Cleaner answered/)).toBeNull();
   });
 
   it('an archived photo says so', async () => {
