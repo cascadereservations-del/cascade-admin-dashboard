@@ -44,7 +44,7 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
   const notes = meters.filter((m) => m[4]).map((m) => `${m[0]}: ${m[4]}`);
   return (
     <li className="space-y-3 rounded-lg border bg-card p-4 text-sm">
-      <p className="font-medium">This holds up the next turnover report until it is answered.</p>
+      <p className="font-medium">The report was accepted. Check the photo against the typed numbers and pick one answer.</p>
       <p className="text-muted-foreground">
         {row.cleaner_name ?? 'A cleaner'} · stay ending {formatDate(row.checkout_date, 'long')} · recorded {formatDateTime(row.recorded_at)}
       </p>
@@ -108,7 +108,7 @@ export function ReportBlocksCard() {
   if (!canInspect) return null;
   return (
     <div className="mb-6">
-      <Section title="Cleaning reports on hold">
+      <Section title="Meter readings to check">
         {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.length === 0 ? <p className="text-sm text-muted-foreground">Nothing is holding up a cleaning report.</p> : (
           <ul className="space-y-3">{q.data.map((r) => <BlockCard key={r.reading_id} row={r} />)}</ul>
         )}

@@ -67,7 +67,7 @@ describe('ReportBlocksCard', () => {
   it('shows who, which stay, the Manila time, the table, the reader note and no ids', async () => {
     listThen([ROW]);
     mount();
-    expect(await screen.findByText('This holds up the next turnover report until it is answered.')).toBeInTheDocument();
+    expect(await screen.findByText('The report was accepted. Check the photo against the typed numbers and pick one answer.')).toBeInTheDocument();
     // 2026-10-30T16:30Z is 31 Oct 00:30 in Asia/Manila
     expect(screen.getByText(/Honey · stay ending 30 Oct 2026 · recorded 31 Oct 2026, 00:30/)).toBeInTheDocument();
     expect(screen.getByText('4292')).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('ReportBlocksCard', () => {
     listThen([ROW]);
     mount();
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText('Cleaning reports on hold')).toBeNull();
+    expect(screen.queryByText('Meter readings to check')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Typed numbers are right' })).toBeNull();
     expect(rpcMock).not.toHaveBeenCalled();
   });
