@@ -24,7 +24,7 @@ export function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** The photo reader often misplaces the decimal (431.2 for 4312). Shift the read by 10^k (k -3..3) to the value closest to the typed number; ties keep k = 0. */
+/** The photo reader often misplaces the decimal (431.2 for 4312). Shift the read by 10^k (k -3..3) to the value closest to the typed number (within 10%); ties keep k = 0. */
 export function alignRead(read: number | null, typed: number | null): { value: number | null; shifted: boolean } {
   if (read === null || typed === null) return { value: read, shifted: false };
   let best = 0, bestDiff = Math.abs(read - typed);
@@ -32,7 +32,8 @@ export function alignRead(read: number | null, typed: number | null): { value: n
     const diff = Math.abs(read * 10 ** k - typed);
     if (diff < bestDiff - 1e-9) { best = k; bestDiff = diff; }
   }
-  if (best === 0) return { value: read, shifted: false };
+  // Only trust a shift that lands within 10% of the typed number; otherwise show the raw read.
+  if (best === 0 || bestDiff > Math.abs(typed) * 0.1) return { value: read, shifted: false };
   return { value: Number((read * 10 ** best).toPrecision(12)), shifted: true };
 }
 

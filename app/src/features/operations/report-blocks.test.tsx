@@ -55,6 +55,7 @@ describe('report blocks api', () => {
     expect(alignRead(431.2, 4292)).toEqual({ value: 4312, shifted: true });
     expect(alignRead(806, 81.852)).toEqual({ value: 80.6, shifted: true });
     expect(alignRead(4326, 4326)).toEqual({ value: 4326, shifted: false });
+    expect(alignRead(5, 4292)).toEqual({ value: 5, shifted: false });
     expect(alignRead(null, 5)).toEqual({ value: null, shifted: false });
     expect(alignRead(5, null)).toEqual({ value: 5, shifted: false });
   });
