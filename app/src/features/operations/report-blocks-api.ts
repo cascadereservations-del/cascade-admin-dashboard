@@ -10,6 +10,8 @@ export type ReportBlock = {
   typed_electric: number | null; typed_water: number | null; prev_electric: number | null; prev_water: number | null;
   photo_electric: number | null; photo_water: number | null; photo_note_electric: string | null; photo_note_water: string | null;
   photo_path_electric: string | null; photo_path_water: string | null;
+  // s104: optional so the card still works against the older SQL that does not return them.
+  reason?: 'mismatch' | 'photo_date' | null; photo_date_lines?: string[] | null; photo_archived?: boolean | null;
 };
 export type ReportBlockRow = ReportBlock & { electric_url: string | null; water_url: string | null };
 
@@ -20,6 +22,18 @@ export function num(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** The photo reader often misplaces the decimal (431.2 for 4312). Shift the read by 10^k (k -3..3) to the value closest to the typed number; ties keep k = 0. */
+export function alignRead(read: number | null, typed: number | null): { value: number | null; shifted: boolean } {
+  if (read === null || typed === null) return { value: read, shifted: false };
+  let best = 0, bestDiff = Math.abs(read - typed);
+  for (let k = -3; k <= 3; k++) {
+    const diff = Math.abs(read * 10 ** k - typed);
+    if (diff < bestDiff - 1e-9) { best = k; bestDiff = diff; }
+  }
+  if (best === 0) return { value: read, shifted: false };
+  return { value: Number((read * 10 ** best).toPrecision(12)), shifted: true };
 }
 
 export async function fetchReportBlocks(propertyId: string): Promise<ReportBlockRow[]> {

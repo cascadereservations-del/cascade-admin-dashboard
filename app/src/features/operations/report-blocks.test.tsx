@@ -14,7 +14,7 @@ vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: 
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }));
 
 import { ReportBlocksCard } from './report-blocks-card';
-import { correctionProblem, fetchReportBlocks, num } from './report-blocks-api';
+import { alignRead, correctionProblem, fetchReportBlocks, num } from './report-blocks-api';
 import { RPC_MODULE, assertRpcEnabled } from '@/lib/rollout';
 
 const ROW = {
@@ -51,6 +51,14 @@ describe('report blocks api', () => {
       .toEqual(['The electric number cannot be below the last reading.', 'The water number cannot be below the last reading.', 'Enter both the electric and the water number.', null, null]);
   });
 
+  it('aligns the photo read to the typed decimal', () => {
+    expect(alignRead(431.2, 4292)).toEqual({ value: 4312, shifted: true });
+    expect(alignRead(806, 81.852)).toEqual({ value: 80.6, shifted: true });
+    expect(alignRead(4326, 4326)).toEqual({ value: 4326, shifted: false });
+    expect(alignRead(null, 5)).toEqual({ value: null, shifted: false });
+    expect(alignRead(5, null)).toEqual({ value: 5, shifted: false });
+  });
+
   it('the resolve rpc is behind the operations rollout gate', () => {
     expect(RPC_MODULE.admin_resolve_report_block_v1).toBe('operations');
     expect(() => assertRpcEnabled('admin_resolve_report_block_v1')).not.toThrow();
@@ -71,11 +79,29 @@ describe('ReportBlocksCard', () => {
     // 2026-10-30T16:30Z is 31 Oct 00:30 in Asia/Manila
     expect(screen.getByText(/Honey · stay ending 30 Oct 2026 · recorded 31 Oct 2026, 00:30/)).toBeInTheDocument();
     expect(screen.getByText('4292')).toBeInTheDocument();
-    expect(screen.getByText('431.2')).toBeInTheDocument();
+    expect(screen.getByText('4312 (reader saw 431.2)')).toBeInTheDocument();
+    expect(screen.getByText('80.6 (reader saw 806)')).toBeInTheDocument();
     expect(screen.getByText('4200')).toBeInTheDocument();
     expect(screen.getByText(/Electric: decimal misread/)).toBeInTheDocument();
     expect(screen.getAllByRole('img')).toHaveLength(2);
     expect(document.body.textContent).not.toMatch(/r1\b|s1\b/);
+  });
+
+  it('a photo_date row shows the date headline, the lines and the same two buttons', async () => {
+    listThen([{ ...ROW, reason: 'photo_date', photo_date_lines: ['Electric photo taken Oct 23, checkout Oct 21'] }]);
+    mount();
+    expect(await screen.findByText('Photo date is far from the checkout day')).toBeInTheDocument();
+    expect(screen.getByText('Electric photo taken Oct 23, checkout Oct 21')).toBeInTheDocument();
+    expect(screen.queryByText(/The report was accepted/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Typed numbers are right' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Correct the numbers' })).toBeInTheDocument();
+  });
+
+  it('an archived photo says so', async () => {
+    listThen([{ ...ROW, photo_archived: true, photo_path_electric: null, photo_path_water: null }]);
+    mount();
+    expect(await screen.findByText('Photo moved to the Drive archive')).toBeInTheDocument();
+    expect(screen.queryAllByRole('img')).toHaveLength(0);
   });
 
   it('Typed numbers are right calls the rpc with that action and the note', async () => {

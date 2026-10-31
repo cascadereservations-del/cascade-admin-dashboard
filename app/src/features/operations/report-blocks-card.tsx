@@ -8,10 +8,14 @@ import { Section } from '@/components/data/page-header';
 import { PhotoLightbox, type LightboxItem } from '@/components/data/photo-lightbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchReportBlocks, correctionProblem, resolveReportBlock, type ReportBlockAction, type ReportBlockRow } from './report-blocks-api';
+import { alignRead, fetchReportBlocks, correctionProblem, resolveReportBlock, type ReportBlockAction, type ReportBlockRow } from './report-blocks-api';
 
 // s101: lists every meter photo mismatch that is holding up a cleaning report, so an admin can answer it here.
 const show = (v: number | null) => (v === null ? 'not read' : String(v));
+const showRead = (read: number | null, typed: number | null) => {
+  const a = alignRead(read, typed);
+  return a.shifted ? `${a.value} (reader saw ${read})` : show(read);
+};
 
 function BlockCard({ row }: { row: ReportBlockRow }) {
   const qc = useQueryClient();
@@ -41,10 +45,13 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
     ['Electric', row.typed_electric, row.photo_electric, row.prev_electric, row.photo_note_electric],
     ['Water', row.typed_water, row.photo_water, row.prev_water, row.photo_note_water],
   ];
+  const photoDate = row.reason === 'photo_date';
+  const dateLines = row.photo_date_lines ?? [];
   const notes = meters.filter((m) => m[4]).map((m) => `${m[0]}: ${m[4]}`);
   return (
     <li className="space-y-3 rounded-lg border bg-card p-4 text-sm">
-      <p className="font-medium">The report was accepted. Check the photo against the typed numbers and pick one answer.</p>
+      <p className="font-medium">{photoDate ? 'Photo date is far from the checkout day' : 'The report was accepted. Check the photo against the typed numbers and pick one answer.'}</p>
+      {photoDate && dateLines.length > 0 && <ul className="list-disc pl-5 text-muted-foreground">{dateLines.map((l) => <li key={l}>{l}</li>)}</ul>}
       <p className="text-muted-foreground">
         {row.cleaner_name ?? 'A cleaner'} · stay ending {formatDate(row.checkout_date, 'long')} · recorded {formatDateTime(row.recorded_at)}
       </p>
@@ -53,12 +60,13 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
           <thead className="text-xs text-muted-foreground"><tr><th className="py-1 pr-3 font-normal"><span className="sr-only">Meter</span></th><th className="py-1 pr-3 font-normal">Typed</th><th className="py-1 pr-3 font-normal">Photo read</th><th className="py-1 font-normal">Last reading</th></tr></thead>
           <tbody>
             {meters.map(([name, typed, photo, prev]) => (
-              <tr key={name} className="border-t"><th scope="row" className="py-1 pr-3 font-medium">{name}</th><td className="tabular py-1 pr-3">{show(typed)}</td><td className="tabular py-1 pr-3">{show(photo)}</td><td className="tabular py-1">{show(prev)}</td></tr>
+              <tr key={name} className="border-t"><th scope="row" className="py-1 pr-3 font-medium">{name}</th><td className="tabular py-1 pr-3">{show(typed)}</td><td className="tabular py-1 pr-3">{showRead(photo, typed)}</td><td className="tabular py-1">{show(prev)}</td></tr>
             ))}
           </tbody>
         </table>
       </div>
       {notes.length > 0 && <p className="text-muted-foreground">Photo reader note: {notes.join(' · ')}</p>}
+      {row.photo_archived && <p className="text-muted-foreground">Photo moved to the Drive archive</p>}
       {items.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {items.map((it, i) => (
