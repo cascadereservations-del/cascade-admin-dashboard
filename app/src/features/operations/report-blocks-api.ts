@@ -11,7 +11,7 @@ export type ReportBlock = {
   photo_electric: number | null; photo_water: number | null; photo_note_electric: string | null; photo_note_water: string | null;
   photo_path_electric: string | null; photo_path_water: string | null;
   // s104: optional so the card still works against the older SQL that does not return them.
-  reason?: 'mismatch' | 'photo_date' | null; photo_date_lines?: string[] | null; photo_archived?: boolean | null;
+  reason?: 'mismatch' | 'photo_date' | 'meter_order' | null; resend_requested_at?: string | null; photo_date_lines?: string[] | null; photo_archived?: boolean | null;
 };
 export type ReportBlockRow = ReportBlock & { electric_url: string | null; water_url: string | null };
 
@@ -73,4 +73,10 @@ export function correctionProblem(row: Pick<ReportBlock, 'prev_electric' | 'prev
   if (row.prev_electric !== null && e < row.prev_electric) return 'The electric number cannot be below the last reading.';
   if (row.prev_water !== null && w < row.prev_water) return 'The water number cannot be below the last reading.';
   return null;
+}
+
+/** s104: ask the cleaner who sent this reading for a new meter photo. Does not resolve the row. */
+export async function requestMeterResend(readingId: string, note: string): Promise<void> {
+  const res = await rpc<{ ok?: boolean; message?: string } | null>('admin_request_meter_resend_v1', { p_reading_id: readingId, p_note: note.trim() || null });
+  if (res && res.ok === false) throw new Error(res.message ?? 'The server did not accept this. Nothing was changed.');
 }

@@ -31,6 +31,7 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   admin_undo_v1: 'operations',
   ack_verifier_finding_v1: 'operations',
   admin_resolve_report_block_v1: 'operations', // s101: Cleaning log, Cleaning reports on hold
+  admin_request_meter_resend_v1: 'operations', // s104: ask the cleaner for a new meter photo
   review_meter_reading_v1: 'readiness',
   review_cleaning_verification: 'readiness',
   review_property_readiness_v1: 'readiness',

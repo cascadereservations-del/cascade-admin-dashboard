@@ -111,6 +111,41 @@ describe('ReportBlocksCard', () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved. The photo date is noted.'));
   });
 
+  it('meter_order headline; Ask cleaner to resend calls the rpc with the note and does not resolve', async () => {
+    listThen([{ ...ROW, reason: 'meter_order', resend_requested_at: null }]);
+    mount();
+    expect(await screen.findByText('Meter number out of order')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Note (optional)'), 'blurred');
+    await userEvent.click(screen.getByRole('button', { name: 'Ask cleaner to resend' }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('admin_request_meter_resend_v1', { p_reading_id: 'r1', p_note: 'blurred' }));
+    expect(rpcMock).not.toHaveBeenCalledWith('admin_resolve_report_block_v1', expect.anything());
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+  });
+
+  it('a row already asked shows the date and stays listed with its buttons', async () => {
+    listThen([{ ...ROW, resend_requested_at: '2026-10-31T02:00:00Z' }]);
+    mount();
+    expect(await screen.findByText(/Asked 31 Oct 2026, 10:00/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Typed numbers are right' })).toBeInTheDocument();
+  });
+
+  it('with older SQL (no resend_requested_at) the resend button is hidden', async () => {
+    listThen([ROW]);
+    mount();
+    await screen.findByRole('button', { name: 'Correct the numbers' });
+    expect(screen.queryByRole('button', { name: 'Ask cleaner to resend' })).toBeNull();
+  });
+
+  it('a missing RPC (PGRST202) hides the resend button after the try', async () => {
+    rpcMock.mockImplementation(async (fn: string) => {
+      if (fn === 'admin_report_blocks_v1') return [{ ...ROW, resend_requested_at: null }];
+      throw { code: 'PGRST202', message: 'Could not find the function' };
+    });
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: 'Ask cleaner to resend' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Ask cleaner to resend' })).toBeNull());
+  });
+
   it('an archived photo says so', async () => {
     listThen([{ ...ROW, photo_archived: true, photo_path_electric: null, photo_path_water: null }]);
     mount();

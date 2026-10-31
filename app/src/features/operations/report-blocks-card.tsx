@@ -8,7 +8,7 @@ import { Section } from '@/components/data/page-header';
 import { PhotoLightbox, type LightboxItem } from '@/components/data/photo-lightbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { alignRead, fetchReportBlocks, correctionProblem, resolveReportBlock, type ReportBlockAction, type ReportBlockRow } from './report-blocks-api';
+import { alignRead, fetchReportBlocks, correctionProblem, requestMeterResend, resolveReportBlock, type ReportBlockAction, type ReportBlockRow } from './report-blocks-api';
 
 // s101: lists every meter photo mismatch that is holding up a cleaning report, so an admin can answer it here.
 const show = (v: number | null) => (v === null ? 'not read' : String(v));
@@ -40,7 +40,15 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
-  const busy = answer.isPending;
+  const [noResend, setNoResend] = useState(false);
+  const resend = useMutation({
+    mutationFn: () => requestMeterResend(row.reading_id, note),
+    onSuccess: () => { toast.success('Asked. The cleaner has been sent a notice.'); void qc.invalidateQueries({ queryKey: ['report-blocks'] }); },
+    onError: (e) => { if (toAppError(e).kind === 'unavailable') setNoResend(true); toast.error(toAppError(e).message); },
+  });
+  // Older SQL does not return resend_requested_at at all; then the button stays hidden.
+  const canResend = 'resend_requested_at' in row && !noResend;
+  const busy = answer.isPending || resend.isPending;
   const meters: Array<[string, number | null, number | null, number | null, string | null]> = [
     ['Electric', row.typed_electric, row.photo_electric, row.prev_electric, row.photo_note_electric],
     ['Water', row.typed_water, row.photo_water, row.prev_water, row.photo_note_water],
@@ -50,7 +58,7 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
   const notes = meters.filter((m) => m[4]).map((m) => `${m[0]}: ${m[4]}`);
   return (
     <li className="space-y-3 rounded-lg border bg-card p-4 text-sm">
-      <p className="font-medium">{photoDate ? 'Photo date is far from the checkout day' : 'The report was accepted. Check the photo against the typed numbers and pick one answer.'}</p>
+      <p className="font-medium">{row.reason === 'meter_order' ? 'Meter number out of order' : photoDate ? 'Photo date is far from the checkout day' : 'The report was accepted. Check the photo against the typed numbers and pick one answer.'}</p>
       {dateLines.length > 0 && <ul className="list-disc pl-5 text-muted-foreground">{dateLines.map((l, i) => <li key={`${i}-${l}`}>{l}</li>)}</ul>}
       <p className="text-muted-foreground">
         {row.cleaner_name ?? 'A cleaner'} · stay ending {formatDate(row.checkout_date, 'long')} · recorded {formatDateTime(row.recorded_at)}
@@ -100,9 +108,12 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
           <>
             <Button size="sm" onClick={() => answer.mutate('typed_is_right')} disabled={busy}>Typed numbers are right</Button>
             <Button size="sm" variant="outline" onClick={() => setFixing(true)} disabled={busy}>Correct the numbers</Button>
+            {canResend && <Button size="sm" variant="outline" onClick={() => resend.mutate()} disabled={busy}>Ask cleaner to resend</Button>}
           </>
         )}
       </div>
+      {row.resend_requested_at && <p className="text-muted-foreground">Asked {formatDateTime(row.resend_requested_at)}</p>}
+      {resend.isError && !noResend && <p className="text-xs text-destructive" role="alert">{toAppError(resend.error).message}</p>}
       {answer.isError && <p className="text-xs text-destructive" role="alert">{toAppError(answer.error).message}</p>}
     </li>
   );
