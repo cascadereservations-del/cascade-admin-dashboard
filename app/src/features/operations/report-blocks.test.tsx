@@ -98,6 +98,19 @@ describe('ReportBlocksCard', () => {
     expect(screen.getByRole('button', { name: 'Correct the numbers' })).toBeInTheDocument();
   });
 
+  it('a mismatch row also lists its photo date lines, even identical ones', async () => {
+    listThen([{ ...ROW, reason: 'mismatch', photo_date_lines: ['Water photo taken Oct 23', 'Water photo taken Oct 23'] }]);
+    mount();
+    expect(await screen.findAllByText('Water photo taken Oct 23')).toHaveLength(2);
+  });
+
+  it('the success toast depends on the reason', async () => {
+    listThen([{ ...ROW, reason: 'photo_date', photo_date_lines: ['x'] }]);
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: 'Typed numbers are right' }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Saved. The photo date is noted.'));
+  });
+
   it('an archived photo says so', async () => {
     listThen([{ ...ROW, photo_archived: true, photo_path_electric: null, photo_path_water: null }]);
     mount();

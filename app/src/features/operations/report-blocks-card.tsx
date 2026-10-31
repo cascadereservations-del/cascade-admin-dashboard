@@ -32,7 +32,7 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
   const answer = useMutation({
     mutationFn: (action: ReportBlockAction) => resolveReportBlock(row.reading_id, action, action === 'correct_numbers' ? Number(electric) : null, action === 'correct_numbers' ? Number(water) : null, note),
     onSuccess: () => {
-      toast.success('Answered. The next cleaning report can go through.');
+      toast.success(row.reason === 'photo_date' ? 'Saved. The photo date is noted.' : 'Saved. The meter reading is checked.');
       void qc.invalidateQueries({ queryKey: ['report-blocks'] });
       void qc.invalidateQueries({ queryKey: ['cleanings'] });
       void qc.invalidateQueries({ queryKey: ['cleaning'] });
@@ -51,7 +51,7 @@ function BlockCard({ row }: { row: ReportBlockRow }) {
   return (
     <li className="space-y-3 rounded-lg border bg-card p-4 text-sm">
       <p className="font-medium">{photoDate ? 'Photo date is far from the checkout day' : 'The report was accepted. Check the photo against the typed numbers and pick one answer.'}</p>
-      {photoDate && dateLines.length > 0 && <ul className="list-disc pl-5 text-muted-foreground">{dateLines.map((l) => <li key={l}>{l}</li>)}</ul>}
+      {dateLines.length > 0 && <ul className="list-disc pl-5 text-muted-foreground">{dateLines.map((l, i) => <li key={`${i}-${l}`}>{l}</li>)}</ul>}
       <p className="text-muted-foreground">
         {row.cleaner_name ?? 'A cleaner'} · stay ending {formatDate(row.checkout_date, 'long')} · recorded {formatDateTime(row.recorded_at)}
       </p>
