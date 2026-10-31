@@ -1,8 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { rpc } from '@/lib/rpc';
 
-// s101: cleaning reports on hold. A meter photo the reader could not match to the typed numbers
-// holds up the next turnover report (submit-cleaning 409 meter_followup_unresolved) until someone answers it.
+// s101: meter readings to check. A meter photo the reader could not match to the typed numbers
+// only flags the report now (D-354); submit-cleaning no longer blocks on it, and someone answers it here.
 // Contract: docs/s101/CONTRACT-report-blocks.md (admin_report_blocks_v1, admin_resolve_report_block_v1).
 
 export type ReportBlock = {

@@ -61,7 +61,7 @@ describe('ReportBlocksCard', () => {
   it('says so when nothing is on hold', async () => {
     listThen([]);
     mount();
-    expect(await screen.findByText('Nothing is holding up a cleaning report.')).toBeInTheDocument();
+    expect(await screen.findByText('No meter readings to check.')).toBeInTheDocument();
   });
 
   it('shows who, which stay, the Manila time, the table, the reader note and no ids', async () => {

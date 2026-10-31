@@ -109,7 +109,7 @@ export function ReportBlocksCard() {
   return (
     <div className="mb-6">
       <Section title="Meter readings to check">
-        {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.length === 0 ? <p className="text-sm text-muted-foreground">Nothing is holding up a cleaning report.</p> : (
+        {q.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : q.isError ? <p className="text-sm text-destructive">{toAppError(q.error).message}</p> : q.data.length === 0 ? <p className="text-sm text-muted-foreground">No meter readings to check.</p> : (
           <ul className="space-y-3">{q.data.map((r) => <BlockCard key={r.reading_id} row={r} />)}</ul>
         )}
       </Section>
