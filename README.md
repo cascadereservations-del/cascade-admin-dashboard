@@ -22,6 +22,14 @@ npm run check
 
 Runs typecheck, vitest unit tests, the four legacy tests and a production build. `npm run test:e2e` runs Playwright once browsers are installed (`npx playwright install`).
 
+## Fast checks
+
+- `npm run test:changed` runs only tests affected by uncommitted changes.
+- `npm run test:affected` runs only tests affected by changes since `origin/main`.
+- `npm run test:related -- src/lib/foo.ts` runs the tests that import a file (path relative to `app/`).
+- `npm run typecheck` is incremental (cache in `node_modules/.cache/tsc.tsbuildinfo`), so repeat runs are fast.
+- `npm test` stays the full check before a push.
+
 ## Backend
 
 New RPCs and tables live in `../stay-site/supabase/migrations/20260913*.sql` with pgTAP suites and a release contract. Applied to production on 2026-09-13 after a rehearsal on Alfred. The new admin is the default entry point at the root (built `dist/`, copied to `index.html` + `assets/`; `next/` still mirrors it); all six mutation modules are enabled in `app/src/lib/rollout.ts`. See `docs/RELEASE.md`.
