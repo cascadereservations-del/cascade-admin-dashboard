@@ -10,6 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:affected": "vitest run --changed origin/main",
+    "test:changed": "vitest run --changed",
+    "test:related": "vitest related --run",
     "test:legacy": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm run test && npm run test:legacy && vite build"
