@@ -29,8 +29,14 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    pool: 'vmThreads',
+    vmMemoryLimit: '300MB',
+    projects: [
+      // vmThreads: jsdom is created once per worker. embed-shell redefines window.top, which vm contexts forbid, so it stays on forks.
+      { extends: true, test: { name: 'vm', include: ['src/**/*.test.{ts,tsx}'], exclude: ['**/node_modules/**', 'src/components/shell/embed-shell.test.tsx'] } },
+      { extends: true, test: { name: 'forks', pool: 'forks', include: ['src/components/shell/embed-shell.test.tsx'] } },
+    ],
     testTimeout: 20000, // Radix-driven tests exceed 5s when several lanes load the machine
   },
 });
