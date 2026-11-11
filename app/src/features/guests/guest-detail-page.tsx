@@ -26,6 +26,7 @@ import { ImportantNotes, ProfileExtraFields, PrivateGuestDetails, isPlausiblePHM
 import { safeMessengerUrl, validateIdPhoto } from './local-records';
 import { GuestIdPanel, IdPhotoProvider, IdPhotoThumb, NoIdPhotoTile } from './id-photos';
 import { findSelfCompanion, otherCompanions } from './id-photo';
+import { TurnoverReport } from './turnover-report';
 import { deleteGuestCompanion, fetchFollowUps, fetchGuest, fetchTimeline, listGuestCompanions, mergeGuests, previewMerge, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type Companion } from './api';
 
 // CRM01-CRM06. Profile fields are optional and carry provenance; the timeline
@@ -273,6 +274,7 @@ export default function GuestDetailPage() {
                         {e.kind === 'lifecycle' && <>{String(e.body.eventType)} {e.body.code ? `(${String(e.body.code)})` : ''}</>}
                         {e.kind === 'refund' && <>{formatPHP(String(e.body.amount))} · {String(e.body.rail ?? '')} · {String(e.body.status)}</>}
                         {e.kind === 'profile_change' && <>{String(e.body.reason ?? 'profile updated')}</>}
+                        {e.kind === 'turnover_report' && <TurnoverReport body={e.body} />}
                         {e.kind === 'merge' && <>merged guest {String(e.body.mergedGuestId)} · {String(e.body.reason)}</>}
                       </div>
                     </li>
