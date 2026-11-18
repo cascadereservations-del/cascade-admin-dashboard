@@ -30,7 +30,13 @@ export function rankStays(stays: Stay[], m: Metric) {
     .filter((s) => counted(s, m))
     .map((s) => { const value = perNight(s[m], s.nights)!; return { stay: s, value, high: isHigh(value, avg.avg) }; })
     .sort((a, b) => b.value - a.value || (b.stay.date ?? '').localeCompare(a.stay.date ?? ''));
-  return { ranked, estimated: stays.filter((s) => s.estimate !== null), avg };
+  // A stay with no flag but an unknown night count or value is listed with its reason, not dropped.
+  const estimated = stays.flatMap((s): Stay[] => {
+    if (s.estimate !== null) return [s];
+    if (counted(s, m)) return [];
+    return [{ ...s, estimate: perNight(1, s.nights) === null ? 'nights_unknown' : 'reading_unknown' }];
+  });
+  return { ranked, estimated, avg };
 }
 
 /** m3 to litres, to the nearest 10. */
@@ -45,19 +51,23 @@ const WORDS: Record<string, string> = {
   duplicate: 'Duplicate of another reading',
   under_review: 'Still under review',
   chain_break: 'Did not follow on from the last photo',
+  nights_unknown: 'Nights not known',
+  reading_unknown: 'Reading not known',
 };
 export const estimateWords = (code: string): string => WORDS[code] ?? code.replaceAll('_', ' ');
 
-const tokens = (n: string) => n.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+const TITLES = new Set(['mr', 'mrs', 'ms', 'dr']);
+const tokens = (n: string) => n.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((t) => t && !TITLES.has(t));
 
 /**
  * Does the guest name on a cleaning report belong to this guest record? The report often holds a first name only,
- * so a one-word report name is a weaker match ('first'). Surname-only or different names never match.
+ * so a one-word report name (or guest name) is a weaker match ('first'). Surname-only or different names never match.
  */
 export function guestMatch(reportName: string | null | undefined, guestName: string): 'exact' | 'first' | null {
   const a = tokens(reportName ?? ''), b = tokens(guestName);
   if (!a.length || !b.length) return null;
-  if (a.length === b.length && [...a].sort().join(' ') === [...b].sort().join(' ')) return 'exact';
+  // A lone first name is never 'exact': two guests can share one.
+  if (a.length >= 2 && a.length === b.length && [...a].sort().join(' ') === [...b].sort().join(' ')) return 'exact';
   if (a.length !== 1) return null;
   // "Surname, Given" puts the given name after the comma; otherwise it is the first word.
   const given = guestName.includes(',') ? tokens(guestName.split(',').slice(1).join(' '))[0] : b[0];

@@ -51,7 +51,7 @@ export function UtilitiesRanking({ propertyId }: { propertyId: string }) {
     <section aria-labelledby="util-title" className="space-y-3">
       <div>
         <h2 id="util-title" className={cn('font-semibold', T.t2)}>Use per stay</h2>
-        <p className={cn('text-muted-foreground', T.t3)}>{q.data ? `${r.avg.stays} stays · ${r.avg.nights} nights` : 'Loading readings'}</p>
+        <p aria-live="polite" className={cn('text-muted-foreground', T.t3)}>{q.data ? `${r.avg.stays} stays · ${r.avg.nights} nights` : 'Loading readings'}</p>
       </div>
       <div role="group" aria-label="Measure" className="flex gap-2">
         {([['kwh', 'Electricity', Zap], ['m3', 'Water', Droplet]] as const).map(([m, label, Icon]) => (
@@ -70,7 +70,7 @@ export function UtilitiesRanking({ propertyId }: { propertyId: string }) {
             <div className="rounded-xl border bg-card p-3"><div className={cn('font-bold leading-tight', T.t1)}>{fmtValue(top.value, metric)}</div><div className={cn('text-muted-foreground', T.t4)}>highest stay · {shortDate(top.stay.date)} · {nightsText(top.stay.nights)}</div></div>
           </div>
           <p className={cn('text-muted-foreground', T.t4)}>Above average means {FLAG_RATIO} times the average of these stays or more.</p>
-          <ol aria-live="polite" className="overflow-hidden rounded-xl border bg-card">
+          <ol className="overflow-hidden rounded-xl border bg-card">
             {rows.map(({ stay, value, high }) => (
               <li key={stay.sessionId} className="flex min-h-14 items-center gap-2.5 border-t px-4 py-1.5 first:border-t-0">
                 <span className={cn('w-24 shrink-0 leading-tight', T.t3)}>{stay.guest ?? 'Guest not named'}<small className={cn('block text-muted-foreground', T.t4)}>{shortDate(stay.date)} · {nightsText(stay.nights)}</small></span>

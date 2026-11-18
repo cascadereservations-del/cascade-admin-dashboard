@@ -5,17 +5,19 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const role = vi.hoisted(() => ({ value: 'owner' as string }));
 const stays = vi.hoisted(() => ({ rows: [] as unknown[], fail: false }));
+const fetchFn = vi.hoisted(() => vi.fn());
 vi.mock('@/auth/session', () => ({ useSession: () => ({ caps: { can: () => role.value === 'owner' || role.value === 'admin' } }) }));
 vi.mock('./utilities-api', () => ({
   UTILITIES_KEY: (p: string) => ['guest-utilities', p],
-  fetchStayUtilities: async () => { if (stays.fail) throw new Error('boom'); return stays.rows; },
+  fetchStayUtilities: (...a: unknown[]) => fetchFn(...a),
 }));
 
 import { UtilitiesRanking } from './utilities-ranking';
 import { GuestUtilitiesCard } from './guest-utilities-card';
 import type { Stay } from './utilities-math';
 
-afterEach(() => { cleanup(); role.value = 'owner'; stays.rows = []; stays.fail = false; });
+fetchFn.mockImplementation(async () => { if (stays.fail) throw new Error('boom'); return stays.rows; });
+afterEach(() => { cleanup(); fetchFn.mockClear(); role.value = 'owner'; stays.rows = []; stays.fail = false; });
 const wrap = (ui: React.ReactElement) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 const st = (o: Partial<Stay> & { sessionId: string }): Stay => ({ guest: 'Demo Guest One', date: '2026-11-03', nights: 2, kwh: 20, m3: 1, estimate: null, ...o });
 
@@ -52,6 +54,7 @@ it('both components render nothing, and fetch nothing, for a role without access
   role.value = 'finance';
   const { container } = wrap(<><UtilitiesRanking propertyId="p" /><GuestUtilitiesCard propertyId="p" guestName="Demo Guest One" /></>);
   expect(container).toBeEmptyDOMElement();
+  expect(fetchFn).not.toHaveBeenCalled();
 });
 
 it('ranking: a failed read shows an alert', async () => {
@@ -69,7 +72,7 @@ it('card: guest average against the house, badge, hint under 3 nights, first-nam
   wrap(<GuestUtilitiesCard propertyId="p" guestName="Alpha Santos" />);
   expect(await screen.findByText(/Average across 1 stay, 1 night/)).toBeInTheDocument();
   expect(screen.getByText(/Under 3 nights, so read it as a hint/)).toBeInTheDocument();
-  expect(screen.getByText(/matched by first name/)).toBeInTheDocument();
+  expect(screen.getByText(/another guest with the same first name may be included/)).toBeInTheDocument();
   expect(screen.getByText('Above average')).toBeInTheDocument();
   expect(screen.getByText('2.14 times the average of 14.0 kWh a night')).toBeInTheDocument();
 });
@@ -86,4 +89,22 @@ it('card: a typical guest gets no badge, an estimated-only guest says so, an unk
   cleanup();
   wrap(<GuestUtilitiesCard propertyId="p" guestName="Nobody Here" />);
   expect(await screen.findByText(/No meter readings are tied to this guest yet/)).toBeInTheDocument();
+});
+
+it('card: a one-word guest name gets the first-name caveat, a two-word exact match does not', async () => {
+  stays.rows = [st({ sessionId: 'a', guest: 'Alpha', nights: 2, kwh: 28 }), st({ sessionId: 'b', guest: 'Alpha Demo', nights: 2, kwh: 28 })];
+  wrap(<GuestUtilitiesCard propertyId="p" guestName="Alpha" />);
+  expect(await screen.findByText(/same first name may be included/)).toBeInTheDocument();
+  cleanup();
+  stays.rows = [st({ sessionId: 'b', guest: 'Alpha Demo', nights: 2, kwh: 28 })];
+  wrap(<GuestUtilitiesCard propertyId="p" guestName="Alpha Demo" />);
+  await screen.findByText(/Average across 1 stay/);
+  expect(screen.queryByText(/same first name/)).not.toBeInTheDocument();
+});
+
+it('ranking: a stay with unknown nights shows under estimated with the reason', async () => {
+  stays.rows = [st({ sessionId: 'a', guest: 'Alpha', nights: null }), st({ sessionId: 'b', guest: 'Bravo', nights: 2, kwh: null })];
+  wrap(<UtilitiesRanking propertyId="p" />);
+  expect(await screen.findByText(/Nights not known/)).toBeInTheDocument();
+  expect(screen.getByText(/Reading not known/)).toBeInTheDocument();
 });

@@ -59,7 +59,9 @@ describe('rankStays', () => {
   it('sorts counted stays by use per night, highest first, and lists estimated ones apart', () => {
     const r = rankStays(list, 'kwh');
     expect(r.ranked.map((x) => [x.stay.guest, x.value])).toEqual([['B', 30], ['D', 20], ['A', 10]]);
-    expect(r.estimated.map((s) => s.guest)).toEqual(['C']);
+    expect(r.estimated.map((s) => [s.guest, s.estimate])).toEqual([['C', 'typed_accepted'], ['E', 'nights_unknown']]);
+    expect(estimateWords('nights_unknown')).toBe('Nights not known');
+    expect(rankStays([stay({ sessionId: 'x', kwh: null })], 'kwh').estimated[0]?.estimate).toBe('reading_unknown');
     expect(r.avg).toEqual({ avg: 17.5, nights: 4, stays: 3 });
   });
   it('marks high with the same unrounded rule', () => {
@@ -98,15 +100,21 @@ describe('guestMatch', () => {
   it('matches the full name in any order, ignoring case and punctuation', () => {
     expect(guestMatch('Juan dela Cruz', 'Juan Dela Cruz')).toBe('exact');
     expect(guestMatch('Cruz, Juan', 'Juan Cruz')).toBe('exact');
+    expect(guestMatch('Mr. Juan Cruz', 'Juan Cruz')).toBe('exact');
+  });
+  it('never calls a one-word name exact', () => {
+    expect(guestMatch('Alpha', 'Alpha')).toBe('first');
+    expect(guestMatch('Alpha', 'Dr Alpha')).toBe('first');
+    expect(guestMatch('Alpha Demo', 'Alpha')).toBeNull();
   });
   it('matches a first-name-only report as a weaker match', () => {
-    expect(guestMatch('Shasha', 'Shasha Santos')).toBe('first');
-    expect(guestMatch('Shasha', 'Santos, Shasha')).toBe('first');
+    expect(guestMatch('Alpha', 'Alpha Demo')).toBe('first');
+    expect(guestMatch('Alpha', 'Demo, Alpha')).toBe('first');
   });
   it('does not match a surname-only or different name, or empty input', () => {
-    expect(guestMatch('Santos', 'Shasha Santos')).toBeNull();
-    expect(guestMatch('Dan', 'Daniel Reyes')).toBeNull();
-    expect(guestMatch('', 'Dan')).toBeNull();
-    expect(guestMatch(null, 'Dan')).toBeNull();
+    expect(guestMatch('Demo', 'Alpha Demo')).toBeNull();
+    expect(guestMatch('Bravo', 'Bravon Reyes')).toBeNull();
+    expect(guestMatch('', 'Bravo')).toBeNull();
+    expect(guestMatch(null, 'Bravo')).toBeNull();
   });
 });

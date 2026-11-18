@@ -19,7 +19,8 @@ export function GuestUtilitiesCard({ propertyId, guestName }: { propertyId: stri
   const byFirstName = matches.some((x) => x.how === 'first');
   const house = { kwh: averageOf(q.data ?? [], 'kwh'), m3: averageOf(q.data ?? [], 'm3') };
   const own = { kwh: averageOf(mine, 'kwh'), m3: averageOf(mine, 'm3') };
-  const nights = Math.max(own.kwh.nights, own.m3.nights);
+  const main = own.kwh.nights >= own.m3.nights ? own.kwh : own.m3; // one metric supplies both the night and stay counts
+  const nights = main.nights;
   const high = isHigh(own.kwh.avg, house.kwh.avg) || isHigh(own.m3.avg, house.m3.avg);
   const estimated = mine.filter((st) => st.estimate !== null);
 
@@ -31,7 +32,7 @@ export function GuestUtilitiesCard({ propertyId, guestName }: { propertyId: stri
       <div key={m} className="mt-2">
         <div className={cn('flex justify-between', T.t3)}><span>{label}</span><b>{fmtValue(v, m)} a night</b></div>
         <UsageBar value={v} avg={h} max={max} metric={m} />
-        {h !== null && <div className={cn('text-muted-foreground', T.t4)}>{(v / h).toFixed(2)} times the average of {fmtValue(h, m)} a night</div>}
+        {h !== null && <div className={cn('text-muted-foreground', T.t4)}>{(Math.floor((v / h) * 100) / 100).toFixed(2)} times the average of {fmtValue(h, m)} a night</div>}
       </div>
     );
   };
@@ -50,9 +51,9 @@ export function GuestUtilitiesCard({ propertyId, guestName }: { propertyId: stri
       {nights > 0 && (
         <>
           <p className={cn('text-muted-foreground', T.t4)}>
-            Average across {own.kwh.stays || own.m3.stays} {(own.kwh.stays || own.m3.stays) === 1 ? 'stay' : 'stays'}, {nightsText(nights)}
+            Average across {main.stays} {main.stays === 1 ? 'stay' : 'stays'}, {nightsText(nights)}
             {nights < READ_AS_HINT_UNDER && `. Under ${READ_AS_HINT_UNDER} nights, so read it as a hint.`}
-            {byFirstName && ' The cleaning report holds a first name, so stays are matched by first name.'}
+            {byFirstName && ' The cleaning report holds a first name only, so a stay by another guest with the same first name may be included.'}
           </p>
           {line('Electricity', 'kwh')}
           {line('Water', 'm3')}
