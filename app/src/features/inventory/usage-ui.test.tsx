@@ -1,3 +1,4 @@
+import type React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -6,7 +7,8 @@ import type { UsageKpi } from './api';
 
 const h = vi.hoisted(() => ({ kpi: null as unknown, fail: false }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => true } }) }));
-vi.mock('./api', () => ({ fetchUsageKpi: () => (h.fail ? Promise.reject(new Error('boom')) : Promise.resolve(h.kpi)) }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('./api', () => ({ recordMissedRefill: vi.fn(), fetchUsageKpi: () => (h.fail ? Promise.reject(new Error('boom')) : Promise.resolve(h.kpi)) }));
 import { RestockPrompts, UsageLearningCard, UsageTiles } from './usage-ui';
 
 afterEach(cleanup);
@@ -70,24 +72,28 @@ describe('Usage learning card', () => {
 
 describe('Restock prompt', () => {
   const w = { id: 'c1', name: 'Demo coffee', since: '2026-10-27T04:00:00Z', qtyBefore: '17', qtyNow: '51' };
-  it('uses the approved wording and offers both buttons', () => {
-    const onRecord = vi.fn();
-    render(<MemoryRouter><RestockPrompts items={[w]} onRecord={onRecord} /></MemoryRouter>);
+  const wrap = (ui: React.ReactElement) => <QueryClientProvider client={new QueryClient()}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>;
+  it('uses the approved wording and offers both buttons; Yes opens the field', () => {
+    render(wrap(<RestockPrompts items={[w]} />));
     expect(screen.getByText('Demo coffee went 17 → 51')).toBeInTheDocument();
     expect(screen.getByText('Was stock added since 27 Oct? Without it this interval is skipped so usage stays accurate.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('How much was added?')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Yes, record refill' }));
-    expect(onRecord).toHaveBeenCalledWith('c1');
+    expect(screen.getByLabelText('How much was added?')).toHaveFocus();
     expect(screen.getByRole('link', { name: 'No, recount' })).toHaveAttribute('href', '/inventory/counts');
   });
   it('one card per item, none when there are none', () => {
-    const { container, rerender } = render(<MemoryRouter><RestockPrompts items={[w, { ...w, id: 'c2', name: 'Demo tea' }]} onRecord={() => {}} /></MemoryRouter>);
+    const { container, rerender } = render(wrap(<RestockPrompts items={[w, { ...w, id: 'c2', name: 'Demo tea' }]} />));
     expect(screen.getAllByRole('button', { name: 'Yes, record refill' })).toHaveLength(2);
-    rerender(<MemoryRouter><RestockPrompts items={[]} onRecord={() => {}} /></MemoryRouter>);
+    rerender(wrap(<RestockPrompts items={[]} />));
     expect(container).toBeEmptyDOMElement();
   });
-  it('buttons are 44 px tall', () => {
-    render(<MemoryRouter><RestockPrompts items={[w]} onRecord={() => {}} /></MemoryRouter>);
+  it('buttons and the field are 44 px tall', () => {
+    render(wrap(<RestockPrompts items={[w]} />));
     expect(screen.getByRole('button', { name: 'Yes, record refill' }).className).toContain('min-h-11');
     expect(screen.getByRole('link', { name: 'No, recount' }).className).toContain('min-h-11');
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, record refill' }));
+    expect(screen.getByLabelText('How much was added?').className).toContain('min-h-11');
+    expect(screen.getByRole('button', { name: 'Save refill' }).className).toContain('min-h-11');
   });
 });

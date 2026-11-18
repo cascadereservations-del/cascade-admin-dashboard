@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({ rpc: {} as { data?: unknown; error?: unknown }
 vi.mock('@/lib/supabase', () => ({
   supabase: { rpc: (fn: string, args: Record<string, unknown>) => { calls.push([fn, args]); return Promise.resolve({ data: null, error: null, ...state.rpc }); } },
 }));
-import { fetchUsageKpi } from './api';
+import { fetchUsageKpi, recordMissedRefill } from './api';
 
 beforeEach(() => { calls.length = 0; });
 
@@ -24,18 +24,28 @@ describe('fetchUsageKpi', () => {
     state.rpc = { data: { ok: true } };
     expect(await fetchUsageKpi('p1')).toMatchObject({ itemsTotal: 0, underFourteenDays: { count: 0, items: [] }, waitingForRefill: { count: 0, items: [] } });
   });
-  it('a missing function (PGRST202, 42883, 404) reads as null, not an error', async () => {
-    for (const error of [{ code: 'PGRST202', message: 'x' }, { code: '42883', message: 'x' }, { status: 404, message: 'Not Found' }]) {
+  it('a missing function (PGRST202 or 42883) reads as null, not an error', async () => {
+    for (const error of [{ code: 'PGRST202', message: 'x' }, { code: '42883', message: 'x' }]) {
       state.rpc = { error };
       expect(await fetchUsageKpi('p1')).toBeNull();
     }
   });
-  it('a refusal reads as null; any other failure is thrown', async () => {
-    state.rpc = { error: { code: '42501', message: 'permission denied' } };
-    expect(await fetchUsageKpi('p1')).toBeNull();
+  it('a refusal (42501) and a 404 status are errors, as is any other failure', async () => {
+    for (const error of [{ code: '42501', message: 'permission denied' }, { status: 404, message: 'Not Found' }, { code: '57014', message: 'canceling statement due to statement timeout' }]) {
+      state.rpc = { error };
+      await expect(fetchUsageKpi('p1')).rejects.toBeDefined();
+    }
+  });
+  it('an ok:false body reads as null', async () => {
     state.rpc = { data: { ok: false } };
     expect(await fetchUsageKpi('p1')).toBeNull();
-    state.rpc = { error: { code: '57014', message: 'canceling statement due to statement timeout' } };
-    await expect(fetchUsageKpi('p1')).rejects.toBeDefined();
+  });
+});
+
+describe('recordMissedRefill', () => {
+  it('calls record_missed_refill_v1 with the item and the quantity, and nothing else', async () => {
+    state.rpc = { data: { ok: true } };
+    expect(await recordMissedRefill('i1', '30')).toEqual({ ok: true });
+    expect(calls).toEqual([['record_missed_refill_v1', { p_item_id: 'i1', p_qty: '30' }]]);
   });
 });

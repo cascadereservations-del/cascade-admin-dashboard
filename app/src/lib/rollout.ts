@@ -36,6 +36,7 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   review_cleaning_verification: 'readiness',
   review_property_readiness_v1: 'readiness',
   reconcile_inventory_baseline_v1: 'inventory',
+  record_missed_refill_v1: 'inventory',
   record_inventory_receipt_v1: 'inventory',
   record_inventory_movement: 'inventory',
   save_shopping_item_v1: 'inventory',

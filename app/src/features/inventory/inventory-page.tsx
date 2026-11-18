@@ -1,5 +1,5 @@
 import { ScrollRegion } from '@/components/data/scroll-region';
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -25,8 +25,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
-import { panelUsage, turnoversText, usageStateOf, usesText } from './usage';
-import { RefillNote, RestockPrompts, UsagePill, useUsageKpi } from './usage-ui';
+import { panelUsage, staysLearning, turnoversText, usageStateOf, usesText } from './usage';
+import { RestockPrompts, UsagePill, useUsageKpi } from './usage-ui';
 
 // s119 lane G: stock counts animate with NumberFlow (own chunk, loaded when an item opens; it honours reduced motion). The plain text
 // is both the fallback while the chunk loads and what a number that cannot be parsed shows.
@@ -97,17 +97,9 @@ export default function InventoryPage() {
   const [rKey, setRKey] = useState(() => newIdempotencyKey('receipt'));
   const [aKey, setAKey] = useState(() => newIdempotencyKey('adjust'));
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
-  // s120: the item whose receipt form was opened from a restock prompt, and the item that just got a receipt that way.
+  // s120: restock prompts come from the usage KPI. A prompt records a missed refill (usage record only); it never opens the receipt form.
   const usageKpi = useUsageKpi();
-  const [promptItem, setPromptItem] = useState<string | null>(null);
-  const [refillNote, setRefillNote] = useState<string | null>(null);
   const panel = selected ? panelUsage(selected) : null;
-  // Opened from a restock prompt: bring the receipt form into view once the panel has mounted.
-  useEffect(() => {
-    if (!selected || promptItem !== selected.id) return;
-    const t = window.setTimeout(() => { const f = document.getElementById('r-packs'); f?.scrollIntoView?.({ block: 'center' }); f?.focus(); }, 150);
-    return () => window.clearTimeout(t);
-  }, [selected?.id, promptItem]); // eslint-disable-line react-hooks/exhaustive-deps
   const [printOpen, setPrintOpen] = useState(false);
   const [printSel, setPrintSel] = useState({ consumables: true, appliances: true, stores: true });
 
@@ -120,7 +112,6 @@ export default function InventoryPage() {
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
       void qc.invalidateQueries({ queryKey: ['movements'] });
       void qc.invalidateQueries({ queryKey: ['usage-kpi'] });
-      if (selected && promptItem === selected.id) { setRefillNote(selected.id); setPromptItem(null); }
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
@@ -149,7 +140,7 @@ export default function InventoryPage() {
 
   const nameCol = useMemo<ColumnDef<Item, unknown>>(() => ({ id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div>{usesText(row.original) && <div className="text-xs text-muted-foreground">{usesText(row.original)}</div>}</div> }), [set]);
   const qtyCol = (header: string): ColumnDef<Item, unknown> => ({ id: 'qty', header, accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> });
-  const controlCol: ColumnDef<Item, unknown> = { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : 'legacy quantity'}</StatusBadge> };
+  const controlCol: ColumnDef<Item, unknown> = { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : staysLearning(row.original) ? 'learning' : 'legacy quantity'}</StatusBadge> };
   const stateCol: ColumnDef<Item, unknown> = { id: 'state', header: 'State', accessorFn: (r) => r.attention, cell: ({ row }) => (!row.original.active ? <StatusBadge tone="neutral">inactive</StatusBadge> : Number(row.original.qty) <= 0 ? <StatusBadge tone="bad">out of stock</StatusBadge> : row.original.attention ? <StatusBadge tone="warn">attention</StatusBadge> : <StatusBadge tone="good">ok</StatusBadge>) };
   // Consumables carry reorder-point and coverage columns; durables don't run
   // out on a schedule, so those two columns would only ever read empty there.
@@ -182,7 +173,8 @@ export default function InventoryPage() {
     <div>
       <div className="print:hidden">
         <PageHeader title="Inventory" description="Consumables and durable items. Advisory reorder estimates never place orders." actions={<><Button variant="outline" onClick={() => setPrintOpen(true)} disabled={!query.data}><Printer className="size-4" aria-hidden /> Print</Button><Button variant="outline" asChild><Link to="/inventory/purchases">Purchases</Link></Button>{canManage && <Button variant="outline" asChild><Link to="/inventory/counts">Counts</Link></Button>}</>} />
-        {canManage && <RestockPrompts items={usageKpi.data?.waitingForRefill.items ?? []} onRecord={(id) => { setPromptItem(id); set({ item: id }); }} />}
+        {canManage && usageKpi.isError && <p className="mb-4 text-sm text-muted-foreground">Refill prompts could not be loaded right now.</p>}
+        {canManage && <RestockPrompts items={usageKpi.data?.waitingForRefill.items ?? []} unitOf={(id) => query.data?.items.find((i) => i.id === id)?.unit} />}
         <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Item name" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
           <FilterSelect label="Attention" value={state.attention || undefined} onChange={(v) => set({ attention: v ?? '' })} options={[{ value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }, { value: 'inactive', label: 'Inactive' }, { value: 'attention', label: 'Attention required' }]} />
           <FilterSelect label="Category" value={state.category || undefined} onChange={(v) => set({ category: v ?? '' })} options={[...new Set((query.data?.items ?? []).map((i) => i.category))].sort().map((c) => ({ value: c, label: c }))} />
@@ -258,7 +250,7 @@ export default function InventoryPage() {
           </>
         );
       })()}
-      <ItemSheet open={!!selected} onOpenChange={(o) => { if (!o) { set({ item: '' }); setPromptItem(null); setRefillNote(null); } }} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
+      <ItemSheet open={!!selected} onOpenChange={(o) => { if (!o) set({ item: '' }); }} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
         {selected && (
           <div className="space-y-4">
             <dl className="space-y-1">
@@ -283,9 +275,8 @@ export default function InventoryPage() {
                   )}
                 </div>
               </Field>
-              <Field label="Stock control">{selected.movementControlled ? `Movement ledger${selected.baselineNote ? ` · baseline: ${selected.baselineNote}` : ''}` : 'Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.'}</Field>
+              <Field label="Stock control">{selected.movementControlled ? `Movement ledger${selected.baselineNote ? ` · baseline: ${selected.baselineNote}` : ''}` : staysLearning(selected) ? 'Counted stock. Counts keep usage learning.' : 'Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.'}</Field>
             </dl>
-            {canManage && refillNote === selected.id && <RefillNote />}
             {canManage && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <form id="receipt-form" className="space-y-2 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); doReceipt.mutate(); }}>
@@ -301,7 +292,7 @@ export default function InventoryPage() {
                   <div><Label htmlFor="a-delta">Change (+/−) in {selected.unit}</Label><Input id="a-delta" inputMode="decimal" required value={adjust.delta} onChange={(e) => setAdjust({ ...adjust, delta: e.target.value })} className="text-base" /></div>
                   <div><Label htmlFor="a-reason">Reason</Label><Textarea id="a-reason" required minLength={3} value={adjust.reason} onChange={(e) => setAdjust({ ...adjust, reason: e.target.value })} className="text-base" /></div>
                   <Button type="submit" size="sm" variant="outline" disabled={doAdjust.isPending || !selected.movementControlled}>Record adjustment</Button>
-                  {!selected.movementControlled && <p className="text-xs text-muted-foreground">Needs a baseline count first.</p>}
+                  {!selected.movementControlled && <p className="text-xs text-muted-foreground">{staysLearning(selected) ? 'Use a stock count to correct this item.' : 'Needs a baseline count first.'}</p>}
                 </form>
               </div>
             )}

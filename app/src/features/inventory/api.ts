@@ -24,19 +24,19 @@ export function fetchCatalogue(propertyId: string) {
   return rpc<Catalogue>('get_inventory_catalogue_v1', { p_property_id: propertyId });
 }
 
-// Usage-learning KPI (s120). The admin may ship before the SQL: a missing function (or a refusal) reads as null and the card stays hidden.
+// Usage-learning KPI (s120). The admin may ship before the SQL: only a missing function (PGRST202, 42883) reads as null and the card stays hidden. A refusal (42501) is an error.
 export type UsageKpi = {
   itemsTotal: number; itemsMeasured: number; itemsLearning: number; medianForecastError: number | null; forecastSamples: number;
   underFourteenDays: { count: number; items: Array<{ id: string; name: string; daysLeft: number | null }> };
   waitingForRefill: { count: number; items: Array<{ id: string; name: string; since: string | null; qtyBefore: string | number | null; qtyNow: string | number | null }> };
 };
 const rpcMissing = (e: { code?: string; status?: number; message?: string }) => e.code === 'PGRST202' || e.code === '42883' || e.status === 404 || /could not find the function/i.test(e.message ?? '');
+const kpiMissing = (e: { code?: string }) => e.code === 'PGRST202' || e.code === '42883';
 const count = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 export async function fetchUsageKpi(propertyId: string): Promise<UsageKpi | null> {
   const res = await supabase.rpc('get_inventory_usage_kpi_v1', { p_property_id: propertyId });
   if (res.error) {
-    const e = res.error as { code?: string; status?: number; message?: string };
-    if (rpcMissing(e) || e.code === '42501') return null;
+    if (kpiMissing(res.error as { code?: string })) return null;
     throw toAppError(res.error);
   }
   const b = res.data as (Partial<UsageKpi> & { ok?: boolean }) | null;
@@ -57,6 +57,12 @@ export async function fetchMovements(itemId: string) {
 
 export function reconcileBaseline(itemId: string, countedQty: string, note: string, key = newIdempotencyKey('baseline')) {
   return rpc<{ ok: boolean; before: string; after: string; variance: string }>('reconcile_inventory_baseline_v1', { p_item_id: itemId, p_counted_qty: countedQty, p_note: note, p_idempotency_key: key });
+}
+
+// A missed refill is record-only: it corrects the usage record and never writes stock or a purchase (server: record_missed_refill_v1).
+export type MissedRefillResult = { ok: boolean; reason?: string; minimum?: string | number | null; replayed?: boolean };
+export function recordMissedRefill(itemId: string, qty: string) {
+  return rpc<MissedRefillResult>('record_missed_refill_v1', { p_item_id: itemId, p_qty: qty });
 }
 
 export function recordAdjustment(itemId: string, delta: string, reason: string, key = newIdempotencyKey('adjust')) {

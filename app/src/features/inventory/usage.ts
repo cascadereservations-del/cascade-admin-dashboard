@@ -11,8 +11,9 @@ export const trimNumber = (v: Num): string | null => num(v)?.toLocaleString('en-
 const counted = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export type UsageState = 'baseline' | 'learning' | 'measured';
-export const usageStateOf = (i: Pick<Item, 'consumable' | 'usageState'>): UsageState | null =>
-  i.consumable && (i.usageState === 'baseline' || i.usageState === 'learning' || i.usageState === 'measured') ? i.usageState : null;
+// A movement-controlled item is measured from its ledger, so it carries no learning pill, turnover or rate (the server may still send the keys).
+export const usageStateOf = (i: Pick<Item, 'consumable' | 'usageState' | 'movementControlled'>): UsageState | null =>
+  i.consumable && !i.movementControlled && (i.usageState === 'baseline' || i.usageState === 'learning' || i.usageState === 'measured') ? i.usageState : null;
 
 /** `uses 2.1 per turnover`, or null when there is no rate. */
 export function usesText(i: Item): string | null {
@@ -29,11 +30,20 @@ export function turnoversText(i: Item): string | null {
   return `~${counted(Math.round(qty / rate), 'turnover', 'turnovers')}`;
 }
 
+/** An active consumable that is not on the ledger: a count keeps it in usage learning, it does not move to the ledger. */
+export const staysLearning = (i: Pick<Item, 'consumable' | 'active' | 'movementControlled'>) => i.consumable && i.active && !i.movementControlled;
+
+/** The state the list pill shows. A baseline with no baseline figure shows nothing, so `baseline · research` is never an empty claim. */
+export function pillState(i: Item): UsageState | null {
+  const s = usageStateOf(i);
+  return s === 'baseline' && num(i.usageBaseline) === null ? null : s;
+}
+
 export const USAGE_TONE = { measured: 'good', learning: 'warn', baseline: 'neutral' } as const;
 
 /** The list pill: `measured · 3 counts`, `learning · 1 count`, `baseline · research`. The badge adds its own glyph, so colour is never the only signal. */
 export function pillText(i: Item): string | null {
-  const s = usageStateOf(i);
+  const s = pillState(i);
   if (!s) return null;
   if (s === 'baseline') return 'baseline · research';
   const n = num(i.usageCounts);

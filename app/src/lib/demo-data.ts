@@ -102,6 +102,7 @@ export function buildDemoData(now: Date): DemoData {
     underFourteenDays: { count: 1, items: [{ id: U(503), name: 'Laundry detergent', daysLeft: 11.9 }] },
     waitingForRefill: { count: 1, items: [{ id: U(506), name: 'Tea sachets', since: iso(-9 * DAY), qtyBefore: '17', qtyNow: '51' }] },
   };
+  let refillSettled = false;
   const catalogue = {
     items: [
       { id: U(501), name: 'Bath towels', category: 'linen', unit: 'pcs', qty: '14', reorderBelow: '8', consumable: false, active: true, status: null, unitCost: '180.00', purchaseUnit: null, unitsPerPurchase: null, photo: null, movementControlled: true, baselineNote: null, usage30d: '0', usageDays: 30, avgDaily: '0', coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null },
@@ -205,7 +206,14 @@ export function buildDemoData(now: Date): DemoData {
       run_health_checks_v1: () => ({ ranAt: iso(0), checks: [] }),
       get_data_integrity_report: () => ({ ok: true, checks: [] }),
       get_inventory_catalogue_v1: () => catalogue,
-      get_inventory_usage_kpi_v1: () => usageKpi,
+      get_inventory_usage_kpi_v1: () => (refillSettled ? { ...usageKpi, waitingForRefill: { count: 0, items: [] } } : usageKpi),
+      // The demo walks the prompt: under the minimum answers too_small, the minimum or more settles it, a second call says not_waiting. Stock is never touched.
+      record_missed_refill_v1: (a) => {
+        if (refillSettled) return { ok: false, reason: 'not_waiting' };
+        if (Number(a.p_qty) < 34) return { ok: false, reason: 'too_small', minimum: 34 };
+        refillSettled = true;
+        return { ok: true, accepted: false, reason: 'too few turnovers', consumed: 0, received: Number(a.p_qty) };
+      },
       get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
       get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } },
         { kind: 'stay', at: iso(-30 * DAY), source: 'airbnb', body: { code: 'HMDEMO0002', checkin: day(-40), checkout: day(-37), nights: 3, status: 'completed', stayKind: 'airbnb', id: U(102) } },

@@ -1,14 +1,17 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useSession } from '@/auth/session';
 import { formatDay } from '@/lib/dates';
 import { toAppError } from '@/lib/errors';
 import { Section } from '@/components/data/page-header';
 import { StatusBadge } from '@/components/data/status-badge';
 import { Button } from '@/components/ui/button';
-import { fetchUsageKpi, type Item, type UsageKpi } from './api';
-import { pillText, trimNumber, USAGE_TONE, usageStateOf } from './usage';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { fetchUsageKpi, recordMissedRefill, type Item, type UsageKpi } from './api';
+import { pillState, pillText, trimNumber, USAGE_TONE } from './usage';
 
 // s120 usage learning screens. Everything here is quiet when the server has no usage data yet.
 
@@ -19,7 +22,7 @@ export function useUsageKpi() {
 
 /** The list pill. Text always carries the state; the badge adds a glyph on top of the colour. */
 export function UsagePill({ item, short }: { item: Item; short?: boolean }) {
-  const state = usageStateOf(item);
+  const state = pillState(item);
   const text = short ? state : pillText(item);
   return state && text ? <StatusBadge tone={USAGE_TONE[state]} className="whitespace-nowrap">{text}</StatusBadge> : null;
 }
@@ -66,34 +69,56 @@ export function UsageLearningCard() {
   );
 }
 
-/** One card per item whose last count was higher than expected. Yes opens the receipt form; No goes to the counts page. */
-export function RestockPrompts({ items, onRecord }: { items: UsageKpi['waitingForRefill']['items']; onRecord: (id: string) => void }) {
-  if (items.length === 0) return null;
+type Waiting = UsageKpi['waitingForRefill']['items'][number];
+
+/** One prompt. Yes opens one field: how much was added. It only corrects the usage record; stock and purchases are never written. */
+function RestockPrompt({ w, unit }: { w: Waiting; unit?: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [qty, setQty] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (open) field.current?.focus(); }, [open]);
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['usage-kpi'] }); void qc.invalidateQueries({ queryKey: ['catalogue'] }); };
+  const save = useMutation({
+    mutationFn: () => recordMissedRefill(w.id, qty.trim()),
+    onSuccess: (r) => {
+      if (r.ok) { toast.success('Refill recorded'); setNotice(null); refresh(); return; } // a replay is a success too
+      if (r.reason === 'too_small') { setNotice(`At least ${trimNumber(r.minimum) ?? '—'} must have been added to reach this count.`); return; }
+      setNotice(r.reason === 'not_waiting' ? 'This was already settled.' : 'This item is not in usage learning.');
+      refresh();
+    },
+    onError: (e) => setNotice(toAppError(e).message),
+  });
+  const since = formatDay(w.since);
+  const n = Number(qty);
+  const valid = qty.trim() !== '' && Number.isFinite(n) && n > 0;
   return (
-    <div className="mb-4 space-y-2">
-      {items.map((w) => {
-        const since = formatDay(w.since);
-        return (
-          <div key={w.id} className="rounded-lg border border-warn bg-card p-3">
-            <p className="font-medium">{w.name} went {trimNumber(w.qtyBefore) ?? '—'} → {trimNumber(w.qtyNow) ?? '—'}</p>
-            <p className="mt-0.5 text-sm text-muted-foreground">Was stock added{since ? ` since ${since}` : ''}? Without it this interval is skipped so usage stays accurate.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button className="min-h-11" onClick={() => onRecord(w.id)}>Yes, record refill</Button>
-              <Button className="min-h-11" variant="outline" asChild><Link to="/inventory/counts">No, recount</Link></Button>
-            </div>
+    <div className="rounded-lg border border-warn bg-card p-3">
+      <p className="font-medium">{w.name} went {trimNumber(w.qtyBefore) ?? '—'} → {trimNumber(w.qtyNow) ?? '—'}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">Was stock added{since ? ` since ${since}` : ''}? Without it this interval is skipped so usage stays accurate.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button className="min-h-11" aria-expanded={open} onClick={() => setOpen(true)}>Yes, record refill</Button>
+        <Button className="min-h-11" variant="outline" asChild><Link to="/inventory/counts">No, recount</Link></Button>
+      </div>
+      {open && (
+        <form className="mt-3 space-y-2" onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }}>
+          <Label htmlFor={`refill-${w.id}`}>How much was added?</Label>
+          <div className="flex items-center gap-2">
+            <Input ref={field} id={`refill-${w.id}`} inputMode="decimal" className="min-h-11 w-32 text-base" value={qty} aria-describedby={`refill-help-${w.id}`} onChange={(e) => { setQty(e.target.value); setNotice(null); }} />
+            {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
+            <Button type="submit" className="min-h-11" disabled={!valid || save.isPending}>Save refill</Button>
           </div>
-        );
-      })}
+          <p id={`refill-help-${w.id}`} className="text-xs text-muted-foreground">This corrects the usage record. Stock stays at {trimNumber(w.qtyNow) ?? '—'}.</p>
+          {notice && <p role="status" className="text-sm">{notice}</p>}
+        </form>
+      )}
     </div>
   );
 }
 
-/** Shown in the item panel after a receipt that started from a restock prompt. */
-export function RefillNote() {
-  return (
-    <div role="status" className="rounded-lg border border-warn bg-card p-3">
-      <p className="text-sm">Refill recorded. Count this item again so the stock number is right.</p>
-      <Button className="mt-2 min-h-11" variant="outline" asChild><Link to="/inventory/counts">Go to counts</Link></Button>
-    </div>
-  );
+/** One card per item whose last count was higher than expected. Yes opens a field in the card; No goes to the counts page, where the item stays in learning. */
+export function RestockPrompts({ items, unitOf }: { items: Waiting[]; unitOf?: (id: string) => string | undefined }) {
+  if (items.length === 0) return null;
+  return <div className="mb-4 space-y-2">{items.map((w) => <RestockPrompt key={w.id} w={w} unit={unitOf?.(w.id)} />)}</div>;
 }

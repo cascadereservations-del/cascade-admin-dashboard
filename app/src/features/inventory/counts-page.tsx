@@ -12,10 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fetchCatalogue, reconcileBaseline } from './api';
+import { staysLearning } from './usage';
 
 // INV03/INV06: count sheet with variance preview; each reviewed count becomes
-// the item's reconciled baseline and switches it to the movement ledger.
-// Nothing is applied until the reviewer confirms a row.
+// the item's reconciled baseline. An active consumable that is not on the ledger
+// stays in usage learning (the count anchors it); other items move to the movement
+// ledger. Nothing is applied until the reviewer confirms a row.
 
 export default function CountsPage() {
   const s = useSession();
@@ -28,15 +30,17 @@ export default function CountsPage() {
   const apply = useMutation({
     mutationFn: (id: string) => reconcileBaseline(id, counts[id] ?? '', notes[id] ?? 'Count sheet', keyFor(id)),
     onSuccess: (r, id) => {
-      toast.success(`Baseline set to ${r.after}`, { description: `Variance ${r.variance}` });
+      const item = query.data?.items.find((i) => i.id === id);
+      toast.success(item && staysLearning(item) ? `Count recorded: ${r.after}` : `Baseline set to ${r.after}`, { description: `Variance ${r.variance}` });
       delete keys[id];
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
+      void qc.invalidateQueries({ queryKey: ['usage-kpi'] }); // a count can start or end a refill prompt
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
   return (
     <div>
-      <PageHeader title="Stock counts" description="Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history." />
+      <PageHeader title="Stock counts" description="Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history. Counts of active consumables keep usage learning." />
       <QueryState query={query}>
         {(d) => (
           <div className="overflow-x-auto rounded-lg border" role="region" aria-label="Count sheet" tabIndex={0}>
@@ -53,7 +57,7 @@ export default function CountsPage() {
                       <TableCell><Input inputMode="decimal" aria-label={`Counted ${i.name}`} className="w-24 text-base sm:text-sm" value={c ?? ''} onChange={(e) => setCounts({ ...counts, [i.id]: e.target.value })} /></TableCell>
                       <TableCell className="tabular">{variance === null ? '—' : <span className={variance === 0 ? 'text-muted-foreground' : 'font-medium'}>{variance > 0 ? '+' : ''}{formatNumber(variance, 2)}</span>}</TableCell>
                       <TableCell><Input aria-label={`Note ${i.name}`} className="w-44 text-base sm:text-sm" placeholder="Where counted / why" value={notes[i.id] ?? ''} onChange={(e) => setNotes({ ...notes, [i.id]: e.target.value })} /></TableCell>
-                      <TableCell><StatusBadge tone={i.movementControlled ? 'good' : 'neutral'}>{i.movementControlled ? 'ledger' : 'legacy'}</StatusBadge></TableCell>
+                      <TableCell><StatusBadge tone={i.movementControlled ? 'good' : 'neutral'}>{i.movementControlled ? 'ledger' : staysLearning(i) ? 'learning' : 'legacy'}</StatusBadge></TableCell>
                       <TableCell><Button size="sm" disabled={variance === null || (notes[i.id] ?? '').trim().length < 3 || apply.isPending} onClick={() => apply.mutate(i.id)}>Confirm</Button></TableCell>
                     </TableRow>
                   );

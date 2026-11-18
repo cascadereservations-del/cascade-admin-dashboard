@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Item } from './api';
-import { panelUsage, pillText, trimNumber, turnoversText, usesText } from './usage';
+import { panelUsage, pillText, staysLearning, trimNumber, turnoversText, usageStateOf, usesText } from './usage';
 
 // Invented items. Hand-computed expectations (ML-17).
 const base: Item = {
@@ -20,9 +20,25 @@ describe('pill wording', () => {
     expect(pillText(item({ usageState: 'learning', usageCounts: 2 }))).toBe('learning · 2 counts');
     expect(pillText(item({ usageState: 'learning', usageCounts: 0 }))).toBe('learning · 0 counts');
   });
-  it('baseline reads research, whatever the count', () => {
-    expect(pillText(item({ usageState: 'baseline', usageCounts: 0 }))).toBe('baseline · research');
-    expect(pillText(item({ usageState: 'baseline' }))).toBe('baseline · research');
+  it('baseline reads research, whatever the count, but only with a baseline figure', () => {
+    expect(pillText(item({ usageState: 'baseline', usageBaseline: '0.02', usageCounts: 0 }))).toBe('baseline · research');
+    expect(pillText(item({ usageState: 'baseline', usageBaseline: 0.5 }))).toBe('baseline · research');
+    expect(pillText(item({ usageState: 'baseline', usageBaseline: null, usageCounts: 0 }))).toBeNull();
+    expect(pillText(item({ usageState: 'baseline' }))).toBeNull();
+  });
+  it('a movement-controlled item has no state, pill, rate, turnovers or panel line', () => {
+    const c = item({ movementControlled: true, usageState: 'measured', usageCounts: 3, usagePerTurnover: '2', usageBaseline: '1', qty: '10' });
+    expect(usageStateOf(c)).toBeNull();
+    expect(pillText(c)).toBeNull();
+    expect(usesText(c)).toBeNull();
+    expect(turnoversText(c)).toBeNull();
+    expect(panelUsage(c)).toBeNull();
+  });
+  it('an active consumable off the ledger stays in learning; a controlled, inactive or durable item does not', () => {
+    expect(staysLearning(item({}))).toBe(true);
+    expect(staysLearning(item({ movementControlled: true }))).toBe(false);
+    expect(staysLearning(item({ active: false }))).toBe(false);
+    expect(staysLearning(item({ consumable: false }))).toBe(false);
   });
   it('an unknown count is left out, not shown as 0', () => {
     expect(pillText(item({ usageState: 'measured', usageCounts: null }))).toBe('measured');
