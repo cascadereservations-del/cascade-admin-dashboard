@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { D_useCompact } from '@/lib/compact';
 import { PageHeader } from '@/components/data/page-header';
+import { DetailSheet } from '@/components/data/detail-sheet';
 import { cn } from '@/lib/utils';
 
 // s119 lane G, liquid-glass layer (docs/s118 DESIGN-liquid-glass.md section 0b, mockup-apple-glass-v3.html).
@@ -53,7 +54,10 @@ type Vaul = { Drawer: typeof import('vaul').Drawer };
  */
 export function GlassSheet({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; children: ReactNode }) {
   const [v, setV] = useState<Vaul | null>(null);
-  useEffect(() => { if (open && !v) void import('vaul').then((m) => setV({ Drawer: m.Drawer })); }, [open, v]);
+  const [failed, setFailed] = useState(false);
+  // A failed chunk load falls back to the plain side sheet, so the control still opens.
+  useEffect(() => { if (open && !v && !failed) import('vaul').then((m) => setV({ Drawer: m.Drawer }), () => setFailed(true)); }, [open, v, failed]);
+  if (failed) return <DetailSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</DetailSheet>;
   if (!v) return null;
   const { Drawer } = v;
   return (

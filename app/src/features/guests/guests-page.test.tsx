@@ -77,6 +77,16 @@ describe('GuestsPage list', () => {
     await waitFor(() => expect(within(screen.getByRole('dialog', { name: 'Filters' })).getByRole('button', { name: 'VIP' })).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByRole('button', { name: 'Filters (1)', hidden: true })).toBeInTheDocument();
   });
+  it('under 640 px: search counts as a filter and Clear filters empties it', async () => {
+    media(true);
+    const user = userEvent.setup();
+    view();
+    await screen.findAllByRole('link', { name: /Demo Guest/ });
+    await user.type(screen.getByLabelText('Search'), 'demo');
+    await user.click(await screen.findByRole('button', { name: 'Filters (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(screen.getByLabelText('Search')).toHaveValue(''));
+  });
   it('at 640 px and wider: the table is unchanged and there are no cards', async () => {
     media(false);
     view();

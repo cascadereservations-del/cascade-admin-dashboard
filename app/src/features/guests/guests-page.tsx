@@ -207,7 +207,7 @@ export function GuestCard({ g }: { g: GuestRow }) {
           <span className="inline-flex items-center gap-1"><IdCard size={14} strokeWidth={1.75} aria-hidden />{idStatusWord(g)}</span>
         </span>
       </span>
-      <ChevronRight size={18} strokeWidth={1.75} aria-hidden className="shrink-0 text-muted-foreground" />
+      <ChevronRight size={20} strokeWidth={1.75} aria-hidden className="shrink-0 text-muted-foreground" />
     </Link>
   );
 }
@@ -234,7 +234,7 @@ function GuestCards({ rows, total, page, onPage }: { rows: GuestRow[]; total: nu
 /** Selected chip = neutral fill + 2 px edge + tick (colour is never the only signal); a second tap clears it. */
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: string }) {
   return (
-    <button type="button" aria-pressed={on} onClick={onClick} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 ${on ? 'border-2 border-foreground bg-card font-semibold' : 'border bg-muted'}`}>
+    <button type="button" aria-pressed={on} onClick={onClick} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border-2 px-4 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none ${on ? 'border-foreground bg-card font-semibold' : 'border-transparent bg-muted'}`}>
       {on && <Check size={16} strokeWidth={1.75} aria-hidden />}{children}
     </button>
   );
@@ -243,14 +243,14 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 /** Search stays visible; tier and flags sit behind one Filters control that opens a vaul sheet (lazy). */
 function MobileFilters({ search, onSearch, tier, flag, onTier, onFlag, onClear }: { search: string; onSearch: (q: string) => void; tier: string; flag: string; onTier: (v: string) => void; onFlag: (v: string) => void; onClear: () => void }) {
   const [open, setOpen] = useState(false);
-  const active = (tier ? 1 : 0) + (flag ? 1 : 0);
+  const active = (search ? 1 : 0) + (tier ? 1 : 0) + (flag ? 1 : 0);
   return (
     <div className={`mb-3 flex items-center gap-2 ${FLUID}`}>
       <div className="relative min-w-0 flex-1">
-        <Search size={18} strokeWidth={1.75} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search size={20} strokeWidth={1.75} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input aria-label="Search" placeholder="Name, phone or e-mail" className="h-11 pl-9 text-base" value={search} onChange={(e) => onSearch(e.target.value)} />
       </div>
-      <Button variant="outline" className="min-h-11 shrink-0" onClick={() => setOpen(true)}><SlidersHorizontal size={18} strokeWidth={1.75} aria-hidden />{active > 0 ? `Filters (${active})` : 'Filters'}</Button>
+      <Button variant="outline" className="min-h-11 shrink-0" onClick={() => setOpen(true)}><SlidersHorizontal size={20} strokeWidth={1.75} aria-hidden />{active > 0 ? `Filters (${active})` : 'Filters'}</Button>
       <GlassSheet open={open} onOpenChange={setOpen} title="Filters" description="Narrow the list. Changes apply straight away.">
         <div>
           <p className="mb-2 font-semibold" style={{ fontSize: 'var(--t3)' }}>Tier</p>

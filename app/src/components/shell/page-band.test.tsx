@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GlassSheet, PageBand } from './page-band';
 
 const read = (f: string) => readFileSync(resolve(__dirname, f), 'utf8').split('\r\n').join('\n');
@@ -46,6 +46,20 @@ describe('GlassSheet', () => {
     render(<GlassSheet open onOpenChange={() => {}} title="Filters" description="Narrow the list."><p>body</p></GlassSheet>);
     expect(await screen.findByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
     expect(screen.getByText('body')).toBeInTheDocument();
+  });
+  it('falls back to the plain sheet when the vaul chunk fails to load, with no unhandled rejection', async () => {
+    vi.resetModules();
+    vi.doMock('vaul', () => { throw new Error('chunk load failed'); });
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const { GlassSheet: Fresh } = await import('./page-band');
+    render(<Fresh open onOpenChange={() => {}} title="Filters"><p>fallback body</p></Fresh>);
+    expect(await screen.findByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.getByText('fallback body')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    process.off('unhandledRejection', unhandled);
+    vi.doUnmock('vaul');
+    expect(unhandled).not.toHaveBeenCalled();
   });
 });
 
