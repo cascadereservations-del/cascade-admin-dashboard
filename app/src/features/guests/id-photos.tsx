@@ -1,18 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ImageOff, Maximize2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toAppError } from '@/lib/errors';
 import { PhotoLightbox, turnStyle } from '@/components/data/photo-lightbox';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { companionIdPhotoUrls, listGuestCompanions, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type ProfileDetails } from './api';
-import { ID_TYPES, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
+import { companionIdPhotoUrls, listGuestCompanions, removeIdPhoto, restoreIdPhoto, saveGuestCompanion, saveProfile, uploadCompanionIdPhoto, type ProfileDetails } from './api';
+import { findSelfCompanion, guestIdStatus, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
 import { validateIdPhoto } from './local-records';
+import { PhotoSheet } from './photo-sheet';
 
 // ID photos on the guest page (Lloyd 2026-10-02: show the photo itself, full size on a click - not a
 // link or a "Show" button). Every photo is a tile in ID-card proportions with the whole card visible
@@ -87,99 +84,109 @@ export function NoIdPhotoTile({ text, warn = false, className = 'w-28', onClick 
   return onClick ? <button type="button" className={`${cls} hover:bg-accent`} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 }
 
-/** The guest's own ID on the guest card: the photo, or a plain statement of what is missing, plus Add/Replace. */
+type Up = { file: File; src: string; stage: 'shrinking' | 'uploading' | 'saving' | 'failed' };
+const STAGE = { shrinking: ['Shrinking photo…', 20], uploading: ['Uploading…', 55], saving: ['Saving…', 90] } as const;
+const action = 'h-11 min-w-11 px-4 text-sm';
+
+/** The guest's own ID on the guest card (s118): the photo or a calm placeholder, then Add / Replace / Remove. A pick shows at once as a local
+ *  thumbnail and saves on its own (reason written for you, D-302); a failed save keeps the photo on screen with Retry. */
 export function GuestIdPanel({ guestId, guestName, details }: { guestId: string; guestName: string; details: ProfileDetails | null }) {
+  const qc = useQueryClient();
   const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
   const self = findSelfCompanion(companions.data, guestName);
   const others = otherCompanions(companions.data, guestName).filter((c) => c.id_photo_path).length;
   const status = guestIdStatus(self, details, others);
-  const size = 'w-full max-w-72 @2xl/main:max-w-none';
-  const text = { companion_photos: `No ID under the booking name. ${others === 1 ? 'The ID photo of the person who stayed is' : `${others} ID photos of the people who stayed are`} under Companions.`, marked_no_photo: 'Marked “ID on file”, but no photo is saved yet', none: 'No ID photo yet' } as const;
-  return (
-    <div className="flex w-full shrink-0 flex-col gap-2 @2xl/main:w-60">
-      <p className="text-xs font-medium text-muted-foreground">Guest ID</p>
-      {status === 'photo'
-        ? <IdPhotoThumb companionId={self!.id} path={self!.id_photo_path!} name={guestName} className={size} />
-        : <NoIdPhotoTile className={size} warn={status === 'marked_no_photo'} text={text[status]} />}
-      <div><GuestIdPhotoControl guestId={guestId} guestName={guestName} details={details} /></div>
-    </div>
-  );
-}
-
-/** "Add ID photo" / "Replace ID photo" for the guest themself -- saves through the audited companion path. */
-export function GuestIdPhotoControl({ guestId, guestName, details }: { guestId: string; guestName: string; details: ProfileDetails | null }) {
-  const qc = useQueryClient();
-  const companions = useQuery({ queryKey: ['companions', guestId], queryFn: () => listGuestCompanions(guestId) });
-  const self = findSelfCompanion(companions.data, guestName);
-  const refs = idPhotoRefs(companions.data, guestName);
-  const mine = refs.find((r) => r.isSelf);
-  const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [idType, setIdType] = useState('');
-  const [reason, setReason] = useState('');
-  const [markOnFile, setMarkOnFile] = useState(true);
+  const [sheet, setSheet] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const [up, setUp] = useState<Up | null>(null);
   // Survives a failed attempt so Retry resumes instead of creating a second companion or re-uploading.
-  const progress = useRef<{ id?: string; version?: number; path?: string; photoSaved?: boolean; profileDone?: boolean }>({});
+  const progress = useRef<{ id?: string; version?: number; path?: string; photoSaved?: boolean; profileDone?: boolean; reason: string; prev: string | null }>({ reason: '', prev: null });
+  const url = useRef<string | null>(null);
+  useEffect(() => () => { if (url.current) URL.revokeObjectURL(url.current); }, []);
+  const refresh = () => Promise.all([['companions', guestId], ['guest', guestId], ['timeline', guestId], ['id-photo-urls', guestId]].map((k) => qc.invalidateQueries({ queryKey: k })));
+  const clear = () => { if (url.current) URL.revokeObjectURL(url.current); url.current = null; progress.current = { reason: '', prev: null }; setUp(null); };
+  const stage = (s: Up['stage']) => setUp((u) => u && { ...u, stage: s });
 
-  const reset = () => { progress.current = {}; setFile(null); setReason(''); setIdType(self?.id_type ?? details?.id_type ?? ''); setMarkOnFile(true); };
-  const refresh = () => { for (const k of [['companions', guestId], ['guest', guestId], ['timeline', guestId], ['id-photo-urls', guestId]]) void qc.invalidateQueries({ queryKey: k }); };
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const problem = idPhotoFormError(file, reason);
-      if (problem) throw new Error(problem);
-      await validateIdPhoto(file!);
-      const p = progress.current;
+  const run = async (file: File) => {
+    const p = progress.current;
+    try {
+      stage('shrinking');
       if (!p.id) {
-        const r = await saveGuestCompanion(guestId, self?.id ?? null, selfCompanionPatch(guestName, idType, self), self?.version, reason);
+        const r = await saveGuestCompanion(guestId, self?.id ?? null, selfCompanionPatch(guestName, '', self), self?.version, p.reason);
         p.id = r.id; p.version = r.version;
       }
       if (!p.photoSaved) {
-        p.path ??= await uploadCompanionIdPhoto(p.id, file!);
-        const r = await saveGuestCompanion(guestId, p.id, { id_photo_path: p.path }, p.version, reason);
+        p.path ??= await uploadCompanionIdPhoto(p.id, file, (s) => stage(s === 'saved' ? 'saving' : s));
+        stage('saving');
+        const r = await saveGuestCompanion(guestId, p.id, { id_photo_path: p.path }, p.version, p.reason);
         p.version = r.version; p.photoSaved = true;
       }
-      if (markOnFile && needsIdOnFile(details) && !p.profileDone) {
-        await saveProfile(guestId, { id_on_file: true }, details?.version ?? null, reason);
+      if (needsIdOnFile(details) && !p.profileDone) {
+        await saveProfile(guestId, { id_on_file: true }, details?.version ?? null, p.reason);
         p.profileDone = true;
       }
-    },
-    onSuccess: () => { toast.success('ID photo saved'); setOpen(false); reset(); refresh(); },
-    onError: (e) => { if (progress.current.photoSaved) refresh(); toast.error(toAppError(e).message); },
-  });
+      await refresh();
+      const { id, version, prev } = p;
+      clear();
+      if (prev) toast.success('ID photo replaced', { duration: 6000, action: { label: 'Undo', onClick: () => { restoreIdPhoto(id!, prev, version!).then(refresh).catch((e) => toast.error(toAppError(e).message)); } } });
+      else toast.success('ID photo saved');
+    } catch (e) {
+      if (p.photoSaved) void refresh();
+      stage('failed');
+      toast.error(toAppError(e).message);
+    }
+  };
+  const start = (file: File) => {
+    if (url.current) URL.revokeObjectURL(url.current);
+    url.current = URL.createObjectURL(file);
+    progress.current = { reason: self?.id_photo_path ? 'ID photo replaced' : 'ID photo added', prev: self?.id_photo_path ?? null };
+    setUp({ file, src: url.current, stage: 'shrinking' });
+    void run(file);
+  };
+  const dropped = async (file: File | undefined) => {
+    if (!file || up) return;
+    try { await validateIdPhoto(file); start(file); } catch (e) { toast.error(toAppError(e).message); }
+  };
+  const remove = async () => {
+    if (!self?.id_photo_path) return;
+    try {
+      const r = await removeIdPhoto(self.id, self.version);
+      await refresh();
+      toast('ID photo removed. The file stays in private storage.', { duration: 6000, action: { label: 'Undo', onClick: () => { restoreIdPhoto(self.id, r.previousPath!, r.version).then(refresh).catch((e) => toast.error(toAppError(e).message)); } } });
+    } catch (e) { toast.error(toAppError(e).message); }
+  };
 
+  const size = 'w-full max-w-72 @2xl/main:max-w-none';
+  const text = { companion_photos: `No ID under the booking name. ${others === 1 ? 'The ID photo of the person who stayed is' : `${others} ID photos of the people who stayed are`} under Companions.`, marked_no_photo: 'Marked on file, no photo', none: 'No ID photo yet' } as const;
+  const busy = !!up && up.stage !== 'failed';
   return (
-    <>
-      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { reset(); setOpen(true); }}>{mine ? 'Replace ID photo' : 'Add ID photo'}</Button>
-      <Dialog open={open} onOpenChange={(o) => { if (!o && !save.isPending) setOpen(false); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{mine ? 'Replace ID photo' : 'Add ID photo'}</DialogTitle>
-            <DialogDescription>Kept in Cascade’s private storage on the guest’s own record. The change is logged with your reason.</DialogDescription>
-          </DialogHeader>
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-            <div>
-              <Label htmlFor="idp-file">Photo</Label>
-              <Input id="idp-file" type="file" accept="image/jpeg,image/png,image/webp" disabled={save.isPending} onChange={(e) => { setFile(e.target.files?.[0] ?? null); progress.current.path = undefined; progress.current.photoSaved = false; }} className="text-base" />
-              <p className="mt-1 text-xs text-muted-foreground">JPEG, PNG or WebP, up to 10 MB.</p>
-            </div>
-            <div>
-              <Label htmlFor="idp-type">ID type</Label>
-              <Select value={idType || 'unset'} onValueChange={(v) => setIdType(v === 'unset' ? '' : v)}>
-                <SelectTrigger id="idp-type"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="unset">Not stated</SelectItem>{ID_TYPES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label htmlFor="idp-reason">Reason</Label><Input id="idp-reason" required minLength={3} maxLength={500} placeholder="e.g. ID shown at check-in" value={reason} onChange={(e) => setReason(e.target.value)} className="text-base" /></div>
-            {needsIdOnFile(details) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={markOnFile} onChange={(e) => setMarkOnFile(e.target.checked)} /> Also mark “ID on file” on the profile</label>}
-            {save.isError && progress.current.id && <p role="alert" className="text-sm">Part of this may already be saved. Retry carries on from where it stopped.</p>}
-            <DialogFooter>
-              <Button type="button" variant="outline" disabled={save.isPending} onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save photo'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+    <div className="flex w-full shrink-0 flex-col gap-2 @2xl/main:w-60">
+      <p className="text-xs font-medium text-muted-foreground">Guest ID</p>
+      <div className={`relative ${size} ${drag ? 'rounded-lg ring-2 ring-ring' : ''}`} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); void dropped(e.dataTransfer.files[0]); }}>
+        {up ? (
+          <>
+            <div className="aspect-[8/5] overflow-hidden rounded-lg border bg-card p-1"><img src={up.src} alt="The ID photo you chose" className="size-full object-contain" /></div>
+            {up.stage === 'failed'
+              ? <div role="alert" className="absolute inset-x-0 bottom-0 flex flex-col gap-2 rounded-b-lg border-t bg-background/95 p-2 text-sm">Upload stopped. Your photo is kept here.
+                  <div className="flex gap-2"><Button type="button" className={action} onClick={() => void run(up.file)}>Retry</Button><Button type="button" variant="outline" className={action} onClick={clear}>Discard</Button></div></div>
+              : <div role="status" className="absolute inset-x-0 bottom-0 rounded-b-lg border-t bg-background/95 p-2 text-sm">{STAGE[up.stage][0]}
+                  <div role="progressbar" aria-label="Upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={STAGE[up.stage][1]} className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${STAGE[up.stage][1]}%` }} /></div></div>}
+          </>
+        ) : status === 'photo'
+          ? <IdPhotoThumb companionId={self!.id} path={self!.id_photo_path!} name={guestName} className="w-full" />
+          : <div className="flex aspect-[8/5] flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-card p-2 text-center text-sm text-muted-foreground">
+              <ImageOff className="size-5" aria-hidden /><span>{text[status]}</span>
+              <Button type="button" className={action} onClick={() => setSheet(true)}>Add photo</Button>
+              <span className="hidden text-xs @2xl/main:block">or drop an image here</span>
+            </div>}
+      </div>
+      {status === 'photo' && !up && (
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className={action} onClick={() => setSheet(true)}>Replace</Button>
+          <Button type="button" variant="outline" className={action} onClick={() => void remove()}>Remove</Button>
+        </div>
+      )}
+      <PhotoSheet open={sheet && !busy} onClose={() => setSheet(false)} onPicked={start} />
+    </div>
   );
 }

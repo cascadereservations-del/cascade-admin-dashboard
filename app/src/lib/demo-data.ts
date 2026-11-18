@@ -159,7 +159,7 @@ export function buildDemoData(now: Date): DemoData {
   return {
     tables: {
       airbnb_reservations: reservations, booking_inquiries: inquiries, calendar_events: calendar, calendar_sync_log: [{ id: U(141), synced_at: iso(-HOUR), status: 'success', source: 'airbnb', event_count: 4, error_msg: null }],
-      guests, guest_profile_details: details, guest_companions: [], follow_up_tasks: followUps, concierge_handoffs: [{ id: U(701), psid: 'demo-psid-1', guest_name: 'Demo Guest Two', guest_text: 'Can we arrive before 2:00 pm?', risk: 'priority', status: 'open', created_at: iso(-3 * HOUR), resolved_by: null, resolved_at: null }],
+      guests, guest_profile_details: details, guest_companions: [{ id: 'demo-companion', guest_id: 'demo-guest', name: 'Demo Companion', id_photo_path: 'demo/photo.jpg', version: 1 }], follow_up_tasks: followUps, concierge_handoffs: [{ id: U(701), psid: 'demo-psid-1', guest_name: 'Demo Guest Two', guest_text: 'Can we arrive before 2:00 pm?', risk: 'priority', status: 'open', created_at: iso(-3 * HOUR), resolved_by: null, resolved_at: null }],
       work_orders: workOrders, ops_notices: notices, cleaning_sessions: cleaning, meter_readings: meters, readiness_reviews: [], cleaning_verification_evidence: [], verifier_findings: [],
       transactions, acct_accounts: accounts, acct_journals: journals, acct_periods: [], acct_close_snapshots: [], acct_opening_balance_batches: [],
       inventory_items: items, inventory_purchases: purchases, inventory_shopping_list: shopping, inventory_stock_movements: movements,
@@ -188,6 +188,7 @@ export function buildDemoData(now: Date): DemoData {
       get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
       get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } }] }),
       list_guest_companions_v1: () => [],
+      save_guest_companion_v1: (a) => ({ ok: true, id: String(a.p_companion_id ?? 'demo-companion'), version: 2 }),
       staff_inquiry_payments_v1: () => [],
       preview_guest_merge_v1: () => ({ ok: true }),
     },

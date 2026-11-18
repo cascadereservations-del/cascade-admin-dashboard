@@ -3,6 +3,7 @@ import { rpc, unwrapList } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
 import { guestPage, guestSearchPattern, validateProfilePatch } from './validation';
 import { validateIdPhoto } from './local-records';
+import { shrinkToJpeg } from '@/lib/image-shrink';
 import { isMissingDetails } from './contact';
 import { companionFlags } from './id-photo';
 
@@ -149,13 +150,37 @@ export function saveGuestCompanion(guestId: string, companionId: string | null, 
 export function deleteGuestCompanion(companionId: string, reason: string) {
   return rpc<{ ok: boolean; id: string }>('delete_guest_companion_v1', { p_companion_id: companionId, p_reason: reason });
 }
-export async function uploadCompanionIdPhoto(companionId: string, file: File) {
+export type UploadProgress = (stage: 'shrinking' | 'uploading' | 'saved', pct?: number) => void;
+// Checks the picked file, shrinks it in the browser (2000 px, JPEG), then uploads. supabase-js reports no byte progress, so
+// 'uploading' carries no pct; 'saved' means the file is stored (the row save follows). If the browser cannot shrink it, the checked original goes up.
+export async function uploadCompanionIdPhoto(companionId: string, file: File, onProgress?: UploadProgress) {
   const mime = await validateIdPhoto(file);
-  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mime];
+  onProgress?.('shrinking');
+  let body: Blob = file, type: string = mime;
+  try { body = await shrinkToJpeg(file); type = 'image/jpeg'; } catch { /* keep the original */ }
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type]!;
   const path = `${companionId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('guest-id-photos').upload(path, file, { upsert: false, contentType: mime });
+  onProgress?.('uploading');
+  const { error } = await supabase.storage.from('guest-id-photos').upload(path, body, { upsert: false, contentType: type });
   if (error) throw error;
+  onProgress?.('saved', 100);
   return path;
+}
+async function companionRow(companionId: string) {
+  const { data, error } = await supabase.from('guest_companions').select('guest_id,id_photo_path').eq('id', companionId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('This person could not be found.');
+  return data as { guest_id: string; id_photo_path: string | null };
+}
+// Remove / Undo (s118): only the path on the row changes, through the audited companion save. The storage object is never deleted.
+export async function removeIdPhoto(companionId: string, version: number) {
+  const row = await companionRow(companionId);
+  const r = await saveGuestCompanion(row.guest_id, companionId, { id_photo_path: null }, version, 'ID photo removed');
+  return { previousPath: row.id_photo_path, version: r.version };
+}
+export async function restoreIdPhoto(companionId: string, previousPath: string, version: number) {
+  const row = await companionRow(companionId);
+  await saveGuestCompanion(row.guest_id, companionId, { id_photo_path: previousPath }, version, 'ID photo restored');
 }
 // One signed URL per path (null when the stored file cannot be signed, i.e. the object is missing).
 export async function companionIdPhotoUrls(paths: string[]) {
