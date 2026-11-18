@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import type { Item } from './api';
 
-const h = vi.hoisted(() => ({ items: [] as unknown[], reject: false }));
+const h = vi.hoisted(() => ({ items: [] as unknown[], reject: false, hold: null as Promise<unknown> | null }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => true } }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('./api', () => ({
   fetchCatalogue: () => Promise.resolve({ items: h.items, sourceAsOf: null, forecastNote: '', turnoverRatePerDay: 0.2 }),
-  reconcileBaseline: (_id: string, counted: string) => (h.reject ? Promise.reject(new Error('Count failed')) : Promise.resolve({ ok: true, before: '5', after: counted, variance: '4' })),
+  reconcileBaseline: (_id: string, counted: string) => (h.hold ? h.hold : h.reject ? Promise.reject(new Error('Count failed')) : Promise.resolve({ ok: true, before: '5', after: counted, variance: '4' })),
 }));
 import CountsPage from './counts-page';
 
@@ -25,7 +25,7 @@ const items = (): Item[] => [
 ] as Item[];
 
 let client: QueryClient;
-beforeEach(() => { h.items = items(); h.reject = false; client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
+beforeEach(() => { h.items = items(); h.reject = false; h.hold = null; client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
 afterEach(cleanup);
 const page = () => render(<QueryClientProvider client={client}><CountsPage /></QueryClientProvider>);
 const rowOf = (name: string) => screen.getByText(name).closest('tr')!;
@@ -94,5 +94,30 @@ describe('count sheet', () => {
     const { container } = page();
     await screen.findByText('Demo soap');
     expect(container.textContent).not.toMatch(/switch/i);
+  });
+  it('the usage-learning sentence shows only when an item stays in learning', async () => {
+    const { unmount } = page();
+    expect(screen.queryByText(/keep usage learning/)).toBeNull(); // loading
+    await screen.findByText('Demo soap');
+    expect(screen.getByText(/Counts of active consumables keep usage learning\./)).toBeInTheDocument();
+    unmount();
+    h.items = [{ ...base, id: 'd', name: 'Demo old' }, { ...base, id: 'c', name: 'Demo mop', consumable: false }] as Item[]; // no usage keys: the server before the release
+    client.clear();
+    page();
+    await screen.findByText('Demo old');
+    expect(screen.queryByText(/keep usage learning/)).toBeNull();
+  });
+  it('while a row is saving its inputs are locked, other rows stay editable', async () => {
+    let release: (v: unknown) => void = () => {};
+    h.hold = new Promise((r) => { release = r; });
+    page();
+    await screen.findByText('Demo soap');
+    confirm('Demo soap', '9');
+    await waitFor(() => expect(screen.getByLabelText('Counted Demo soap')).toBeDisabled());
+    expect(screen.getByLabelText('Note Demo soap')).toBeDisabled();
+    expect(screen.getByLabelText('Counted Demo old')).toBeEnabled();
+    expect(screen.getByLabelText('Note Demo old')).toBeEnabled();
+    release({ ok: true, before: '5', after: '9', variance: '4' });
+    await waitFor(() => expect(screen.getByLabelText('Counted Demo soap')).toBeEnabled());
   });
 });

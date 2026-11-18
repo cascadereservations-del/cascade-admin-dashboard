@@ -72,7 +72,7 @@ export function UsageLearningCard() {
 type Waiting = UsageKpi['waitingForRefill']['items'][number];
 
 /** One prompt. Yes opens one field: how much was added. It only corrects the usage record; stock and purchases are never written. */
-function RestockPrompt({ w, unit, qty: stock, onDone }: { w: Waiting; unit?: string; qty?: string | number | null; onDone: () => void }) {
+function RestockPrompt({ w, unit, qty: stock, onHandled }: { w: Waiting; unit?: string; qty?: string | number | null; onHandled: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState('');
@@ -83,18 +83,21 @@ function RestockPrompt({ w, unit, qty: stock, onDone }: { w: Waiting; unit?: str
   const save = useMutation({
     mutationFn: () => recordMissedRefill(w.id, cleaned),
     onSuccess: (r) => {
-      if (r.ok) { toast.success('Refill recorded'); setNotice(null); onDone(); refresh(); return; } // a replay is a success too
+      if (r.ok) { toast.success('Refill recorded'); setNotice(null); onHandled(); refresh(); return; } // a replay is a success too
       if (r.reason === 'too_small') { setNotice(`At least ${trimNumber(r.minimum) ?? '—'} must have been added to reach this count.`); return; }
       // The refresh drops this card, so the message goes to a toast that outlives it.
       toast.info(r.reason === 'not_waiting' ? 'This was already settled.' : 'This item is not in usage learning.');
+      onHandled();
       refresh();
     },
     onError: (e) => setNotice(toAppError(e).message),
   });
   const since = formatDay(w.since);
-  const cleaned = qty.replace(/,/g, '').trim();
-  const valid = /^\d+(\.\d{1,2})?$/.test(cleaned) && Number(cleaned) > 0;
-  const bad = cleaned !== '' && !valid;
+  const typed = qty.trim();
+  const cleaned = typed.replace(/,/g, ''); // commas are thousands groups only: "1,2" is refused, never read as 12
+  const valid = /^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,2})?$/.test(typed) && Number(cleaned) > 0;
+  const unfinished = /^(\d+|\d{1,3}(,\d{3})+)\.$/.test(typed); // "12." is on its way to a number, not a mistake
+  const bad = typed !== '' && !valid && !unfinished;
   const stockNow = trimNumber(stock ?? w.qtyNow) ?? '—'; // the catalogue quantity; the count-time figure is only the fallback while it loads
   return (
     <div className="rounded-lg border border-warn bg-card p-3">
@@ -123,13 +126,19 @@ function RestockPrompt({ w, unit, qty: stock, onDone }: { w: Waiting; unit?: str
 
 /** One card per item whose last count was higher than expected. Yes opens a field in the card; No goes to the counts page, where the item stays in learning. */
 export function RestockPrompts({ items, unitOf, qtyOf }: { items: Waiting[]; unitOf?: (id: string) => string | undefined; qtyOf?: (id: string) => string | number | null | undefined }) {
-  if (items.length === 0) return null;
-  // After a saved refill this card goes; focus moves now to a heading that stays: the next prompt's, else the page heading (never body).
-  const focusAfter = (i: number) => () => {
-    const next = items[i + 1];
-    const el = (next && document.getElementById(`restock-heading-${next.id}`)) || document.querySelector<HTMLElement>('h1');
+  // A handled prompt (saved, or answered not_waiting / not_learning) leaves with the refetch. If focus fell to body when the list changed, it goes to the first remaining prompt heading, else the page heading.
+  const handled = useRef(false);
+  const ids = items.map((w) => w.id).join('|');
+  useEffect(() => {
+    if (!handled.current) return;
+    handled.current = false;
+    const a = document.activeElement;
+    if (a && a !== document.body) return;
+    const el = (items[0] && document.getElementById(`restock-heading-${items[0].id}`)) || document.querySelector<HTMLElement>('h1');
     if (el && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
     el?.focus();
-  };
-  return <div className="mb-4 space-y-2">{items.map((w, i) => <RestockPrompt key={w.id} w={w} unit={unitOf?.(w.id)} qty={qtyOf?.(w.id)} onDone={focusAfter(i)} />)}</div>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the list of prompts changes
+  }, [ids]);
+  if (items.length === 0) return null;
+  return <div className="mb-4 space-y-2">{items.map((w) => <RestockPrompt key={w.id} w={w} unit={unitOf?.(w.id)} qty={qtyOf?.(w.id)} onHandled={() => { handled.current = true; }} />)}</div>;
 }

@@ -42,9 +42,10 @@ export default function CountsPage() {
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
+  const learns = query.data?.items.some(staysLearning) ?? false; // the sentence is true only once the server reports usage state
   return (
     <div>
-      <PageHeader title="Stock counts" description="Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history. Counts of active consumables keep usage learning." />
+      <PageHeader title="Stock counts" description={`Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history.${learns ? ' Counts of active consumables keep usage learning.' : ''}`} />
       <QueryState query={query}>
         {(d) => (
           <div className="overflow-x-auto rounded-lg border" role="region" aria-label="Count sheet" tabIndex={0}>
@@ -53,14 +54,15 @@ export default function CountsPage() {
               <TableBody>
                 {d.items.filter((i) => i.active).map((i) => {
                   const c = counts[i.id];
+                  const saving = apply.isPending && apply.variables === i.id;
                   const variance = c !== undefined && c !== '' && !Number.isNaN(Number(c)) ? Number(c) - Number(i.qty) : null;
                   return (
                     <TableRow key={i.id}>
                       <TableCell className="font-medium">{i.name}<div className="text-xs text-muted-foreground">{i.unit}</div></TableCell>
                       <TableCell className="tabular">{formatNumber(i.qty, 2)}</TableCell>
-                      <TableCell><Input inputMode="decimal" aria-label={`Counted ${i.name}`} className="w-24 text-base sm:text-sm" value={c ?? ''} onChange={(e) => setCounts({ ...counts, [i.id]: e.target.value })} /></TableCell>
+                      <TableCell><Input inputMode="decimal" aria-label={`Counted ${i.name}`} className="w-24 text-base sm:text-sm" value={c ?? ''} disabled={saving} onChange={(e) => setCounts({ ...counts, [i.id]: e.target.value })} /></TableCell>
                       <TableCell className="tabular">{variance === null ? '—' : <span className={variance === 0 ? 'text-muted-foreground' : 'font-medium'}>{variance > 0 ? '+' : ''}{formatNumber(variance, 2)}</span>}</TableCell>
-                      <TableCell><Input aria-label={`Note ${i.name}`} className="w-44 text-base sm:text-sm" placeholder="Where counted / why" value={notes[i.id] ?? ''} onChange={(e) => setNotes({ ...notes, [i.id]: e.target.value })} /></TableCell>
+                      <TableCell><Input aria-label={`Note ${i.name}`} className="w-44 text-base sm:text-sm" placeholder="Where counted / why" value={notes[i.id] ?? ''} disabled={saving} onChange={(e) => setNotes({ ...notes, [i.id]: e.target.value })} /></TableCell>
                       <TableCell><StatusBadge tone={i.movementControlled ? 'good' : 'neutral'}>{i.movementControlled ? 'ledger' : staysLearning(i) ? 'learning' : 'legacy'}</StatusBadge></TableCell>
                       <TableCell><Button size="sm" disabled={variance === null || (notes[i.id] ?? '').trim().length < 3 || apply.isPending} onClick={() => apply.mutate(i.id)}>Confirm</Button></TableCell>
                     </TableRow>
