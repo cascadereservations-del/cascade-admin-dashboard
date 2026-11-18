@@ -113,7 +113,7 @@ describe('Restock prompt', () => {
     open(); type('12'); fireEvent.click(save());
     await waitFor(() => expect(recordMissedRefill).toHaveBeenCalledWith('c1', '12'));
   });
-  it.each(['1,2', '1,2,3', ',5', '1e2'])('%s shows the hint and keeps Save disabled', (v) => {
+  it.each(['1,2', '1,2,3', ',5', '1e2', '0,500', '0,500.'])('%s shows the hint and keeps Save disabled', (v) => {
     render(wrap(<RestockPrompts items={[w]} />));
     open(); type(v);
     expect(screen.getByText('Enter a number, like 12 or 12.5.')).toBeInTheDocument();

@@ -95,8 +95,8 @@ function RestockPrompt({ w, unit, qty: stock, onHandled }: { w: Waiting; unit?: 
   const since = formatDay(w.since);
   const typed = qty.trim();
   const cleaned = typed.replace(/,/g, ''); // commas are thousands groups only: "1,2" is refused, never read as 12
-  const valid = /^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,2})?$/.test(typed) && Number(cleaned) > 0;
-  const unfinished = /^(\d+|\d{1,3}(,\d{3})+)\.$/.test(typed); // "12." is on its way to a number, not a mistake
+  const valid = /^(\d+|[1-9]\d{0,2}(,\d{3})+)(\.\d{1,2})?$/.test(typed) && Number(cleaned) > 0; // "0,500" is a decimal comma, not 500
+  const unfinished = /^(\d+|[1-9]\d{0,2}(,\d{3})+)\.$/.test(typed); // "12." is on its way to a number, not a mistake
   const bad = typed !== '' && !valid && !unfinished;
   const stockNow = trimNumber(stock ?? w.qtyNow) ?? '—'; // the catalogue quantity; the count-time figure is only the fallback while it loads
   return (
