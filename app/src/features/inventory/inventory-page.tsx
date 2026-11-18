@@ -246,7 +246,7 @@ export default function InventoryPage() {
                 <div>
                   <div>{selected.usageDays && selected.usageDays >= 14 ? `${formatNumber(selected.usage30d, 2)} over ${selected.usageDays} days · ${selected.avgDaily}/day` : `Not enough usage history (${selected.usageDays ?? 0} days recorded)`}</div>
                   <div className="text-xs text-muted-foreground">Sum of recorded consumption in the last 30 days; needs at least 14 distinct days with a usage entry before it's shown.</div>
-                  {!(selected.usageDays && selected.usageDays >= 14) && selected.estDailyUsage && (
+                  {!(selected.usageDays && selected.usageDays >= 14) && Number(selected.estDailyUsage) > 0 && (
                     <div className="mt-1 text-xs text-muted-foreground">Estimated meanwhile: ~{selected.estDailyUsage}/day, from this item's catalogued per-turnover consumption times the recent turnover rate — not a measurement.</div>
                   )}
                 </div>
