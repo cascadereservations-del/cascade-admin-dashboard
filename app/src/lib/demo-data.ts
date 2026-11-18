@@ -37,6 +37,8 @@ export function buildDemoData(now: Date): DemoData {
     guest_profile_details: { id_on_file: n < 3, birthday: n === 2 ? day(9).replace(/^\d{4}/, '1990') : null, contact_number: `+63 900 000 000${n}` },
   }));
   const details: Rows = guests.map((g, i) => ({ guest_id: g.id, display_name: g.name, preferred_channel: 'messenger', language: 'en', messenger_psid: null, messenger_link: null, stay_preferences: i === 0 ? 'Quiet room, late check-in' : null, tags: [], vip: false, vip_reason: null, contact_provenance: {}, updated_at: iso(-DAY), version: 1, contact_number: (g.guest_profile_details as { contact_number: string }).contact_number, birthday: (g.guest_profile_details as { birthday: string | null }).birthday, address: null, airbnb_profile_id: null, id_on_file: (g.guest_profile_details as { id_on_file: boolean }).id_on_file, id_type: null, id_number: null, id_drive_url: null, id_verified_at: null }));
+  // The guest's own ID row (name = guest name), so Remove and Undo are reachable in demo.
+  const companions: Rows = [{ id: 'demo-companion', guest_id: guests[0]!.id, name: guests[0]!.name, id_photo_path: 'demo/photo.jpg', version: 1 }];
   const followUps: Rows = [
     { id: U(201), property_id: DEMO_PROPERTY_ID, guest_id: U(1), booking_kind: 'airbnb', booking_id: U(101), purpose: 'welcome', title: 'Send the welcome note to Demo Guest One', detail: null, assignee_user_id: null, due_at: iso(2 * HOUR), priority: 'normal', status: 'open', completion_note: null, completed_at: null, created_at: iso(-DAY), version: 1 },
     { id: U(202), property_id: DEMO_PROPERTY_ID, guest_id: null, booking_kind: null, booking_id: null, purpose: 'reminder', title: 'Order a spare remote', detail: 'Living room TV', assignee_user_id: null, due_at: iso(3 * DAY), priority: 'low', status: 'open', completion_note: null, completed_at: null, created_at: iso(-2 * DAY), version: 1 },
@@ -159,7 +161,7 @@ export function buildDemoData(now: Date): DemoData {
   return {
     tables: {
       airbnb_reservations: reservations, booking_inquiries: inquiries, calendar_events: calendar, calendar_sync_log: [{ id: U(141), synced_at: iso(-HOUR), status: 'success', source: 'airbnb', event_count: 4, error_msg: null }],
-      guests, guest_profile_details: details, guest_companions: [{ id: 'demo-companion', guest_id: 'demo-guest', name: 'Demo Companion', id_photo_path: 'demo/photo.jpg', version: 1 }], follow_up_tasks: followUps, concierge_handoffs: [{ id: U(701), psid: 'demo-psid-1', guest_name: 'Demo Guest Two', guest_text: 'Can we arrive before 2:00 pm?', risk: 'priority', status: 'open', created_at: iso(-3 * HOUR), resolved_by: null, resolved_at: null }],
+      guests, guest_profile_details: details, guest_companions: companions, follow_up_tasks: followUps, concierge_handoffs: [{ id: U(701), psid: 'demo-psid-1', guest_name: 'Demo Guest Two', guest_text: 'Can we arrive before 2:00 pm?', risk: 'priority', status: 'open', created_at: iso(-3 * HOUR), resolved_by: null, resolved_at: null }],
       work_orders: workOrders, ops_notices: notices, cleaning_sessions: cleaning, meter_readings: meters, readiness_reviews: [], cleaning_verification_evidence: [], verifier_findings: [],
       transactions, acct_accounts: accounts, acct_journals: journals, acct_periods: [], acct_close_snapshots: [], acct_opening_balance_batches: [],
       inventory_items: items, inventory_purchases: purchases, inventory_shopping_list: shopping, inventory_stock_movements: movements,
@@ -187,7 +189,7 @@ export function buildDemoData(now: Date): DemoData {
       get_inventory_catalogue_v1: () => catalogue,
       get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
       get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } }] }),
-      list_guest_companions_v1: () => [],
+      list_guest_companions_v1: (a) => companions.filter((c) => c.guest_id === a.p_guest_id),
       save_guest_companion_v1: (a) => ({ ok: true, id: String(a.p_companion_id ?? 'demo-companion'), version: 2 }),
       staff_inquiry_payments_v1: () => [],
       preview_guest_merge_v1: () => ({ ok: true }),

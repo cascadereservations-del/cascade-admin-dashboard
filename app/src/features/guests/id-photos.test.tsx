@@ -93,3 +93,25 @@ it('Remove clears the path, says the file stays, and Undo for 6 seconds writes t
   opts.action.onClick();
   await waitFor(() => expect(h.restore).toHaveBeenCalledWith('c1', 'c1/old.jpg', 4));
 });
+
+it('Replace on an existing own row sends one photo save and no empty companion save', async () => {
+  const user = userEvent.setup();
+  h.list.mockResolvedValue([companion({ id_photo_path: 'c1/old.jpg' })]);
+  view();
+  await user.click(await screen.findByRole('button', { name: 'Replace' }));
+  await user.upload(await screen.findByTestId('photo-library'), jpeg());
+  await waitFor(() => expect(h.toast.success).toHaveBeenCalledWith('ID photo replaced', expect.anything()));
+  expect(h.save).toHaveBeenCalledTimes(1);
+  expect(h.save).toHaveBeenCalledWith('g1', 'c1', { id_photo_path: 'c1/new.jpg' }, 3, 'ID photo replaced');
+});
+
+it('a double tap on Remove sends one save only', async () => {
+  const user = userEvent.setup();
+  h.list.mockResolvedValue([companion({ id_photo_path: 'c1/old.jpg' })]);
+  h.remove.mockImplementation(() => new Promise((res) => setTimeout(() => res({ previousPath: 'c1/old.jpg', version: 4 }), 30)));
+  view();
+  const btn = await screen.findByRole('button', { name: 'Remove' });
+  await user.dblClick(btn);
+  await waitFor(() => expect(h.toast).toHaveBeenCalled());
+  expect(h.remove).toHaveBeenCalledTimes(1);
+});

@@ -112,8 +112,11 @@ export function GuestIdPanel({ guestId, guestName, details }: { guestId: string;
     try {
       stage('shrinking');
       if (!p.id) {
-        const r = await saveGuestCompanion(guestId, self?.id ?? null, selfCompanionPatch(guestName, '', self), self?.version, p.reason);
-        p.id = r.id; p.version = r.version;
+        if (self) { p.id = self.id; p.version = self.version; } // own row exists: no empty save, no extra audit entry
+        else {
+          const r = await saveGuestCompanion(guestId, null, selfCompanionPatch(guestName, '', self), undefined, p.reason);
+          p.id = r.id; p.version = r.version;
+        }
       }
       if (!p.photoSaved) {
         p.path ??= await uploadCompanionIdPhoto(p.id, file, (s) => stage(s === 'saved' ? 'saving' : s));
@@ -147,13 +150,15 @@ export function GuestIdPanel({ guestId, guestName, details }: { guestId: string;
     if (!file || up) return;
     try { await validateIdPhoto(file); start(file); } catch (e) { toast.error(toAppError(e).message); }
   };
+  const removing = useRef(false);
   const remove = async () => {
-    if (!self?.id_photo_path) return;
+    if (!self?.id_photo_path || removing.current) return;
+    removing.current = true;
     try {
       const r = await removeIdPhoto(self.id, self.version);
       await refresh();
       toast('ID photo removed. The file stays in private storage.', { duration: 6000, action: { label: 'Undo', onClick: () => { restoreIdPhoto(self.id, r.previousPath!, r.version).then(refresh).catch((e) => toast.error(toAppError(e).message)); } } });
-    } catch (e) { toast.error(toAppError(e).message); }
+    } catch (e) { toast.error(toAppError(e).message); } finally { removing.current = false; }
   };
 
   const size = 'w-full max-w-72 @2xl/main:max-w-none';

@@ -19,4 +19,13 @@ describe('D_duplicate guard', () => {
     const text = JSON.stringify(buildDemoData(new Date('2026-10-13T02:00:00Z')).tables);
     expect(text).not.toMatch(/@gmail|@yahoo|\+63 9(?!00 000)/);
   });
+  it('gives the demo guest an own ID companion with a photo, so Remove and Undo are reachable', () => {
+    const d = buildDemoData(new Date('2026-10-13T02:00:00Z'));
+    const guest = d.tables.guests![0]!;
+    const rows = d.rpcs.list_guest_companions_v1!({ p_guest_id: guest.id }) as { name: string; guest_id: string; id_photo_path: string }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ guest_id: guest.id, name: guest.name });
+    expect(rows[0]!.id_photo_path).toBeTruthy();
+    expect(d.rpcs.list_guest_companions_v1!({ p_guest_id: 'other' })).toEqual([]);
+  });
 });

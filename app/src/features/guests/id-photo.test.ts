@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Companion } from './api';
-import { companionFlags, findSelfCompanion, guestIdStatus, idPhotoFormError, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
+import { companionFlags, findSelfCompanion, guestIdStatus, idPhotoLabel, idPhotoRefs, idPhotoTurn, needsIdOnFile, otherCompanions, selfCompanionPatch } from './id-photo';
 
 const c = (o: Partial<Companion>): Companion => ({ id: 'x', guest_id: 'g', name: 'Test Person', contact_number: null, id_type: null, id_number: null, id_photo_path: null, id_photo_rotation: null, notes: null, created_at: '', updated_at: '', version: 1, ...o });
 const rows = [c({ id: 'a', name: 'Co One', id_photo_path: 'a/1.jpg' }), c({ id: 'b', name: ' test person ', id_photo_path: 'b/1.jpg', id_type: 'passport' }), c({ id: 'd', name: 'Test Person' })];
@@ -51,13 +51,6 @@ describe('guest ID photos', () => {
     ]);
     expect([...f.companions].sort()).toEqual(['g2', 'g3']);
     expect([...f.photos].sort()).toEqual(['g1', 'g3']);
-  });
-  it('requires a file and a reason', () => {
-    const f = new File(['x'], 'id.jpg', { type: 'image/jpeg' });
-    expect(idPhotoFormError(null, 'because')).toMatch(/Choose/);
-    expect(idPhotoFormError(f, 'ab')).toMatch(/reason/);
-    expect(idPhotoFormError(f, 'a'.repeat(501))).toMatch(/500/);
-    expect(idPhotoFormError(f, 'ID collected at check-in')).toBeNull();
   });
 });
 

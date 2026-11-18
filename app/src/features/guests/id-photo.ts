@@ -68,14 +68,6 @@ export function selfCompanionPatch(guestName: string, idType: string, existing: 
 
 export const needsIdOnFile = (details: Pick<ProfileDetails, 'id_on_file'> | null | undefined) => !details?.id_on_file;
 
-/** First problem with the dialog inputs, or null. File content is checked separately by validateIdPhoto. */
-export function idPhotoFormError(file: File | null, reason: string): string | null {
-  if (!file) return 'Choose a photo of the ID.';
-  if (reason.trim().length < 3) return 'Add a reason for this change.';
-  if (reason.length > 500) return 'Keep the reason within 500 characters.';
-  return null;
-}
-
 export function idPhotoLabel(ref: Pick<IdPhotoRef, 'name' | 'isSelf'>) {
   return ref.isSelf ? `${ref.name.trim()} (guest)` : ref.name.trim();
 }

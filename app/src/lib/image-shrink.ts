@@ -2,8 +2,8 @@ import { fitWithin } from '@/features/guests/guest-reply-image';
 
 // Shrink a picked or pasted photo to a JPEG Blob before upload (s118: phone photos are 3-8 MB; an ID card read fine at 2000 px).
 // createImageBitmap applies the EXIF rotation, so a portrait phone photo is not stored sideways. Never enlarges.
-export const SHRINK_EDGE = 2000;
-export const SHRINK_QUALITY = 0.85;
+const SHRINK_EDGE = 2000;
+const SHRINK_QUALITY = 0.85;
 
 export async function shrinkToJpeg(file: Blob, opts: { maxEdge?: number; quality?: number } = {}): Promise<Blob> {
   if (file.type && !file.type.startsWith('image/')) throw new Error('not an image');
