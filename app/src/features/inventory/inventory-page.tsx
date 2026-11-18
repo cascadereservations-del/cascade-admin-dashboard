@@ -1,5 +1,5 @@
 import { ScrollRegion } from '@/components/data/scroll-region';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -18,12 +18,31 @@ import { EmptyState, QueryState } from '@/components/data/query-state';
 import { Freshness } from '@/components/data/freshness';
 import { StatusBadge } from '@/components/data/status-badge';
 import { DetailSheet, Field } from '@/components/data/detail-sheet';
+import { GlassSheet, useNarrow } from '@/components/shell/page-band';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
+
+// s119 lane G: stock counts animate with NumberFlow (own chunk, loaded when an item opens; it honours reduced motion). The plain text
+// is both the fallback while the chunk loads and what a number that cannot be parsed shows.
+const NumberFlow = lazy(() => import('@number-flow/react'));
+export function StockCount({ value, unit }: { value: string | number | null | undefined; unit: string }) {
+  const n = value === null || value === undefined || value === '' ? NaN : Number(value);
+  const plain = `${formatNumber(value, 2)} ${unit}`;
+  if (!Number.isFinite(n)) return <>{plain}</>;
+  return <Suspense fallback={plain}><NumberFlow value={n} locales="en-PH" format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} suffix={` ${unit}`} /></Suspense>;
+}
+
+// Item panel: a right-hand drawer on wide screens, a bottom sheet (vaul, lazy) under 640 px. Same content in both.
+function ItemSheet({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; children: ReactNode }) {
+  const narrow = useNarrow();
+  return narrow
+    ? <GlassSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</GlassSheet>
+    : <DetailSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</DetailSheet>;
+}
 
 // Plain HTML table for the print-only view (#PRINT01): no sorting, filtering
 // or row-click, since a printed page can't act on any of those anyway.
@@ -215,11 +234,11 @@ export default function InventoryPage() {
           </>
         );
       })()}
-      <DetailSheet open={!!selected} onOpenChange={(o) => !o && set({ item: '' })} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
+      <ItemSheet open={!!selected} onOpenChange={(o) => !o && set({ item: '' })} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
         {selected && (
           <div className="space-y-4">
             <dl className="space-y-1">
-              <Field label={selected.consumable ? 'In storage' : 'On hand'}>{formatNumber(selected.qty, 2)} {selected.unit}</Field>
+              <Field label={selected.consumable ? 'In storage' : 'On hand'}><StockCount value={selected.qty} unit={selected.unit} /></Field>
               <Field label="Reorder below">{selected.reorderBelow ?? 'not set'}</Field>
               <Field label="Purchase unit">{selected.purchaseUnit ? `${selected.purchaseUnit} = ${selected.unitsPerPurchase} ${selected.unit}` : 'same as base unit'}</Field>
               <Field label="Unit cost">{selected.unitCost !== null ? formatPHP(selected.unitCost) : s.caps.can('read_finance') ? 'not recorded' : 'restricted'}</Field>
@@ -284,7 +303,7 @@ export default function InventoryPage() {
             </div>
           </div>
         )}
-      </DetailSheet>
+      </ItemSheet>
     </div>
   );
 }
