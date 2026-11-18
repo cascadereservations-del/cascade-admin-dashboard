@@ -40,21 +40,30 @@ it('history keeps only Tier: and Manual tier: profile changes', () => {
 const renderCard = (props: Partial<Parameters<typeof TierCard>[0]> = {}) =>
   render(<QueryClientProvider client={new QueryClient()}><TierCard guestId="g1" tier="returning" manual={null} events={[ev('Tier: Returning (2nd completed stay)')]} {...props} /></QueryClientProvider>);
 
-it('shows tier, benefits and history; saving needs a reason and calls the RPC with null for Automatic', async () => {
+it('Automatic sends null with a neutral reason, not the by-hand wording', async () => {
   const user = userEvent.setup();
   setGuestTier.mockResolvedValue({ ok: true });
   renderCard({ manual: 'vip', tier: 'vip' });
   expect(screen.getByText('Yes (VIP)')).toBeInTheDocument();
   expect(screen.getByText(/Tier: Returning \(2nd completed stay\)/)).toBeInTheDocument();
-  const save = screen.getByRole('button', { name: 'Save tier' });
-  expect(save).toBeDisabled();
+  expect(screen.queryByLabelText('Reason')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save tier' })).not.toBeInTheDocument();
   await user.click(screen.getByLabelText('Set by hand'));
   await user.click(await screen.findByRole('option', { name: 'Automatic' }));
-  await user.type(screen.getByLabelText('Reason'), 'ab');
-  expect(save).toBeDisabled();
-  await user.type(screen.getByLabelText('Reason'), 'c');
-  await user.click(save);
-  await waitFor(() => expect(setGuestTier).toHaveBeenCalledWith('g1', null, 'abc'));
+  await waitFor(() => expect(setGuestTier).toHaveBeenCalledWith('g1', null, 'Tier set to automatic'));
+  expect(setGuestTier.mock.calls[0]![2].length).toBeGreaterThanOrEqual(3);
+  expect(setGuestTier.mock.calls[0]![2].length).toBeLessThanOrEqual(200);
+}, 20000);
+
+it('shows an Undo that puts the previous tier back', async () => {
+  const user = userEvent.setup();
+  setGuestTier.mockResolvedValue({ ok: true });
+  renderCard({ manual: 'regular', tier: 'regular' });
+  await user.click(screen.getByLabelText('Set by hand'));
+  await user.click(await screen.findByRole('option', { name: 'VIP' }));
+  await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Tier saved', expect.objectContaining({ action: expect.objectContaining({ label: 'Undo' }) })));
+  toastSuccess.mock.calls[0]![1].action.onClick();
+  await waitFor(() => expect(setGuestTier).toHaveBeenLastCalledWith('g1', 'regular', 'Undo of last change'));
 }, 20000);
 
 it('shows the server error plainly', async () => {
@@ -63,15 +72,13 @@ it('shows the server error plainly', async () => {
   renderCard();
   await user.click(screen.getByLabelText('Set by hand'));
   await user.click(await screen.findByRole('option', { name: 'Regular' }));
-  await user.type(screen.getByLabelText('Reason'), 'owner asked');
-  await user.click(screen.getByRole('button', { name: 'Save tier' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(/Not allowed/);
-});
+}, 20000);
 
 it('hides the form for roles other than owner/admin', () => {
   role.value = 'finance';
   renderCard();
-  expect(screen.queryByRole('button', { name: 'Save tier' })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Set by hand')).not.toBeInTheDocument();
   expect(screen.getByText(/Returning guest:/)).toBeInTheDocument();
 });
 
@@ -81,8 +88,6 @@ it('an ok:false answer shows a plain error and no success toast', { timeout: 200
   renderCard();
   await user.click(screen.getByLabelText('Set by hand'));
   await user.click(await screen.findByRole('option', { name: 'Regular' }));
-  await user.type(screen.getByLabelText('Reason'), 'owner asked');
-  await user.click(screen.getByRole('button', { name: 'Save tier' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('This guest no longer exists. Refresh the page.');
   expect(toastSuccess).not.toHaveBeenCalled();
 });
