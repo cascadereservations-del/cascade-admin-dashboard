@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({ fetchGuests: vi.fn() }));
 vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), fetchGuests: api.fetchGuests }));
-vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => true } }) }));
+const role = vi.hoisted(() => ({ value: 'owner' }));
+vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => role.value === 'owner' || role.value === 'admin' } }) }));
+vi.mock('./utilities-api', () => ({ UTILITIES_KEY: (p: string) => ['guest-utilities', p], fetchStayUtilities: async () => [] }));
 
 import GuestsPage, { GuestCard, idStatusWord } from './guests-page';
 import type { GuestRow } from './api';
@@ -26,7 +28,7 @@ function view() {
 }
 beforeEach(() => { Element.prototype.setPointerCapture = vi.fn(); Element.prototype.releasePointerCapture = vi.fn(); // jsdom lacks pointer capture, vaul calls it
   api.fetchGuests.mockReset(); api.fetchGuests.mockResolvedValue({ rows, total: 3, page: 1 }); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { role.value = 'owner'; cleanup(); vi.unstubAllGlobals(); });
 
 describe('idStatusWord', () => {
   it('names the three states in plain words', () => {
@@ -93,5 +95,20 @@ describe('GuestsPage list', () => {
     expect(await screen.findByRole('table')).toBeInTheDocument();
     expect(document.querySelector('[data-slot="guest-card"]')).toBeNull();
     expect(screen.getByLabelText('Tier')).toBeInTheDocument();
+  });
+});
+
+describe('Use per stay tab (lane U)', () => {
+  it('is reachable for owner and admin and opens the ranking', async () => {
+    for (const r of ['owner', 'admin']) {
+      role.value = r; const { unmount } = view();
+      await userEvent.setup().click(screen.getByRole('tab', { name: 'Use per stay' }));
+      expect(await screen.findByText(/No stays with a meter reading yet/)).toBeInTheDocument();
+      unmount();
+    }
+  });
+  it('is absent for other roles', () => {
+    role.value = 'finance'; view();
+    expect(screen.queryByRole('tab', { name: 'Use per stay' })).not.toBeInTheDocument();
   });
 });

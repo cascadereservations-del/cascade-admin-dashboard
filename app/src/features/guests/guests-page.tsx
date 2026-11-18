@@ -22,6 +22,7 @@ import { LocalRecordsPanel } from './local-records-panel';
 import { displayContact, isMissingDetails } from './contact';
 import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 import { tierLabel } from './tier';
+import { UtilitiesRanking } from './utilities-ranking';
 
 // s119 lane G: under 640 px the CRM list is row cards (no sideways table) and the filters sit behind one control. The desktop table is unchanged.
 
@@ -48,6 +49,7 @@ const TABS = [
   { value: 'followups', label: 'Follow-ups' },
   { value: 'handoffs', label: 'Messenger handoffs' },
   { value: 'inquiries', label: 'Inquiries' },
+  { value: 'usage', label: 'Use per stay' }, // owner and admin only, see tabs below
 ];
 
 export default function GuestsPage() {
@@ -61,7 +63,8 @@ export default function GuestsPage() {
   useEffect(() => { if (params.has('q')) { const next = new URLSearchParams(params); next.delete('q'); setParams(next, { replace: true }); } }, [params, setParams]);
   useEffect(() => { const timer = setTimeout(() => setQueryText(search), 250); return () => clearTimeout(timer); }, [search]);
   const clearFilters = () => { setSearch(''); setQueryText(''); reset(); };
-  const tab = TABS.some((t) => t.value === state.tab) ? state.tab : 'crm';
+  const tabs = TABS.filter((t) => t.value !== 'usage' || s.caps.can('manage_staff'));
+  const tab = tabs.some((t) => t.value === state.tab) ? state.tab : 'crm';
   const query = useQuery({ queryKey: ['guests', s.propertyId, queryText, state.tier, state.flag, state.page], queryFn: () => fetchGuests(s.propertyId, { ...state, q: queryText }), enabled: tab === 'crm' && search === queryText });
   const tasks = useQuery({ queryKey: ['follow-ups', s.propertyId], queryFn: () => fetchFollowUps(s.propertyId), enabled: tab === 'followups' });
   const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs, enabled: tab === 'handoffs' });
@@ -92,7 +95,7 @@ export default function GuestsPage() {
       <PageBand title="Guests" description="Know your guests, prepare for their stays and keep every request in view." />
       <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'crm' ? '' : v })} className="mb-3">
         <TabsList className="h-auto w-full justify-start overflow-x-auto">
-          {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
+          {tabs.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
         </TabsList>
 
         <TabsContent value="crm">
@@ -111,6 +114,10 @@ export default function GuestsPage() {
               <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
             )}
           </QueryState>
+        </TabsContent>
+
+        <TabsContent value="usage">
+          {tab === 'usage' && <UtilitiesRanking propertyId={s.propertyId} />}
         </TabsContent>
 
         <TabsContent value="local">

@@ -13,7 +13,9 @@ const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('./api', () => api);
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }));
-vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { can: () => true } }) }));
+const role = vi.hoisted(() => ({ value: 'owner' }));
+vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { can: () => role.value === 'owner' || role.value === 'admin' } }) }));
+vi.mock('./utilities-api', () => ({ UTILITIES_KEY: (p: string) => ['guest-utilities', p], fetchStayUtilities: async () => [] }));
 vi.mock('@/lib/dates', () => ({ formatDate: (v: string) => v, formatDateTime: (v: string) => v }));
 vi.mock('./id-photos', () => ({
   GuestIdPanel: () => null, IdPhotoProvider: ({ children }: { children: unknown }) => <>{children as never}</>, IdPhotoThumb: () => null, NoIdPhotoTile: () => null,
@@ -24,7 +26,7 @@ vi.mock('./follow-up-form', () => ({ FollowUpForm: () => null }));
 vi.mock('./photo-sheet', () => ({ PhotoSheet: () => null }));
 
 beforeEach(() => vi.useRealTimers());
-afterEach(() => { cleanup(); vi.useRealTimers(); Object.values(api).forEach((m) => m.mockReset()); toastSuccess.mockReset(); toastError.mockReset(); });
+afterEach(() => { role.value = 'owner'; cleanup(); vi.useRealTimers(); Object.values(api).forEach((m) => m.mockReset()); toastSuccess.mockReset(); toastError.mockReset(); });
 
 const companion = { id: 'c1', guest_id: 'g1', name: 'Demo Companion', contact_number: null, id_type: null, id_number: null, id_photo_path: 'c1/a.jpg', id_photo_rotation: null, notes: null, created_at: '', updated_at: '', version: 1 };
 const wrap = (ui: React.ReactNode, path = '/') => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter></QueryClientProvider>);
@@ -106,4 +108,15 @@ it('inline Phone row: clearing a value the profile never had does not save', asy
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument());
   expect(api.saveProfile).not.toHaveBeenCalled();
   expect(toastError).not.toHaveBeenCalled();
+});
+
+it('lane U: the electricity and water card shows for owner and admin, not for other roles', async () => {
+  for (const r of ['owner', 'admin']) {
+    role.value = r; pageSetup();
+    expect(await screen.findByRole('heading', { name: 'Electricity and water' })).toBeInTheDocument();
+    cleanup();
+  }
+  role.value = 'finance'; pageSetup();
+  await screen.findByRole('button', { name: /^Contact number: 0917/ });
+  expect(screen.queryByRole('heading', { name: 'Electricity and water' })).not.toBeInTheDocument();
 });

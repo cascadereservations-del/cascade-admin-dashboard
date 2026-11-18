@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { TierCard } from './tier-card';
+import { GuestUtilitiesCard } from './guest-utilities-card';
 import { tierLabel } from './tier';
 import { FollowUpForm } from './follow-up-form';
 import { validateIdPhoto } from './local-records';
@@ -239,6 +240,8 @@ export default function GuestDetailPage() {
                 </section>
 
                 <CompanionsSection key={`companions-${id}`} guestId={id} guestName={g.name} />
+
+                <GuestUtilitiesCard propertyId={s.propertyId} guestName={g.name} />
 
                 <section className="space-y-2">
                   <Heading>Optional</Heading>
