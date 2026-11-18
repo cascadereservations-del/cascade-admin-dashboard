@@ -63,6 +63,10 @@
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: light;
   --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8; /* lane D (dashboard) */
+  /* s119 lane G: liquid-glass type scale, warm header band, icon tiles. Additive. Mirror into staff-app/tokens.css or the sync test fails. */
+  --t1: 2rem; --t2: 1.0625rem; --t3: .9375rem; --t4: .8125rem; /* root defaults; PageBand's FLUID class swaps in the cqi clamps on an inline-size container */
+  --band-a: #F6E7C4; --band-b: var(--v5-bg); --band-mark: .16;
+  --tile-gold: #FBEFD2; --tile-gold-fg: #7A4E00; --tile-elec: #FDEBD0; --tile-elec-fg: #A85600; --tile-water: #DDF0F8; --tile-water-fg: #0B7FB0; --tile-ok: #DFF5E3; --tile-ok-fg: #1E7A34;
 }
 
 .dark {
@@ -91,4 +95,6 @@
   --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
   color-scheme: dark;
   --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
+  --band-a: #3A2E14; --band-mark: .22;
+  --tile-gold: #3A2E14; --tile-gold-fg: #F2C96B; --tile-elec: #3D2A10; --tile-elec-fg: #FFB340; --tile-water: #10303F; --tile-water-fg: #64D2FF; --tile-ok: #10301A; --tile-ok-fg: #30D158;
 }

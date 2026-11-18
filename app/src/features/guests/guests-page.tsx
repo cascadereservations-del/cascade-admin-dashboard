@@ -6,7 +6,9 @@ import { useSession } from '@/auth/session';
 import { useUrlState } from '@/lib/url-state';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { formatPHP } from '@/lib/money';
-import { PageHeader } from '@/components/data/page-header';
+import { PageBand, FLUID, GlassSheet, useNarrow } from '@/components/shell/page-band';
+import { Check, ChevronLeft, ChevronRight, IdCard, Search, SlidersHorizontal } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { FilterBar, FilterSelect } from '@/components/data/filter-bar';
 import { DataTable } from '@/components/data/data-table';
 import { EmptyState, QueryState } from '@/components/data/query-state';
@@ -20,6 +22,8 @@ import { LocalRecordsPanel } from './local-records-panel';
 import { displayContact, isMissingDetails } from './contact';
 import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
 import { tierLabel } from './tier';
+
+// s119 lane G: under 640 px the CRM list is row cards (no sideways table) and the filters sit behind one control. The desktop table is unchanged.
 
 // CRM list: canonical guests joined by guest_id everywhere else. Same-name
 // guests stay separate rows here; merging is a reviewed action on the detail.
@@ -37,6 +41,7 @@ const FLAG_OPTIONS = [
   { value: 'repeat', label: 'Repeat guest' },
   { value: 'has_companions', label: 'Has companions' },
 ];
+const TIER_OPTIONS = [{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'regular', label: 'Regular' }, { value: 'vip', label: 'VIP' }];
 const TABS = [
   { value: 'crm', label: 'Guest CRM' },
   { value: 'local', label: 'Collected records' },
@@ -62,6 +67,7 @@ export default function GuestsPage() {
   const handoffs = useQuery({ queryKey: ['handoffs'], queryFn: fetchHandoffs, enabled: tab === 'handoffs' });
   const inquiries = useQuery({ queryKey: ['inquiries', s.propertyId], queryFn: () => fetchInquiries(s.propertyId), enabled: tab === 'inquiries' });
   const [taskSheet, setTaskSheet] = useState<{ open: boolean; existing: FollowUp | null }>({ open: false, existing: null });
+  const narrow = useNarrow();
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
     { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${tierLabel(row.original.tier)}` : ''}</div></div> },
@@ -83,19 +89,25 @@ export default function GuestsPage() {
   const taskStatusFilter = state.taskStatus;
   return (
     <div>
-      <PageHeader title="Guests" description="Know your guests, prepare for their stays and keep every request in view." />
+      <PageBand title="Guests" description="Know your guests, prepare for their stays and keep every request in view." />
       <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'crm' ? '' : v })} className="mb-3">
         <TabsList className="h-auto w-full justify-start overflow-x-auto">
           {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
         </TabsList>
 
         <TabsContent value="crm">
+          {narrow ? (
+            <MobileFilters search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} tier={state.tier} flag={state.flag} onTier={(v) => set({ tier: v, page: '1' })} onFlag={(v) => set({ flag: v, page: '1' })} onClear={clearFilters} />
+          ) : (
           <FilterBar search={search} onSearch={(q) => { setSearch(q); set({ page: '1' }); }} searchPlaceholder="Name, phone or e-mail" activeCount={(search ? 1 : 0) + (state.tier ? 1 : 0) + (state.flag ? 1 : 0)} onClear={clearFilters} density={density} onDensity={(d) => set({ density: d })}>
-            <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={[{ value: 'new', label: 'New' }, { value: 'returning', label: 'Returning' }, { value: 'regular', label: 'Regular' }, { value: 'vip', label: 'VIP' }]} />
+            <FilterSelect label="Tier" value={state.tier || undefined} onChange={(v) => set({ tier: v ?? '' })} options={TIER_OPTIONS} />
             <FilterSelect label="Flags" value={state.flag || undefined} onChange={(v) => { set({ flag: v ?? '', page: '1' }); }} options={FLAG_OPTIONS} />
           </FilterBar>
+          )}
           <QueryState query={query}>
-            {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>} /> : (
+            {(d) => d.rows.length === 0 ? <EmptyState title="No guests match" action={<Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>} /> : narrow ? (
+              <GuestCards rows={d.rows} total={d.total} page={d.page} onPage={(p) => set({ page: String(p) })} />
+            ) : (
               <DataTable columns={columns} rows={d.rows} total={d.total} page={d.page} onPageChange={(p) => set({ page: String(p) })} density={density} onRowClick={(r) => nav(`/guests/${r.id}`)} caption="Guests" getRowId={(r) => r.id} />
             )}
           </QueryState>
@@ -167,6 +179,92 @@ export default function GuestsPage() {
           </QueryState>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/** The ID status word on a card: a plain word with an icon, never an alarm colour for a normal state. */
+export function idStatusWord(r: Pick<GuestRow, 'has_id_photo' | 'id_on_file'>): string {
+  return r.has_id_photo ? 'ID photo' : r.id_on_file ? 'ID marked, no photo' : 'No ID yet';
+}
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** One guest as a tappable row card: avatar initial, name, last stay, stays and nights, ID status. At least 72 px tall. */
+export function GuestCard({ g }: { g: GuestRow }) {
+  const stays = g.total_stays ?? 0;
+  const nights = g.total_nights_stayed ?? 0;
+  const initial = (g.name.trim()[0] ?? '?').toUpperCase();
+  return (
+    <Link to={`/guests/${g.id}`} data-slot="guest-card" className="flex min-h-[72px] items-center gap-3 rounded-[20px] border bg-card px-4 py-3 shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full font-bold" style={{ background: 'var(--tile-gold)', color: 'var(--tile-gold-fg)' }}>{initial}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <b className="min-w-0 truncate" style={{ fontSize: 'var(--t2)' }}>{g.name}</b>
+          <span className="shrink-0 tabular text-muted-foreground" style={{ fontSize: 'var(--t4)' }}>{g.last_stay_date ? formatDate(g.last_stay_date, 'long') : 'No stay yet'}</span>
+        </span>
+        <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-muted-foreground" style={{ fontSize: 'var(--t3)' }}>
+          <span className="tabular">{plural(stays, 'stay', 'stays')} · {plural(nights, 'night', 'nights')}</span>
+          <span className="inline-flex items-center gap-1"><IdCard size={14} strokeWidth={1.75} aria-hidden />{idStatusWord(g)}</span>
+        </span>
+      </span>
+      <ChevronRight size={18} strokeWidth={1.75} aria-hidden className="shrink-0 text-muted-foreground" />
+    </Link>
+  );
+}
+
+const PAGE_SIZE = 25;
+function GuestCards({ rows, total, page, onPage }: { rows: GuestRow[]; total: number; page: number; onPage: (p: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  return (
+    <div className={FLUID}>
+      <ul aria-label="Guests" className="space-y-2.5">
+        {rows.map((g) => <li key={g.id}><GuestCard g={g} /></li>)}
+      </ul>
+      <div className="mt-3 flex items-center justify-between text-muted-foreground" style={{ fontSize: 'var(--t3)' }}>
+        <span className="tabular">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</span>
+        <span className="flex items-center gap-1">
+          <Button variant="outline" className="size-11" aria-label="Previous page" disabled={page <= 1} onClick={() => onPage(page - 1)}><ChevronLeft size={20} strokeWidth={1.75} aria-hidden /></Button>
+          <Button variant="outline" className="size-11" aria-label="Next page" disabled={page >= pages} onClick={() => onPage(page + 1)}><ChevronRight size={20} strokeWidth={1.75} aria-hidden /></Button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Selected chip = neutral fill + 2 px edge + tick (colour is never the only signal); a second tap clears it. */
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: string }) {
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 ${on ? 'border-2 border-foreground bg-card font-semibold' : 'border bg-muted'}`}>
+      {on && <Check size={16} strokeWidth={1.75} aria-hidden />}{children}
+    </button>
+  );
+}
+
+/** Search stays visible; tier and flags sit behind one Filters control that opens a vaul sheet (lazy). */
+function MobileFilters({ search, onSearch, tier, flag, onTier, onFlag, onClear }: { search: string; onSearch: (q: string) => void; tier: string; flag: string; onTier: (v: string) => void; onFlag: (v: string) => void; onClear: () => void }) {
+  const [open, setOpen] = useState(false);
+  const active = (tier ? 1 : 0) + (flag ? 1 : 0);
+  return (
+    <div className={`mb-3 flex items-center gap-2 ${FLUID}`}>
+      <div className="relative min-w-0 flex-1">
+        <Search size={18} strokeWidth={1.75} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input aria-label="Search" placeholder="Name, phone or e-mail" className="h-11 pl-9 text-base" value={search} onChange={(e) => onSearch(e.target.value)} />
+      </div>
+      <Button variant="outline" className="min-h-11 shrink-0" onClick={() => setOpen(true)}><SlidersHorizontal size={18} strokeWidth={1.75} aria-hidden />{active > 0 ? `Filters (${active})` : 'Filters'}</Button>
+      <GlassSheet open={open} onOpenChange={setOpen} title="Filters" description="Narrow the list. Changes apply straight away.">
+        <div>
+          <p className="mb-2 font-semibold" style={{ fontSize: 'var(--t3)' }}>Tier</p>
+          <div className="flex flex-wrap gap-2">{TIER_OPTIONS.map((o) => <Chip key={o.value} on={tier === o.value} onClick={() => onTier(tier === o.value ? '' : o.value)}>{o.label}</Chip>)}</div>
+        </div>
+        <div>
+          <p className="mb-2 font-semibold" style={{ fontSize: 'var(--t3)' }}>Flags</p>
+          <div className="flex flex-wrap gap-2">{FLAG_OPTIONS.map((o) => <Chip key={o.value} on={flag === o.value} onClick={() => onFlag(flag === o.value ? '' : o.value)}>{o.label}</Chip>)}</div>
+        </div>
+        <div className="flex gap-2">
+          {active > 0 && <Button variant="outline" className="min-h-12 flex-1" onClick={onClear}>Clear filters</Button>}
+          <Button className="min-h-12 flex-1" onClick={() => setOpen(false)}>Done</Button>
+        </div>
+      </GlassSheet>
     </div>
   );
 }
