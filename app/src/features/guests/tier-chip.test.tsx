@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { TierChip, TierName, tierChipText, tierKey } from './tier-chip';
+import { TierChip, TierName, tierChipLabel, tierChipText, tierKey } from './tier-chip';
 
 afterEach(cleanup);
 const css = readFileSync(resolve(__dirname, '../../index.css'), 'utf8').split('\r\n').join('\n');
@@ -11,6 +11,12 @@ const block = (sel: string) => css.slice(css.indexOf(`\n${sel} {`), css.indexOf(
 describe('tier chip mapping', () => {
   it('uses the stored tier and the stay count, short forms only', () => {
     expect(tierChipText(null, 1)).toBe('First');
+    expect(tierChipText(null, 2)).toBe('Returning · 2');
+    expect(tierChipText(null, 0)).toBe('First');
+    expect(tierKey('first', 3)).toBe('returning');
+    expect(tierChipText('vip', 1)).toBe('VIP');
+    expect(tierChipText('regular', 1)).toBe('Regular');
+    expect(tierChipLabel('vip', 1)).toBe('VIP');
     expect(tierChipText(null, null)).toBe('First');
     expect(tierChipText('returning', 2)).toBe('Returning · 2');
     expect(tierChipText('regular', 5)).toBe('Regular · 5');

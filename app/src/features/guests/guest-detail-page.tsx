@@ -216,13 +216,12 @@ export default function GuestDetailPage() {
               <div className="mx-auto max-w-2xl space-y-5 pb-16">
                 <div className="flex flex-col items-center gap-2 text-center">
                   <GuestIdPanel guestId={id} guestName={g.name} details={d} />
-                  <h1 className="text-[1.75rem] leading-tight font-semibold"><TierName tier={g.tier}>{shownName}</TierName></h1>
+                  <h1 className="text-[1.75rem] leading-tight font-semibold"><TierName tier={g.tier} stays={stays}>{shownName}</TierName></h1>
                   {d?.display_name && d.display_name !== g.name && <p className="text-[0.9375rem] text-muted-foreground">{g.name}</p>}
-                  <p className="text-[0.9375rem] text-muted-foreground">{g.source} · {stays} {stays === 1 ? 'stay' : 'stays'} · last stay {formatDate(g.last_stay_date, 'long')}</p>
+                  <p className="text-[0.9375rem] text-muted-foreground">{g.source} · last stay {formatDate(g.last_stay_date, 'long')}</p>
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <IdStatusBadge guestId={id} guestName={g.name} details={d} />
                     <TierChip tier={g.tier} stays={stays} />
-                    {d?.vip && g.tier !== 'vip' && <StatusBadge tone="info">VIP</StatusBadge>}
                   </div>
                   <Button variant="outline" className="min-h-11" disabled={!!detailsError} onClick={() => { setDraft({ contact_number: d?.contact_number ?? '', stay_preferences: d?.stay_preferences ?? '', id_type: d?.id_type ?? '', display_name: d?.display_name ?? '' }); setEditing(true); }}>Edit</Button>
                   {detailsError && <p className={caption}>Profile details unavailable: {detailsError}</p>}

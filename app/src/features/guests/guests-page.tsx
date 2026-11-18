@@ -73,7 +73,7 @@ export default function GuestsPage() {
   const narrow = useNarrow();
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
-    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}><TierName tier={row.original.tier}>{row.original.name}</TierName></Link><div className="text-xs text-muted-foreground">{row.original.source}</div></div> },
+    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}><TierName tier={row.original.tier} stays={row.original.total_stays}>{row.original.name}</TierName></Link><div className="text-xs text-muted-foreground">{row.original.source}</div></div> },
     { id: 'contact', header: 'Contact', accessorFn: (r) => displayContact(r) ?? '', cell: ({ row }) => { const c = displayContact(row.original); return <span className="inline-flex items-center gap-1 text-xs">{c ?? '—'}{c && <CopyButton value={c} />}</span>; } },
     { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
@@ -206,7 +206,7 @@ export function GuestCard({ g }: { g: GuestRow }) {
       <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full font-bold" style={{ background: 'var(--tile-gold)', color: 'var(--tile-gold-fg)' }}>{initial}</span>
       <span className="min-w-0 flex-1">
         <span className="tier-line">
-          <b className="tier-nm truncate" style={{ fontSize: 'var(--t2)' }}><TierName tier={g.tier}>{g.name}</TierName></b>
+          <b className="tier-nm truncate" style={{ fontSize: 'var(--t2)' }}><TierName tier={g.tier} stays={g.total_stays}>{g.name}</TierName></b>
           <span className="tier-cell"><TierChip tier={g.tier} stays={g.total_stays} /></span>
         </span>
         <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-muted-foreground" style={{ fontSize: 'var(--t3)' }}>

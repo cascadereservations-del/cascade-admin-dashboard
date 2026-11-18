@@ -357,7 +357,7 @@ body:has([data-embed]) { font-family: var(--v5-font-ui); font-size: var(--v5-t-b
 .D_filters-content > button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; top: 0.5rem; right: 0.5rem; }
 
 /* s119 lane A: tier chip (one 32 px shape, no animation) and tier-graded guest names, from mockup-staff-staying-v4 */
-.tier-chip { --bgc: var(--t1-bg); --fgc: var(--t1-fg); --edge: var(--t1-edge); display: inline-flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%; min-height: 2rem; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--bgc); color: var(--fgc); box-shadow: var(--edge); font-size: .9375rem; line-height: 1.2; font-weight: 500; white-space: nowrap; }
+.tier-chip { --bgc: var(--t1-bg); --fgc: var(--t1-fg); --edge: var(--t1-edge); display: inline-flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%; min-height: 2rem; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--bgc); color: var(--fgc); box-shadow: var(--edge); font-size: .9375rem; line-height: 1.2; font-weight: 500; white-space: normal; }
 .tier-chip[data-tier="returning"] { --bgc: var(--t2-bg); --fgc: var(--t2-fg); --edge: var(--t2-edge); font-weight: 600; }
 .tier-chip[data-tier="regular"] { --bgc: var(--t3-bg); --fgc: var(--t3-fg); --edge: var(--t3-edge); font-weight: 600; }
 .tier-chip[data-tier="vip"] { --bgc: var(--t4-bg); --fgc: var(--t4-fg); --edge: var(--t4-edge); font-weight: 700; }

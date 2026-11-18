@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StayingSection, stayingState } from './staying-section';
-import { MSG_CONTACT, MSG_GONE, MSG_STALE, keyFor, stayingError } from './staying';
+import { MSG_CONTACT, MSG_GONE, MSG_STALE, MSG_STALE_KEPT, keyFor, stayingError } from './staying';
 
 const api = vi.hoisted(() => ({ fetchTimeline: vi.fn() }));
 const st = vi.hoisted(() => ({ fetchStayRows: vi.fn(), fetchStayStaying: vi.fn(), setStayStaying: vi.fn(), confirmStayStaying: vi.fn() }));
@@ -80,14 +80,24 @@ describe('dialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(MSG_CONTACT);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
-  it('reloads and says so on a stale version', async () => {
+  it('keeps typed text and says to check the latest on a stale version', async () => {
     st.setStayStaying.mockRejectedValue({ code: '40001', message: 'stale version: x' });
     const user = await open(/^Edit who is staying, 2026-11-14/);
     await user.type(screen.getByRole('textbox'), ' Z');
     st.fetchStayStaying.mockClear();
+    st.fetchStayStaying.mockResolvedValue(new Map([['u1', { stay_uid: 'u1', names: 'Newer Names', source: 'staff', suggestion: null, version: 3 }]]));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(MSG_STALE_KEPT);
+    await waitFor(() => expect(st.fetchStayStaying).toHaveBeenCalled());
+    expect(screen.getByRole('textbox')).toHaveValue('Bravo Guest Z');
+  });
+  it('shows the refreshed names when nothing was typed', async () => {
+    st.setStayStaying.mockRejectedValue({ code: '40001', message: 'stale version: x' });
+    const user = await open(/^Edit who is staying, 2026-11-14/);
+    st.fetchStayStaying.mockResolvedValue(new Map([['u1', { stay_uid: 'u1', names: 'Newer Names', source: 'staff', suggestion: null, version: 3 }]]));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(MSG_STALE);
-    await waitFor(() => expect(st.fetchStayStaying).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('Newer Names'));
   });
   it('accepts a suggestion through the confirm function, and says calmly when it is gone', async () => {
     st.confirmStayStaying.mockResolvedValue({ ok: false, error: 'no_pending_suggestion', names: null, version: 3 });

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Pencil, Plus, Sparkles } from 'lucide-react';
@@ -8,10 +8,10 @@ import { DetailSheet } from '@/components/data/detail-sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchTimeline } from './api';
-import { confirmStayStaying, fetchStayRows, fetchStayStaying, keyFor, MSG_GONE, NAMES_MAX, setStayStaying, STAYING_KEY, stayingError, type StayRow, type StayStaying } from './staying';
+import { confirmStayStaying, fetchStayRows, fetchStayStaying, keyFor, MSG_GONE, MSG_STALE_KEPT, NAMES_MAX, setStayStaying, STAYING_KEY, stayingError, type StayRow, type StayStaying } from './staying';
 
 const SOURCE_LABEL: Record<string, string> = { airbnb: 'Airbnb', direct: 'Direct' };
-const stayTitle = (r: StayRow) => `${formatDate(r.checkin)} → ${formatDate(r.checkout)}${SOURCE_LABEL[r.kind] ? ` · ${SOURCE_LABEL[r.kind]}` : ''}`;
+const stayTitle = (r: StayRow) => `${formatDate(r.checkin)} to ${formatDate(r.checkout)}${SOURCE_LABEL[r.kind] ? ` · ${SOURCE_LABEL[r.kind]}` : ''}`;
 
 /** What a row shows: the typed names with who typed them, else the pending Cassy suggestion, else nothing recorded. */
 export function stayingState(s: StayStaying | undefined): { value: string | null; tag: 'You' | 'Staff' | 'Cassy suggested' | null; action: 'Edit' | 'Review' | 'Add' } {
@@ -27,7 +27,7 @@ export function StayingSection({ guestId }: { guestId: string }) {
   const canEdit = s.caps.can('manage_operations');
   const timeline = useQuery({ queryKey: ['timeline', guestId], queryFn: () => fetchTimeline(guestId) });
   const events = timeline.data?.events;
-  const stays = useQuery({ queryKey: ['stay-rows', s.propertyId, guestId, events?.length ?? 0], queryFn: () => fetchStayRows(s.propertyId, events!), enabled: !!events });
+  const stays = useQuery({ queryKey: ['stay-rows', s.propertyId, guestId, events?.length ?? 0], queryFn: () => fetchStayRows(s.propertyId, events!, qc), enabled: !!events });
   const uids = stays.data?.map((r) => r.uid) ?? [];
   const staying = useQuery({ queryKey: [...STAYING_KEY(s.propertyId), uids.join(',')], queryFn: () => fetchStayStaying(s.propertyId, uids), enabled: uids.length > 0, retry: false });
   const [open, setOpen] = useState<StayRow | null>(null);
@@ -68,12 +68,23 @@ export function StayingSection({ guestId }: { guestId: string }) {
 export function StayingDialog({ stay, current, onClose, onRefresh }: { stay: StayRow; current: StayStaying | undefined; onClose: () => void; onRefresh: () => Promise<unknown> | void }) {
   const s = useSession();
   const reviewing = !current?.names && !!current?.suggestion;
-  const [names, setNames] = useState(current?.names ?? current?.suggestion ?? '');
+  const shown = (c: StayStaying | undefined) => c?.names ?? c?.suggestion ?? '';
+  const [names, setNames] = useState(shown(current));
+  const baseline = useRef(shown(current)); // what the box held when it was last filled from the server
+  const resetOnRefresh = useRef(false);
   const [note, setNote] = useState<string | null>(null);
   const sent = useRef<{ key: string; names: string } | null>(null); // a new key whenever the names differ from the last sent
   const version = current?.version ?? 0;
   const done = () => { toast.success('Names saved'); void onRefresh(); onClose(); };
-  const fail = (e: unknown) => { const r = stayingError(e); setNote(r.text); if (r.stale) void onRefresh(); };
+  // A refused-as-stale save shows the refreshed names only when the box is still untouched; typed text is never thrown away.
+  useEffect(() => { if (resetOnRefresh.current) { resetOnRefresh.current = false; baseline.current = shown(current); setNames(baseline.current); } }, [current]);
+  const fail = (e: unknown) => {
+    const r = stayingError(e);
+    const typed = r.stale && names !== baseline.current;
+    resetOnRefresh.current = r.stale && !typed;
+    setNote(typed ? MSG_STALE_KEPT : r.text);
+    if (r.stale) void onRefresh();
+  };
   const save = useMutation({
     mutationFn: () => { const n = names.trim(); sent.current = keyFor(sent.current, n); return setStayStaying(s.propertyId, stay.uid, n, version, sent.current.key); },
     onSuccess: done,

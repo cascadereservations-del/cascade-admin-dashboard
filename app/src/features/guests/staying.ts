@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { rpc } from '@/lib/rpc';
 import { newIdempotencyKey } from '@/lib/idempotency';
@@ -6,8 +7,8 @@ import { readCalendarEvents } from '@/features/bookings/calendar-reads';
 import type { TimelineEvent } from './api';
 
 // s119 lane A: "Who is staying" per stay (stay key = calendar_events.uid). Writes go through set_stay_staying_v1 and
-// confirm_stay_staying_suggestion_v1 (migration 20261119000000_s119_staying). The read is admin_stay_staying_v1, which the
-// SQL lane has yet to add (docs/s119/admin_stay_staying_v1.sql); until it exists the whole feature stays hidden.
+// confirm_stay_staying_suggestion_v1 (migration 20261119000000_s119_staying). The read is admin_stay_staying_v1(p_property uuid, p_uids text[])
+// (SQL lane migration, section 5b); while it is not deployed the whole feature stays hidden.
 
 export type StayStaying = { stay_uid: string; names: string | null; source: 'admin' | 'staff' | null; suggestion: string | null; version: number };
 export type StayRow = { uid: string; checkin: string; checkout: string; kind: string; code: string };
@@ -28,17 +29,32 @@ export async function fetchStayStaying(propertyId: string, uids: string[]): Prom
   return new Map(rows.map((r) => [r.stay_uid, r]));
 }
 
-/** The guest's bookings that can carry a staying value: stay events with a calendar uid (from the event, else the linked calendar row). */
-export async function fetchStayRows(propertyId: string, events: TimelineEvent[]): Promise<StayRow[]> {
+type CalRow = { uid: string; linked_reservation_id: string | null; status: string };
+/** One shared calendar read per property (up to 1000 rows): opening several guests costs one fetch. */
+export const CALENDAR_KEY = (propertyId: string) => ['calendar-events', propertyId];
+const CALENDAR_STALE_MS = 60_000;
+
+/** The guest's bookings that can carry a staying value. A stay key is a confirmed calendar_events.uid: Airbnb rows are found through
+ *  linked_reservation_id = timeline body.id; a direct booking's body.id is the booking_inquiries id and its calendar uid is 'cascade-direct-<id>'
+ *  (older rows 'direct:<id>'), written by the inquiry confirm. A body.uid, when present, is used as is. */
+export async function fetchStayRows(propertyId: string, events: TimelineEvent[], qc: QueryClient): Promise<StayRow[]> {
   const stays = events.filter((e) => e.kind === 'stay' && !/^(cancel|declin|void)/i.test(String(e.body.status ?? '')));
-  let byReservation: Map<string, string> | null = null;
-  if (stays.some((e) => !e.body.uid)) {
-    const { data } = await readCalendarEvents<{ uid: string; linked_reservation_id: string | null; status: string }>(propertyId);
-    byReservation = new Map((data ?? []).filter((c) => c.linked_reservation_id && c.status === 'confirmed').map((c) => [c.linked_reservation_id as string, c.uid]));
+  let confirmed: CalRow[] = [];
+  if (stays.length) {
+    confirmed = (await qc.fetchQuery({
+      queryKey: CALENDAR_KEY(propertyId),
+      queryFn: async () => { const { data, error } = await readCalendarEvents<CalRow>(propertyId); if (error) throw toAppError(error); return data ?? []; },
+      staleTime: CALENDAR_STALE_MS,
+    })).filter((c) => c.status === 'confirmed');
   }
+  const byReservation = new Map(confirmed.filter((c) => c.linked_reservation_id).map((c) => [c.linked_reservation_id as string, c.uid]));
+  const uids = new Set(confirmed.map((c) => c.uid));
   const rows: StayRow[] = [];
   for (const e of stays) {
-    const uid = e.body.uid ? String(e.body.uid) : byReservation?.get(String(e.body.id));
+    const id = String(e.body.id ?? '');
+    const uid = e.body.uid ? String(e.body.uid)
+      : e.body.stayKind === 'direct' ? [`cascade-direct-${id}`, `direct:${id}`].find((u) => uids.has(u))
+      : byReservation.get(id);
     if (uid) rows.push({ uid, checkin: String(e.body.checkin), checkout: String(e.body.checkout), kind: String(e.body.stayKind ?? ''), code: String(e.body.code ?? '') });
   }
   return rows.sort((a, b) => b.checkin.localeCompare(a.checkin));
@@ -63,6 +79,7 @@ export function confirmStayStaying(propertyId: string, uid: string, accept: bool
 export const MSG_CONTACT = 'Please leave phone numbers and e-mail addresses out. Type names only.';
 export const MSG_GONE = 'That suggestion is no longer there.';
 export const MSG_STALE = 'These names changed since you opened them. The latest is shown.';
+export const MSG_STALE_KEPT = 'These names changed since you opened them. Check the latest, then save again.'; // typed text is kept
 
 /** Plain words for a refusal. `stale` (40001) means reload and show what is there now. */
 export function stayingError(err: unknown): { stale: boolean; text: string } {
