@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -81,14 +81,22 @@ export function CompanionsSection({ guestId, guestName }: { guestId: string; gue
     onSuccess: () => { toast.success('Companion saved'); setDraft(null); setFile(null); setUploadedPath(null); refresh(); },
     onError: (e) => toast.error(toAppError(e).message),
   });
-  const restore = (c: Companion) => saveGuestCompanion(guestId, null, { name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', ...(c.id_photo_path ? { id_photo_path: c.id_photo_path } : {}) }, undefined, 'Companion restored')
-    .then(() => { refresh(); toast.success('Companion restored'); }).catch((e) => toast.error(toAppError(e).message));
-  // The photo file stays in storage; Undo writes the row back with the same file path.
-  const remove = useMutation({
-    mutationFn: (c: Companion) => deleteGuestCompanion(c.id, 'Companion removed'),
-    onSuccess: (_r, c) => { setDraft(null); refresh(); toast.success('Companion removed', { duration: 6000, action: { label: 'Undo', onClick: () => void restore(c) } }); },
-    onError: (e) => toast.error(toAppError(e).message),
-  });
+  // Remove is deferred: the row hides, the 6 s Undo toast shows, and the delete runs only when the time is up (or the
+  // page unmounts). A restore would insert a new id, and the stored photo path (folder = old id) would stop being readable.
+  const [hidden, setHidden] = useState<string[]>([]);
+  const pending = useRef(new Map<string, { c: Companion; timer: ReturnType<typeof setTimeout> }>());
+  const commit = (c: Companion) => {
+    pending.current.delete(c.id);
+    deleteGuestCompanion(c.id, 'Companion removed').then(refresh).catch((e) => { setHidden((h) => h.filter((x) => x !== c.id)); toast.error(toAppError(e).message); });
+  };
+  const remove = (c: Companion) => {
+    setDraft(null);
+    setHidden((h) => [...h, c.id]);
+    pending.current.set(c.id, { c, timer: setTimeout(() => commit(c), 6000) });
+    toast.success('Companion removed', { duration: 6000, action: { label: 'Undo', onClick: () => { const p = pending.current.get(c.id); if (p) { clearTimeout(p.timer); pending.current.delete(c.id); } setHidden((h) => h.filter((x) => x !== c.id)); } } });
+  };
+  // Leaving the page must not lose a delete that is waiting for its Undo window.
+  useEffect(() => () => { for (const { c, timer } of pending.current.values()) { clearTimeout(timer); commit(c); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const open = (c?: Companion) => { setFile(null); setUploadedPath(null); setMore(false); setDraft(c ? { id: c.id, name: c.name, contact_number: c.contact_number ?? '', id_type: c.id_type ?? '', id_number: c.id_number ?? '', notes: c.notes ?? '', version: c.version } : { name: '', contact_number: '', id_type: '', id_number: '', notes: '' }); };
   const pick = (f: File) => { validateIdPhoto(f).then(() => { setFile(f); setUploadedPath(null); }).catch((e) => toast.error(toAppError(e).message)); };
   const set = (patch: Partial<CompanionDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
@@ -101,7 +109,7 @@ export function CompanionsSection({ guestId, guestName }: { guestId: string; gue
       <Heading>Companions</Heading>
       <QueryState query={companions}>
         {(all) => {
-          const rows = otherCompanions(all, guestName); // the guest's own photo is the page header
+          const rows = otherCompanions(all, guestName).filter((c) => !hidden.includes(c.id)); // the guest's own photo is the page header
           return (
             <div className="divide-y overflow-hidden rounded-xl border bg-card">
               {rows.map((c) => (
@@ -150,7 +158,7 @@ export function CompanionsSection({ guestId, guestName }: { guestId: string; gue
             </div>
             {save.isError && draft.id && <p role="alert" className="text-base">Details may already be saved. Retry keeps the same companion; check the list before cancelling.</p>}
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" className="min-h-11" disabled={save.isPending} onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" className="min-h-11" disabled={save.isPending || !nameOk}>{save.isPending ? 'Saving…' : draft.id ? 'Done' : 'Add'}</Button></div>
-            {current && <Button type="button" variant="ghost" className="min-h-11 w-full text-destructive" disabled={save.isPending || remove.isPending} onClick={() => remove.mutate(current)}>Remove companion</Button>}
+            {current && <Button type="button" variant="ghost" className="min-h-11 w-full text-destructive" disabled={save.isPending} onClick={() => remove(current)}>Remove companion</Button>}
             {current && <p className={caption}>You can undo for a few seconds. The ID photo file is kept.</p>}
           </form>
         )}
@@ -213,7 +221,7 @@ export default function GuestDetailPage() {
                     {g.tier && <StatusBadge tone="info">{tierLabel(g.tier)}</StatusBadge>}
                     {d?.vip && g.tier !== 'vip' && <StatusBadge tone="info">VIP</StatusBadge>}
                   </div>
-                  <Button variant="outline" className="min-h-11" disabled={!!detailsError} onClick={() => { setDraft({ contact_number: phone, stay_preferences: d?.stay_preferences ?? '', id_type: d?.id_type ?? '', display_name: d?.display_name ?? '' }); setEditing(true); }}>Edit</Button>
+                  <Button variant="outline" className="min-h-11" disabled={!!detailsError} onClick={() => { setDraft({ contact_number: d?.contact_number ?? '', stay_preferences: d?.stay_preferences ?? '', id_type: d?.id_type ?? '', display_name: d?.display_name ?? '' }); setEditing(true); }}>Edit</Button>
                   {detailsError && <p className={caption}>Profile details unavailable: {detailsError}</p>}
                 </div>
 
@@ -221,7 +229,7 @@ export default function GuestDetailPage() {
                   <Heading>Guest</Heading>
                   <div className="divide-y overflow-hidden rounded-xl border bg-card">
                     <div className="flex items-center">
-                      <div className="min-w-0 flex-1"><FieldRow def={PHONE} value={phone} hint={phoneHint} onSave={(v) => saveField(PHONE, v)} /></div>
+                      <div className="min-w-0 flex-1"><FieldRow def={PHONE} value={phone} hint={phoneHint} onSave={(v) => (!v && !fieldValue(src, PHONE.key) ? Promise.resolve() : saveField(PHONE, v))} /></div>
                       {phone && <span className="pr-2 [&>button]:size-11"><CopyButton value={phone} /></span>}
                     </div>
                     <FieldRow def={NOTES} value={d?.stay_preferences ?? ''} shown={notesShown(d?.stay_preferences ?? '')} onSave={(v) => saveField(NOTES, v)} />
@@ -295,7 +303,7 @@ export default function GuestDetailPage() {
 
                 <DetailSheet open={editing} onOpenChange={setEditing} title="Edit guest" description="Saves with an automatic reason. Each change can be undone for a few seconds.">
                   <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); saveEdit.mutate(); }}>
-                    <div className="space-y-1"><label htmlFor="ed-phone" className="text-[0.9375rem] text-muted-foreground">Contact number</label><Input id="ed-phone" type="tel" inputMode="tel" autoComplete="off" value={draft.contact_number} onChange={(e) => setDraft({ ...draft, contact_number: e.target.value })} className="min-h-11 text-base md:text-base" /></div>
+                    <div className="space-y-1"><label htmlFor="ed-phone" className="text-[0.9375rem] text-muted-foreground">Contact number</label><Input id="ed-phone" type="tel" inputMode="tel" autoComplete="off" placeholder={g.phone ?? undefined} value={draft.contact_number} onChange={(e) => setDraft({ ...draft, contact_number: e.target.value })} className="min-h-11 text-base md:text-base" /></div>
                     <div className="space-y-1"><label htmlFor="ed-notes" className="text-[0.9375rem] text-muted-foreground">Notes and stay preferences</label><Textarea id="ed-notes" placeholder="Requests, arrival time, occasions" value={draft.stay_preferences} onChange={(e) => setDraft({ ...draft, stay_preferences: e.target.value })} className="min-h-24 text-base md:text-base" /></div>
                     <div className="space-y-1"><label htmlFor="ed-idtype" className="text-[0.9375rem] text-muted-foreground">ID type</label><select id="ed-idtype" value={draft.id_type} onChange={(e) => setDraft({ ...draft, id_type: e.target.value })} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-base"><option value="">Not stated</option>{ID_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
                     <div className="space-y-1"><label htmlFor="ed-name" className="text-[0.9375rem] text-muted-foreground">Name shown to staff (optional)</label><Input id="ed-name" autoComplete="off" placeholder={g.name} value={draft.display_name} onChange={(e) => setDraft({ ...draft, display_name: e.target.value })} className="min-h-11 text-base md:text-base" /></div>

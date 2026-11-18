@@ -30,8 +30,8 @@ export function TierCard({ guestId, tier, manual, events }: { guestId: string; t
     void qc.invalidateQueries({ queryKey: ['guests'] });
   };
   const save = useMutation({
-    mutationFn: async ({ choice, reason = autoReason('tier') }: { choice: string; reason?: string }) => {
-      const res = await setGuestTier(guestId, choice === 'auto' ? null : choice, reason);
+    mutationFn: async ({ choice, reason }: { choice: string; reason?: string }) => {
+      const res = await setGuestTier(guestId, choice === 'auto' ? null : choice, reason ?? autoReason(choice === 'auto' ? 'tier_auto' : 'tier'));
       // The RPC reports refusals as {ok:false, reason} without raising.
       if (!res.ok) throw new Error(SAVE_REFUSALS[(res as { reason?: string }).reason ?? ''] ?? 'Could not save the tier.');
       return res;

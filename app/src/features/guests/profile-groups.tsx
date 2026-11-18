@@ -80,9 +80,12 @@ export function FieldRow({ def, value, shown, locked, onUnlock, readOnly, hint, 
   const [busy, setBusy] = useState(false);
   const label = <span className="w-28 shrink-0 text-[0.9375rem] text-muted-foreground">{def.label}</span>;
   if (!editing) {
-    const body = <>{label}<span className={`min-w-0 flex-1 break-words text-base ${value ? '' : 'text-muted-foreground'}`}>{locked ? '•••• hidden' : shown ?? (value ? displayValue(def, value) : readOnly ? 'Not recorded' : 'Add')}</span>{!readOnly && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}</>;
-    if (readOnly) return <div className="flex min-h-12 items-center gap-3 px-4 py-2">{body}</div>;
-    return <button type="button" aria-label={`${def.label}: ${locked ? 'hidden, tap to show' : value ? displayValue(def, value) : 'empty, tap to add'}`} className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left hover:bg-muted" onClick={() => { if (locked) onUnlock?.(); else { setDraft(value); setEditing(true); } }}>{body}</button>;
+    const block = !!shown && typeof shown !== 'string' && !locked; // a block (the notes bullets) cannot sit inside a button
+    const text = locked ? '•••• hidden' : block ? null : shown ?? (value ? displayValue(def, value) : readOnly ? 'Not recorded' : 'Add');
+    const body = <>{label}<span className={`min-w-0 flex-1 break-words text-base ${value ? '' : 'text-muted-foreground'}`}>{block ? (readOnly ? '' : 'Tap to change') : text}</span>{!readOnly && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}</>;
+    if (readOnly) return <div className="flex min-h-12 items-center gap-3 px-4 py-2">{body}{block && <div className="basis-full">{shown}</div>}</div>;
+    const btn = <button type="button" aria-label={`${def.label}: ${locked ? 'hidden, tap to show' : value ? displayValue(def, value) : 'empty, tap to add'}`} className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left hover:bg-muted" onClick={() => { if (locked) onUnlock?.(); else { setDraft(value); setEditing(true); } }}>{body}</button>;
+    return block ? <div>{btn}<div className="px-4 pb-3">{shown}</div></div> : btn;
   }
   const done = async (e?: FormEvent) => {
     e?.preventDefault();

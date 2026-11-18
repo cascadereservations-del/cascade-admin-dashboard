@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
 import { REASON_CHIPS, SENSITIVE_FIELDS, autoReason, sensitiveKind, type ReasonKind } from './auto-reason';
 
-const KINDS: ReasonKind[] = ['contact', 'notes', 'id_type', 'photo_added', 'photo_replaced', 'photo_removed', 'tier', 'tags', 'channel', 'name', 'companion'];
+const KINDS: ReasonKind[] = ['contact', 'notes', 'id_type', 'photo_added', 'photo_replaced', 'photo_removed', 'tier', 'tier_auto', 'tags', 'channel', 'name', 'companion'];
 
 it('every kind gives 3-500 characters, with no fields, empty fields and a huge field list', () => {
   for (const k of KINDS) for (const f of [undefined, [], [''], ['Phone'], Array.from({ length: 200 }, () => 'a very long field label')]) {
     const r = autoReason(k, f);
     expect(r.length).toBeGreaterThanOrEqual(3);
-    expect(r.length).toBeLessThanOrEqual(k === 'tier' ? 200 : 500);
+    expect(r.length).toBeLessThanOrEqual(k.startsWith('tier') ? 200 : 500);
   }
 });
 

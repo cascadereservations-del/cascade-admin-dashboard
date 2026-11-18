@@ -40,7 +40,7 @@ it('history keeps only Tier: and Manual tier: profile changes', () => {
 const renderCard = (props: Partial<Parameters<typeof TierCard>[0]> = {}) =>
   render(<QueryClientProvider client={new QueryClient()}><TierCard guestId="g1" tier="returning" manual={null} events={[ev('Tier: Returning (2nd completed stay)')]} {...props} /></QueryClientProvider>);
 
-it('choosing a tier saves itself with the automatic reason; Automatic sends null', async () => {
+it('Automatic sends null with a neutral reason, not the by-hand wording', async () => {
   const user = userEvent.setup();
   setGuestTier.mockResolvedValue({ ok: true });
   renderCard({ manual: 'vip', tier: 'vip' });
@@ -50,7 +50,7 @@ it('choosing a tier saves itself with the automatic reason; Automatic sends null
   expect(screen.queryByRole('button', { name: 'Save tier' })).not.toBeInTheDocument();
   await user.click(screen.getByLabelText('Set by hand'));
   await user.click(await screen.findByRole('option', { name: 'Automatic' }));
-  await waitFor(() => expect(setGuestTier).toHaveBeenCalledWith('g1', null, 'Tier set by hand'));
+  await waitFor(() => expect(setGuestTier).toHaveBeenCalledWith('g1', null, 'Tier set to automatic'));
   expect(setGuestTier.mock.calls[0]![2].length).toBeGreaterThanOrEqual(3);
   expect(setGuestTier.mock.calls[0]![2].length).toBeLessThanOrEqual(200);
 }, 20000);

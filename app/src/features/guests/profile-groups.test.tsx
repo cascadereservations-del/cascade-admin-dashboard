@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { FieldRow, PHONE, ProfileGroups, fieldValue, groupSummary, useFieldSave, type FieldDef } from './profile-groups';
+import { FieldRow, NOTES, PHONE, ProfileGroups, notesShown, fieldValue, groupSummary, useFieldSave, type FieldDef } from './profile-groups';
 import type { GuestRow, ProfileDetails } from './api';
 
 const saveProfile = vi.hoisted(() => vi.fn());
@@ -122,4 +122,12 @@ it('an unchanged value closes without saving', async () => {
   await user.click(screen.getAllByRole('button', { name: /^Contact number/ })[0]!);
   await user.click(screen.getByRole('button', { name: 'Done' }));
   expect(saveProfile).not.toHaveBeenCalled();
+});
+
+it('a block value (the notes bullets) is never rendered inside a button', () => {
+  const v = '2026-10-01: Late arrival | Quiet room';
+  render(<FieldRow def={NOTES} value={v} shown={notesShown(v)} onSave={async () => undefined} />);
+  const btn = screen.getByRole('button', { name: /^Notes:/ });
+  expect(btn.querySelector('ul, div')).toBeNull();
+  expect(screen.getByText('Late arrival').closest('button')).toBeNull();
 });
