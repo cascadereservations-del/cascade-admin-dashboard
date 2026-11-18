@@ -42,6 +42,8 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   save_guest_profile_v1: 'follow_ups',
   save_follow_up_v1: 'follow_ups',
   merge_guests_v1: 'follow_ups',
+  set_stay_staying_v1: 'follow_ups', // s119: Who is staying, per booking (guest page)
+  confirm_stay_staying_suggestion_v1: 'follow_ups',
   admin_set_guest_tier_v1: 'follow_ups', // SPEC-46: guest detail, Tier and benefits (owner/admin)
   admin_save_transaction_v1: 'finance',
   admin_transactions_bulk_v1: 'finance',

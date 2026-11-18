@@ -21,7 +21,7 @@ import { FollowUpForm } from './follow-up-form';
 import { LocalRecordsPanel } from './local-records-panel';
 import { displayContact, isMissingDetails } from './contact';
 import { daysToNextBirthday, fetchFollowUps, fetchGuests, fetchHandoffs, fetchInquiries, type FollowUp, type GuestRow } from './api';
-import { tierLabel } from './tier';
+import { TierChip, TierName } from './tier-chip';
 import { UtilitiesRanking } from './utilities-ranking';
 
 // s119 lane G: under 640 px the CRM list is row cards (no sideways table) and the filters sit behind one control. The desktop table is unchanged.
@@ -73,11 +73,11 @@ export default function GuestsPage() {
   const narrow = useNarrow();
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
   const columns = useMemo<ColumnDef<GuestRow, unknown>[]>(() => [
-    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{row.original.name}</Link><div className="text-xs text-muted-foreground">{row.original.source}{row.original.tier ? ` · ${tierLabel(row.original.tier)}` : ''}</div></div> },
+    { id: 'name', header: 'Guest', accessorFn: (r) => r.name, cell: ({ row }) => <div><Link to={`/guests/${row.original.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}><TierName tier={row.original.tier}>{row.original.name}</TierName></Link><div className="text-xs text-muted-foreground">{row.original.source}</div></div> },
     { id: 'contact', header: 'Contact', accessorFn: (r) => displayContact(r) ?? '', cell: ({ row }) => { const c = displayContact(row.original); return <span className="inline-flex items-center gap-1 text-xs">{c ?? '—'}{c && <CopyButton value={c} />}</span>; } },
     { id: 'stays', header: 'Stays', accessorFn: (r) => r.total_stays ?? 0, cell: ({ row }) => <span className="tabular">{row.original.total_stays ?? 0} · {row.original.total_nights_stayed ?? 0} nights</span> },
     { id: 'last', header: 'Last stay', accessorFn: (r) => r.last_stay_date ?? '', cell: ({ row }) => <span className="tabular">{formatDate(row.original.last_stay_date, 'long')}</span> },
-    { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => (row.original.tier ? <StatusBadge tone={row.original.tier === 'vip' ? 'warn' : 'info'}>{tierLabel(row.original.tier)}</StatusBadge> : <span className="text-xs text-muted-foreground">—</span>) },
+    { id: 'tier', header: 'Tier', accessorFn: (r) => r.tier ?? '', cell: ({ row }) => <span className="tier-cell"><TierChip tier={row.original.tier} stays={row.original.total_stays} /></span> },
     { id: 'flags', header: 'Flags', accessorFn: () => '', cell: ({ row }) => {
       const r = row.original;
       const soon = r.birthday && daysToNextBirthday(r.birthday) <= 30;
@@ -205,12 +205,12 @@ export function GuestCard({ g }: { g: GuestRow }) {
     <Link to={`/guests/${g.id}`} data-slot="guest-card" className="flex min-h-[72px] items-center gap-3 rounded-[20px] border bg-card px-4 py-3 shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
       <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full font-bold" style={{ background: 'var(--tile-gold)', color: 'var(--tile-gold-fg)' }}>{initial}</span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-2">
-          <b className="min-w-0 truncate" style={{ fontSize: 'var(--t2)' }}>{g.name}</b>
-          <span className="shrink-0 tabular text-muted-foreground" style={{ fontSize: 'var(--t4)' }}>{g.last_stay_date ? formatDate(g.last_stay_date, 'long') : 'No stay yet'}</span>
+        <span className="tier-line">
+          <b className="tier-nm truncate" style={{ fontSize: 'var(--t2)' }}><TierName tier={g.tier}>{g.name}</TierName></b>
+          <span className="tier-cell"><TierChip tier={g.tier} stays={g.total_stays} /></span>
         </span>
         <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-muted-foreground" style={{ fontSize: 'var(--t3)' }}>
-          <span className="tabular">{plural(stays, 'stay', 'stays')} · {plural(nights, 'night', 'nights')}</span>
+          <span className="flex flex-wrap items-center gap-x-3"><span className="tabular">{g.last_stay_date ? formatDate(g.last_stay_date, 'long') : 'No stay yet'}</span><span className="tabular">{plural(stays, 'stay', 'stays')} · {plural(nights, 'night', 'nights')}</span></span>
           <span className="inline-flex items-center gap-1"><IdCard size={14} strokeWidth={1.75} aria-hidden />{idStatusWord(g)}</span>
         </span>
       </span>

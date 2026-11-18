@@ -32,8 +32,8 @@ export function buildDemoData(now: Date): DemoData {
   const calendar: Rows = reservations.map((r, i) => ({ id: U(121 + i), uid: `demo-uid-${i}`, source: 'airbnb', checkin_date: r.checkin_date, checkout_date: r.checkout_date, guest_name: r.guest_name, status: 'confirmed', linked_reservation_id: r.id, synced_at: iso(-HOUR), raw_summary: 'Reserved' }))
     .concat([{ id: U(130), uid: 'demo-block', source: 'airbnb', checkin_date: day(14), checkout_date: day(16), guest_name: null, status: 'blocked', linked_reservation_id: null, synced_at: iso(-HOUR), raw_summary: 'Not available' }]);
   const guests: Rows = [1, 2, 3, 4, 5].map((n) => ({
-    id: U(n), property_id: DEMO_PROPERTY_ID, name: ['Demo Guest One', 'Demo Guest Two', 'Demo Guest Three', 'Demo Guest Four', 'Demo Guest Five'][n - 1], phone: `+63 900 000 000${n}`, email: `demo.${n}@example.invalid`, source: n < 4 ? 'airbnb' : 'direct', tier: n === 3 ? 'returning' : null,
-    total_stays: n === 3 ? 2 : 1, total_nights_stayed: 3, first_stay_date: day(-12 + n), last_stay_date: day(-12 + n), is_active: true, created_at: iso(-30 * DAY), updated_at: iso(-DAY), notes: null,
+    id: U(n), property_id: DEMO_PROPERTY_ID, name: ['Demo Guest One', 'Demo Guest Two', 'Demo Guest Three', 'Demo Guest Four', 'Demo Guest Five'][n - 1], phone: `+63 900 000 000${n}`, email: `demo.${n}@example.invalid`, source: n < 4 ? 'airbnb' : 'direct', tier: n === 3 ? 'returning' : n === 4 ? 'regular' : n === 5 ? 'vip' : null,
+    total_stays: n === 3 ? 2 : n === 4 ? 5 : n === 5 ? 12 : 1, total_nights_stayed: 3, first_stay_date: day(-12 + n), last_stay_date: day(-12 + n), is_active: true, created_at: iso(-30 * DAY), updated_at: iso(-DAY), notes: null,
     guest_profile_details: { id_on_file: n < 3, birthday: n === 2 ? day(9).replace(/^\d{4}/, '1990') : null, contact_number: `+63 900 000 000${n}` },
   }));
   const details: Rows = guests.map((g, i) => ({ guest_id: g.id, display_name: g.name, preferred_channel: 'messenger', language: 'en', messenger_psid: null, messenger_link: null, stay_preferences: i === 0 ? 'Quiet room, late check-in' : null, tags: [], vip: false, vip_reason: null, contact_provenance: {}, updated_at: iso(-DAY), version: 1, contact_number: (g.guest_profile_details as { contact_number: string }).contact_number, birthday: (g.guest_profile_details as { birthday: string | null }).birthday, address: null, airbnb_profile_id: null, id_on_file: (g.guest_profile_details as { id_on_file: boolean }).id_on_file, id_type: null, id_number: null, id_drive_url: null, id_verified_at: null }));
@@ -193,7 +193,15 @@ export function buildDemoData(now: Date): DemoData {
       get_data_integrity_report: () => ({ ok: true, checks: [] }),
       get_inventory_catalogue_v1: () => catalogue,
       get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
-      get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } }] }),
+      get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103), uid: 'demo-uid-2' } },
+        { kind: 'stay', at: iso(-30 * DAY), source: 'airbnb', body: { code: 'HMDEMO0002', checkin: day(-40), checkout: day(-37), nights: 3, status: 'completed', stayKind: 'airbnb', id: U(102), uid: 'demo-uid-1' } },
+        { kind: 'stay', at: iso(-60 * DAY), source: 'direct', body: { code: 'HMDEMO0001', checkin: day(-70), checkout: day(-67), nights: 3, status: 'completed', stayKind: 'direct', id: U(101), uid: 'demo-uid-0' } },
+        { kind: 'stay', at: iso(-90 * DAY), source: 'airbnb', body: { code: 'HMDEMO0000', checkin: day(-100), checkout: day(-98), nights: 2, status: 'completed', stayKind: 'airbnb', id: U(100), uid: 'demo-uid-9' } }] }),
+      admin_stay_staying_v1: () => [
+        { stay_uid: 'demo-uid-2', names: null, source: null, suggestion: 'Demo Guest Three, Demo Companion', version: 1 },
+        { stay_uid: 'demo-uid-1', names: 'Demo Guest Two + 1', source: 'staff', suggestion: null, version: 2 },
+        { stay_uid: 'demo-uid-0', names: 'Demo Guest One, Demo Companion', source: 'admin', suggestion: null, version: 3 },
+      ],
       list_guest_companions_v1: (a) => companions.filter((c) => c.guest_id === a.p_guest_id),
       save_guest_companion_v1: (a) => ({ ok: true, id: String(a.p_companion_id ?? 'demo-companion'), version: 2 }),
       staff_inquiry_payments_v1: () => [],

@@ -76,6 +76,9 @@
   --t1: 2rem; --t2: 1.0625rem; --t3: .9375rem; --t4: .8125rem; /* root defaults; PageBand's FLUID class swaps in the cqi clamps on an inline-size container */
   --band-a: #F6E7C4; --band-b: var(--v5-bg); --band-mark: .16;
   --tile-gold: #FBEFD2; --tile-gold-fg: #7A4E00; --tile-elec: #FDEBD0; --tile-elec-fg: #A85600; --tile-water: #DDF0F8; --tile-water-fg: #0B7FB0; --tile-ok: #DFF5E3; --tile-ok-fg: #1E7A34;
+  /* s119 lane A: v4 tier chip and name tokens (mockup-staff-staying-v4) */
+  --t1-bg: rgba(70,80,96,.09); --t1-fg: #465060; --t1-edge: none; --t2-bg: rgba(27,140,116,.12); --t2-fg: #0B4F44; --t2-edge: inset 0 0 0 1px rgba(27,140,116,.28); --t3-bg: rgba(181,142,95,.15); --t3-fg: #6E4F22; --t3-edge: inset 0 0 0 1px rgba(181,142,95,.40); --t4-bg: rgba(215,179,119,.22); --t4-fg: #4F3205; --t4-edge: inset 0 0 0 1.5px rgba(154,116,50,.62); --hc-bg: #FFF;
+  --nm3: #7A5418; --nm4a: #7A5A1E; --nm4b: #8A6614; --nm4c: #6E5018; --glow: rgba(215,179,119,.22);
 }
 
 /* Only what has no v5 token differs by theme here; every var(--v5-*) above already follows .dark. */
@@ -94,6 +97,8 @@
   /* s119 lane G dark values (see the :root block above) */
   --band-a: #3A2E14; --band-mark: .22;
   --tile-gold: #3A2E14; --tile-gold-fg: #F2C96B; --tile-elec: #3D2A10; --tile-elec-fg: #FFB340; --tile-water: #10303F; --tile-water-fg: #64D2FF; --tile-ok: #10301A; --tile-ok-fg: #30D158;
+  --t1-bg: rgba(201,211,222,.09); --t1-fg: #C9D3DE; --t1-edge: none; --t2-bg: rgba(79,195,168,.13); --t2-fg: #D5F5EC; --t2-edge: inset 0 0 0 1px rgba(79,195,168,.28); --t3-bg: rgba(215,179,119,.12); --t3-fg: #E4C98F; --t3-edge: inset 0 0 0 1px rgba(215,179,119,.26); --t4-bg: rgba(215,179,119,.20); --t4-fg: #F3D99A; --t4-edge: inset 0 0 0 1.5px rgba(215,179,119,.70); --hc-bg: #000;
+  --nm3: #D9B877; --nm4a: #E9CC8C; --nm4b: #F5DDA0; --nm4c: #D9B66B; --glow: rgba(215,179,119,.28);
 }
 
 @theme inline {
@@ -350,3 +355,32 @@ body:has([data-embed]) { font-family: var(--v5-font-ui); font-size: var(--v5-t-b
 .D_filters-sheet [data-slot="select-trigger"], .D_filters-sheet label { min-height: 44px; }
 .D_cards a:focus-visible, .D_cards button:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; border-radius: 12px; }
 .D_filters-content > button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; top: 0.5rem; right: 0.5rem; }
+
+/* s119 lane A: tier chip (one 32 px shape, no animation) and tier-graded guest names, from mockup-staff-staying-v4 */
+.tier-chip { --bgc: var(--t1-bg); --fgc: var(--t1-fg); --edge: var(--t1-edge); display: inline-flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%; min-height: 2rem; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--bgc); color: var(--fgc); box-shadow: var(--edge); font-size: .9375rem; line-height: 1.2; font-weight: 500; white-space: nowrap; }
+.tier-chip[data-tier="returning"] { --bgc: var(--t2-bg); --fgc: var(--t2-fg); --edge: var(--t2-edge); font-weight: 600; }
+.tier-chip[data-tier="regular"] { --bgc: var(--t3-bg); --fgc: var(--t3-fg); --edge: var(--t3-edge); font-weight: 600; }
+.tier-chip[data-tier="vip"] { --bgc: var(--t4-bg); --fgc: var(--t4-fg); --edge: var(--t4-edge); font-weight: 700; }
+.tier-chip[data-tier="vip"] svg { fill: currentColor; fill-opacity: .9; }
+.tier-name[data-tier="regular"] { color: var(--nm3); }
+.tier-name[data-tier="vip"] { display: inline-block; color: var(--nm4a); }
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .tier-name[data-tier="vip"] { background: linear-gradient(90deg, var(--nm4a), var(--nm4b), var(--nm4c)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 6px var(--glow)); }
+}
+@media (prefers-contrast: more) {
+  .tier-chip { background: var(--hc-bg) !important; box-shadow: inset 0 0 0 2px currentColor !important; }
+  .tier-name[data-tier="regular"], .tier-name[data-tier="vip"] { color: var(--foreground); background: none; -webkit-text-fill-color: currentColor; filter: none; }
+}
+@media (forced-colors: active) {
+  .tier-chip { border: 1px solid CanvasText; }
+  .tier-name[data-tier="regular"], .tier-name[data-tier="vip"] { color: CanvasText; background: none; -webkit-text-fill-color: currentColor; filter: none; }
+}
+/* guest list rows: chip in a fixed 10.5 rem column so every chip starts on the same x; under 480 px it sits right after the name */
+.tier-cell { width: 10.5rem; flex: none; display: flex; }
+.tier-line { display: flex; align-items: center; gap: 8px 16px; min-width: 0; }
+.tier-line > .tier-nm { flex: 1 1 0; min-width: 0; }
+@media (max-width: 480px) {
+  .tier-cell { width: auto; }
+  .tier-line { gap: 8px; }
+  .tier-line > .tier-nm { flex: 0 1 auto; }
+}
