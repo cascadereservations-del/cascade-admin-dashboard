@@ -69,7 +69,7 @@ it('card: guest average against the house, badge, hint under 3 nights, first-nam
     st({ sessionId: 'b', guest: 'Bravo', nights: 2, kwh: 20, m3: 0.4 }),
     st({ sessionId: 'c', guest: 'Charlie', nights: 2, kwh: 20, m3: 0.4 }),
   ];
-  wrap(<GuestUtilitiesCard propertyId="p" guestName="Alpha Santos" />);
+  wrap(<GuestUtilitiesCard propertyId="p" guestName="Alpha Demo" />);
   expect(await screen.findByText(/Average across 1 stay, 1 night/)).toBeInTheDocument();
   expect(screen.getByText(/Under 3 nights, so read it as a hint/)).toBeInTheDocument();
   expect(screen.getByText(/another guest with the same first name may be included/)).toBeInTheDocument();
