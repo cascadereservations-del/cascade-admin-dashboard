@@ -12,8 +12,8 @@ const counted = (n: number, one: string, many: string) => `${n} ${n === 1 ? one 
 
 export type UsageState = 'baseline' | 'learning' | 'measured';
 // A movement-controlled item is measured from its ledger, so it carries no learning pill, turnover or rate (the server may still send the keys).
-export const usageStateOf = (i: Pick<Item, 'consumable' | 'usageState' | 'movementControlled'>): UsageState | null =>
-  i.consumable && !i.movementControlled && (i.usageState === 'baseline' || i.usageState === 'learning' || i.usageState === 'measured') ? i.usageState : null;
+export const usageStateOf = (i: Pick<Item, 'consumable' | 'active' | 'usageState' | 'movementControlled'>): UsageState | null =>
+  i.consumable && i.active && !i.movementControlled && (i.usageState === 'baseline' || i.usageState === 'learning' || i.usageState === 'measured') ? i.usageState : null;
 
 /** `uses 2.1 per turnover`, or null when there is no rate. */
 export function usesText(i: Item): string | null {
@@ -30,8 +30,9 @@ export function turnoversText(i: Item): string | null {
   return `~${counted(Math.round(qty / rate), 'turnover', 'turnovers')}`;
 }
 
-/** An active consumable that is not on the ledger: a count keeps it in usage learning, it does not move to the ledger. */
-export const staysLearning = (i: Pick<Item, 'consumable' | 'active' | 'movementControlled'>) => i.consumable && i.active && !i.movementControlled;
+/** An active consumable that is not on the ledger: a count keeps it in usage learning, it does not move to the ledger.
+ *  It also needs a usage state: until the server release ships (one combined release) the catalogue has no usage keys and the old wording stays. */
+export const staysLearning = (i: Pick<Item, 'consumable' | 'active' | 'movementControlled' | 'usageState'>) => i.consumable && i.active && !i.movementControlled && i.usageState != null;
 
 /** The state the list pill shows. A baseline with no baseline figure shows nothing, so `baseline · research` is never an empty claim. */
 export function pillState(i: Item): UsageState | null {

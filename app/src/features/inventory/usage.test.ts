@@ -35,10 +35,23 @@ describe('pill wording', () => {
     expect(panelUsage(c)).toBeNull();
   });
   it('an active consumable off the ledger stays in learning; a controlled, inactive or durable item does not', () => {
-    expect(staysLearning(item({}))).toBe(true);
-    expect(staysLearning(item({ movementControlled: true }))).toBe(false);
-    expect(staysLearning(item({ active: false }))).toBe(false);
-    expect(staysLearning(item({ consumable: false }))).toBe(false);
+    const l = { usageState: 'learning' as const };
+    expect(staysLearning(item(l))).toBe(true);
+    expect(staysLearning(item({ ...l, movementControlled: true }))).toBe(false);
+    expect(staysLearning(item({ ...l, active: false }))).toBe(false);
+    expect(staysLearning(item({ ...l, consumable: false }))).toBe(false);
+  });
+  it('before the server release (no usage keys) nothing stays in learning, so the old wording shows', () => {
+    expect(staysLearning(item({}))).toBe(false);
+    expect(staysLearning(item({ usageState: null }))).toBe(false);
+  });
+  it('an inactive consumable has no usage state, pill, rate, turnovers or panel line', () => {
+    const c = item({ active: false, usageState: 'measured', usageCounts: 3, usagePerTurnover: '2', usageBaseline: '1', qty: '10' });
+    expect(usageStateOf(c)).toBeNull();
+    expect(pillText(c)).toBeNull();
+    expect(usesText(c)).toBeNull();
+    expect(turnoversText(c)).toBeNull();
+    expect(panelUsage(c)).toBeNull();
   });
   it('an unknown count is left out, not shown as 0', () => {
     expect(pillText(item({ usageState: 'measured', usageCounts: null }))).toBe('measured');

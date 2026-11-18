@@ -33,7 +33,11 @@ export default function CountsPage() {
       const item = query.data?.items.find((i) => i.id === id);
       toast.success(item && staysLearning(item) ? `Count recorded: ${r.after}` : `Baseline set to ${r.after}`, { description: `Variance ${r.variance}` });
       delete keys[id];
+      // A confirmed row is spent: clear it so a second tap cannot write a new count (that would end a refill prompt). A failure keeps what was typed.
+      setCounts(({ [id]: _c, ...rest }) => rest);
+      setNotes(({ [id]: _n, ...rest }) => rest);
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
+      void qc.invalidateQueries({ queryKey: ['movements'] });
       void qc.invalidateQueries({ queryKey: ['usage-kpi'] }); // a count can start or end a refill prompt
     },
     onError: (e) => toast.error(toAppError(e).message),

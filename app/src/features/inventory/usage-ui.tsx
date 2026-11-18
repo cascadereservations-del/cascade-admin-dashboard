@@ -72,7 +72,7 @@ export function UsageLearningCard() {
 type Waiting = UsageKpi['waitingForRefill']['items'][number];
 
 /** One prompt. Yes opens one field: how much was added. It only corrects the usage record; stock and purchases are never written. */
-function RestockPrompt({ w, unit }: { w: Waiting; unit?: string }) {
+function RestockPrompt({ w, unit, qty: stock, onDone }: { w: Waiting; unit?: string; qty?: string | number | null; onDone: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState('');
@@ -81,21 +81,24 @@ function RestockPrompt({ w, unit }: { w: Waiting; unit?: string }) {
   useEffect(() => { if (open) field.current?.focus(); }, [open]);
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['usage-kpi'] }); void qc.invalidateQueries({ queryKey: ['catalogue'] }); };
   const save = useMutation({
-    mutationFn: () => recordMissedRefill(w.id, qty.trim()),
+    mutationFn: () => recordMissedRefill(w.id, cleaned),
     onSuccess: (r) => {
-      if (r.ok) { toast.success('Refill recorded'); setNotice(null); refresh(); return; } // a replay is a success too
+      if (r.ok) { toast.success('Refill recorded'); setNotice(null); onDone(); refresh(); return; } // a replay is a success too
       if (r.reason === 'too_small') { setNotice(`At least ${trimNumber(r.minimum) ?? '—'} must have been added to reach this count.`); return; }
-      setNotice(r.reason === 'not_waiting' ? 'This was already settled.' : 'This item is not in usage learning.');
+      // The refresh drops this card, so the message goes to a toast that outlives it.
+      toast.info(r.reason === 'not_waiting' ? 'This was already settled.' : 'This item is not in usage learning.');
       refresh();
     },
     onError: (e) => setNotice(toAppError(e).message),
   });
   const since = formatDay(w.since);
-  const n = Number(qty);
-  const valid = qty.trim() !== '' && Number.isFinite(n) && n > 0;
+  const cleaned = qty.replace(/,/g, '').trim();
+  const valid = /^\d+(\.\d{1,2})?$/.test(cleaned) && Number(cleaned) > 0;
+  const bad = cleaned !== '' && !valid;
+  const stockNow = trimNumber(stock ?? w.qtyNow) ?? '—'; // the catalogue quantity; the count-time figure is only the fallback while it loads
   return (
     <div className="rounded-lg border border-warn bg-card p-3">
-      <p className="font-medium">{w.name} went {trimNumber(w.qtyBefore) ?? '—'} → {trimNumber(w.qtyNow) ?? '—'}</p>
+      <h2 id={`restock-heading-${w.id}`} tabIndex={-1} className="text-base font-medium outline-none">{w.name} went {trimNumber(w.qtyBefore) ?? '—'} → {trimNumber(w.qtyNow) ?? '—'}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">Was stock added{since ? ` since ${since}` : ''}? Without it this interval is skipped so usage stays accurate.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button className="min-h-11" aria-expanded={open} onClick={() => setOpen(true)}>Yes, record refill</Button>
@@ -105,11 +108,12 @@ function RestockPrompt({ w, unit }: { w: Waiting; unit?: string }) {
         <form className="mt-3 space-y-2" onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }}>
           <Label htmlFor={`refill-${w.id}`}>How much was added?</Label>
           <div className="flex items-center gap-2">
-            <Input ref={field} id={`refill-${w.id}`} inputMode="decimal" className="min-h-11 w-32 text-base" value={qty} aria-describedby={`refill-help-${w.id}`} onChange={(e) => { setQty(e.target.value); setNotice(null); }} />
+            <Input ref={field} id={`refill-${w.id}`} inputMode="decimal" className="min-h-11 w-32 text-base" value={qty} aria-invalid={bad || undefined} aria-describedby={bad ? `refill-bad-${w.id} refill-help-${w.id}` : `refill-help-${w.id}`} onChange={(e) => { setQty(e.target.value); setNotice(null); }} />
             {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
             <Button type="submit" className="min-h-11" disabled={!valid || save.isPending}>Save refill</Button>
           </div>
-          <p id={`refill-help-${w.id}`} className="text-xs text-muted-foreground">This corrects the usage record. Stock stays at {trimNumber(w.qtyNow) ?? '—'}.</p>
+          {bad && <p id={`refill-bad-${w.id}`} className="text-sm text-destructive">Enter a number, like 12 or 12.5.</p>}
+          <p id={`refill-help-${w.id}`} className="text-xs text-muted-foreground">This corrects the usage record. Stock stays at {stockNow}.</p>
           {notice && <p role="status" className="text-sm">{notice}</p>}
         </form>
       )}
@@ -118,7 +122,14 @@ function RestockPrompt({ w, unit }: { w: Waiting; unit?: string }) {
 }
 
 /** One card per item whose last count was higher than expected. Yes opens a field in the card; No goes to the counts page, where the item stays in learning. */
-export function RestockPrompts({ items, unitOf }: { items: Waiting[]; unitOf?: (id: string) => string | undefined }) {
+export function RestockPrompts({ items, unitOf, qtyOf }: { items: Waiting[]; unitOf?: (id: string) => string | undefined; qtyOf?: (id: string) => string | number | null | undefined }) {
   if (items.length === 0) return null;
-  return <div className="mb-4 space-y-2">{items.map((w) => <RestockPrompt key={w.id} w={w} unit={unitOf?.(w.id)} />)}</div>;
+  // After a saved refill this card goes; focus moves now to a heading that stays: the next prompt's, else the page heading (never body).
+  const focusAfter = (i: number) => () => {
+    const next = items[i + 1];
+    const el = (next && document.getElementById(`restock-heading-${next.id}`)) || document.querySelector<HTMLElement>('h1');
+    if (el && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+    el?.focus();
+  };
+  return <div className="mb-4 space-y-2">{items.map((w, i) => <RestockPrompt key={w.id} w={w} unit={unitOf?.(w.id)} qty={qtyOf?.(w.id)} onDone={focusAfter(i)} />)}</div>;
 }

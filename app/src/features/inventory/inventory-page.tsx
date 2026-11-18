@@ -106,7 +106,8 @@ export default function InventoryPage() {
   const doReceipt = useMutation({
     mutationFn: () => recordReceipt(selected!.id, receipt.packs, receipt.unitCost || null, receipt.supplier || null, receipt.date, null, rKey),
     onSuccess: (r) => {
-      toast.success(`Received ${r.unitsAdded} ${selected?.unit}`, { description: `${r.controlled ? 'Movement' : 'Legacy quantity update'} recorded ${formatDateTime(new Date().toISOString())}` });
+      const what = r.controlled ? 'Movement recorded' : selected && staysLearning(selected) ? 'Stock updated' : 'Legacy quantity update recorded';
+      toast.success(`Received ${r.unitsAdded} ${selected?.unit}`, { description: `${what} ${formatDateTime(new Date().toISOString())}` });
       setReceipt({ packs: '', unitCost: '', supplier: '', date: receipt.date });
       setRKey(newIdempotencyKey('receipt'));
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
@@ -174,7 +175,7 @@ export default function InventoryPage() {
       <div className="print:hidden">
         <PageHeader title="Inventory" description="Consumables and durable items. Advisory reorder estimates never place orders." actions={<><Button variant="outline" onClick={() => setPrintOpen(true)} disabled={!query.data}><Printer className="size-4" aria-hidden /> Print</Button><Button variant="outline" asChild><Link to="/inventory/purchases">Purchases</Link></Button>{canManage && <Button variant="outline" asChild><Link to="/inventory/counts">Counts</Link></Button>}</>} />
         {canManage && usageKpi.isError && <p className="mb-4 text-sm text-muted-foreground">Refill prompts could not be loaded right now.</p>}
-        {canManage && <RestockPrompts items={usageKpi.data?.waitingForRefill.items ?? []} unitOf={(id) => query.data?.items.find((i) => i.id === id)?.unit} />}
+        {canManage && <RestockPrompts items={usageKpi.data?.waitingForRefill.items ?? []} unitOf={(id) => query.data?.items.find((i) => i.id === id)?.unit} qtyOf={(id) => query.data?.items.find((i) => i.id === id)?.qty} />}
         <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Item name" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
           <FilterSelect label="Attention" value={state.attention || undefined} onChange={(v) => set({ attention: v ?? '' })} options={[{ value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }, { value: 'inactive', label: 'Inactive' }, { value: 'attention', label: 'Attention required' }]} />
           <FilterSelect label="Category" value={state.category || undefined} onChange={(v) => set({ category: v ?? '' })} options={[...new Set((query.data?.items ?? []).map((i) => i.category))].sort().map((c) => ({ value: c, label: c }))} />

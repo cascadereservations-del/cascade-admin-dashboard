@@ -8,13 +8,19 @@ import type { Item, UsageKpi } from './api';
 const h = vi.hoisted(() => ({
   items: [] as unknown[], kpi: null as unknown, kpiFail: false, kpiCalls: 0, can: true,
   receipts: [] as unknown[][], refill: [] as unknown[][], refillAnswer: { ok: true } as unknown,
+  catalogueCalls: 0, refillMode: 'answer' as 'answer' | 'reject' | 'hold', release: null as null | (() => void),
 }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => h.can } }) }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('./api', () => ({
-  fetchCatalogue: () => Promise.resolve({ items: h.items, sourceAsOf: null, forecastNote: 'Demo note.', turnoverRatePerDay: 0.2 }),
+  fetchCatalogue: () => { h.catalogueCalls += 1; return Promise.resolve({ items: h.items, sourceAsOf: null, forecastNote: 'Demo note.', turnoverRatePerDay: 0.2 }); },
   fetchUsageKpi: () => { h.kpiCalls += 1; return h.kpiFail ? Promise.reject(new Error('boom')) : Promise.resolve(h.kpi); },
-  recordMissedRefill: (...a: unknown[]) => { h.refill.push(a); return Promise.resolve(h.refillAnswer); },
+  recordMissedRefill: (...a: unknown[]) => {
+    h.refill.push(a);
+    if (h.refillMode === 'reject') return Promise.reject(new Error('Refill failed on the server'));
+    if (h.refillMode === 'hold') return new Promise((res) => { h.release = () => res(h.refillAnswer); });
+    return Promise.resolve(h.refillAnswer);
+  },
   fetchMovements: () => Promise.resolve({ rows: [], total: 0 }),
   fetchItemPurchases: () => Promise.resolve({ rows: [], total: 0 }),
   recordAdjustment: vi.fn(),
@@ -41,8 +47,8 @@ const kpi = (): UsageKpi => ({ itemsTotal: 5, itemsMeasured: 1, itemsLearning: 2
 
 const page = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/inventory']}><InventoryPage /></MemoryRouter></QueryClientProvider>);
 beforeEach(() => {
-  h.items = catalogue(); h.kpi = kpi(); h.kpiFail = false; h.kpiCalls = 0; h.can = true; h.receipts.length = 0; h.refill.length = 0; h.refillAnswer = { ok: true };
-  vi.mocked(toast.success).mockClear();
+  h.items = catalogue(); h.kpi = kpi(); h.kpiFail = false; h.kpiCalls = 0; h.can = true; h.receipts.length = 0; h.refill.length = 0; h.refillAnswer = { ok: true }; h.catalogueCalls = 0; h.refillMode = 'answer'; h.release = null;
+  vi.mocked(toast.success).mockClear(); vi.mocked(toast.info).mockClear();
 });
 afterEach(cleanup);
 
@@ -114,7 +120,7 @@ describe('restock prompt', () => {
     const field = await openPrompt();
     expect(field).toHaveValue('');
     expect(field).toHaveFocus();
-    expect(screen.getByText('This corrects the usage record. Stock stays at 8.')).toBeInTheDocument();
+    expect(screen.getByText('This corrects the usage record. Stock stays at 2.')).toBeInTheDocument(); // the catalogue quantity, not the KPI qtyNow (8)
     expect(screen.getAllByText('pcs').length).toBeGreaterThan(0); // the item's base unit sits beside the field
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText('Receive stock')).toBeNull();
@@ -148,14 +154,112 @@ describe('restock prompt', () => {
     expect(screen.getByLabelText('How much was added?')).toHaveValue('2');
     expect(toast.success).not.toHaveBeenCalled();
   });
-  it('not_waiting says it was settled and refreshes', async () => {
+  it('not_waiting is a toast that outlives the card, and the card goes when the KPI drops the item', async () => {
     h.refillAnswer = { ok: false, reason: 'not_waiting' };
     page();
     fireEvent.change(await openPrompt(), { target: { value: '30' } });
     const before = h.kpiCalls;
+    h.kpi = { ...kpi(), waitingForRefill: { count: 0, items: [] } };
     saveRefill();
-    expect(await screen.findByText('This was already settled.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('This was already settled.'));
     await waitFor(() => expect(h.kpiCalls).toBeGreaterThan(before));
+    await waitFor(() => expect(screen.queryByText('Demo soap went 2 → 8')).toBeNull());
+    expect(toast.info).toHaveBeenCalledTimes(1);
+  });
+  it('not_learning is a toast too', async () => {
+    h.refillAnswer = { ok: false, reason: 'not_learning' };
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '30' } });
+    h.kpi = { ...kpi(), waitingForRefill: { count: 0, items: [] } };
+    saveRefill();
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('This item is not in usage learning.'));
+    await waitFor(() => expect(screen.queryByText('Demo soap went 2 → 8')).toBeNull());
+  });
+  it('Stock stays at shows the real catalogue stock, not the count-time quantity', async () => {
+    h.items = catalogue().map((i) => (i.id === 'b' ? { ...i, qty: '18' } : i));
+    page();
+    await openPrompt();
+    expect(screen.getByText('This corrects the usage record. Stock stays at 18.')).toBeInTheDocument();
+  });
+  it('a successful refill refetches the catalogue', async () => {
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '30' } });
+    await waitFor(() => expect(h.catalogueCalls).toBeGreaterThan(0));
+    const before = h.catalogueCalls;
+    saveRefill();
+    await waitFor(() => expect(h.catalogueCalls).toBeGreaterThan(before));
+  });
+  it('Save stays disabled at 0 and at 0.00', async () => {
+    page();
+    const field = await openPrompt();
+    for (const v of ['0', '0.00']) {
+      fireEvent.change(field, { target: { value: v } });
+      expect(screen.getByRole('button', { name: 'Save refill' })).toBeDisabled();
+    }
+    expect(h.refill).toHaveLength(0);
+  });
+  it('Save is disabled while the call is pending, so a second tap sends nothing', async () => {
+    h.refillMode = 'hold';
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '30' } });
+    saveRefill();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save refill' })).toBeDisabled());
+    saveRefill();
+    expect(h.refill).toHaveLength(1);
+    h.release!();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Refill recorded'));
+  });
+  it('a rejected call shows its message and keeps the field', async () => {
+    h.refillMode = 'reject';
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '30' } });
+    saveRefill();
+    expect(await screen.findByText('Refill failed on the server')).toBeInTheDocument();
+    expect(screen.getByLabelText('How much was added?')).toHaveValue('30');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+  it('commas are removed and the cleaned value is sent', async () => {
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '1,200.5' } });
+    saveRefill();
+    await waitFor(() => expect(h.refill).toEqual([['b', '1200.5']]));
+  });
+  it.each(['1e2', 'abc', '12.345', '-5', '1.2.3', '.5'])('%s is refused with the hint tied to the field, and Save stays off', async (bad) => {
+    page();
+    const field = await openPrompt();
+    fireEvent.change(field, { target: { value: bad } });
+    const hint = screen.getByText('Enter a number, like 12 or 12.5.');
+    expect(field.getAttribute('aria-describedby')!.split(' ')).toContain(hint.id);
+    expect(screen.getByRole('button', { name: 'Save refill' })).toBeDisabled();
+    expect(h.refill).toHaveLength(0);
+  });
+  it('a valid number shows no hint', async () => {
+    page();
+    fireEvent.change(await openPrompt(), { target: { value: '12.5' } });
+    expect(screen.queryByText('Enter a number, like 12 or 12.5.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save refill' })).toBeEnabled();
+  });
+  it('after a refill, focus goes to the next prompt heading, and to the Inventory heading when none is left', async () => {
+    h.kpi = { ...kpi(), waitingForRefill: { count: 2, items: [
+      { id: 'b', name: 'Demo soap', since: '2026-10-27T04:00:00Z', qtyBefore: '2', qtyNow: '8' },
+      { id: 'a', name: 'Demo detergent', since: '2026-10-27T04:00:00Z', qtyBefore: '9', qtyNow: '15' },
+    ] } };
+    page();
+    await screen.findByText('Demo detergent went 9 → 15');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Yes, record refill' })[0]!);
+    fireEvent.change(await screen.findByLabelText('How much was added?'), { target: { value: '30' } });
+    h.kpi = { ...kpi(), waitingForRefill: { count: 1, items: [{ id: 'a', name: 'Demo detergent', since: '2026-10-27T04:00:00Z', qtyBefore: '9', qtyNow: '15' }] } };
+    saveRefill();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Demo detergent went 9 → 15' })).toHaveFocus());
+    await waitFor(() => expect(screen.queryByText('Demo soap went 2 → 8')).toBeNull());
+    // the last prompt: the KPI drops it, focus lands on the page heading rather than body
+    h.kpi = { ...kpi(), waitingForRefill: { count: 0, items: [] } };
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, record refill' }));
+    fireEvent.change(await screen.findByLabelText('How much was added?'), { target: { value: '5' } });
+    saveRefill();
+    await waitFor(() => expect(screen.queryByText('Demo detergent went 9 → 15')).toBeNull());
+    expect(screen.getByRole('heading', { level: 1, name: 'Inventory' })).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
   });
   it('no prompt when the KPI function is missing, and the list still loads', async () => {
     h.kpi = null;
@@ -220,7 +324,36 @@ describe('wording for a consumable that stays in learning', () => {
     await screen.findByRole('button', { name: 'Demo soap' });
     expect(within(row('Demo soap')).getByText('learning')).toBeInTheDocument();
     expect(within(row('Demo mop')).getByText('legacy quantity')).toBeInTheDocument();
+    expect(within(row('Demo old')).getByText('legacy quantity')).toBeInTheDocument(); // no usage keys: the old wording until the server release
     expect(within(row('Demo ledger item')).getByText('movement ledger')).toBeInTheDocument();
+  });
+  it('an item with no usage keys keeps the old legacy wording', async () => {
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: 'Demo old' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Needs a baseline count first.')).toBeInTheDocument();
+  });
+  const receive = async (name: string) => {
+    fireEvent.click(await screen.findByRole('button', { name }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/^Packs/), { target: { value: '10' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record receipt' }));
+  };
+  it('a receipt on an item that stays in learning says Stock updated, never Legacy', async () => {
+    page();
+    await receive('Demo soap');
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const [, opts] = vi.mocked(toast.success).mock.calls[0] as [string, { description: string }];
+    expect(opts.description).toMatch(/^Stock updated/);
+    expect(opts.description).not.toMatch(/Legacy/);
+  });
+  it('a receipt on an item with no usage keys keeps the Legacy wording', async () => {
+    page();
+    await receive('Demo old');
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const [, opts] = vi.mocked(toast.success).mock.calls[0] as [string, { description: string }];
+    expect(opts.description).toMatch(/^Legacy quantity update recorded/);
   });
   it('a durable item keeps the old wording', async () => {
     page();
