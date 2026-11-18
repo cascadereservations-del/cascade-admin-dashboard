@@ -22,7 +22,7 @@ import { validateIdPhoto } from './local-records';
 import { GuestIdPanel, IdPhotoProvider, IdPhotoThumb, NoIdPhotoTile } from './id-photos';
 import { ID_TYPES, findSelfCompanion, guestIdStatus, otherCompanions, type GuestIdStatus } from './id-photo';
 import { TurnoverReport } from './turnover-report';
-import { PhotoSheet } from './photo-sheet.stub'; // lane P: change to './photo-sheet' on merge and delete the stub
+import { PhotoSheet } from './photo-sheet';
 import { autoReason } from './auto-reason';
 import { DISPLAY_NAME, FieldRow, GROUP_IDS, ID_TYPE, NOTES, PHONE, ProfileGroups, fieldValue, groupCounts, notesShown, phoneHint, useFieldSave } from './profile-groups';
 import { MergeSheet } from './merge-sheet';

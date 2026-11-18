@@ -21,7 +21,7 @@ vi.mock('./id-photos', () => ({
 vi.mock('./tier-card', () => ({ TierCard: () => null }));
 vi.mock('./merge-sheet', () => ({ MergeSheet: () => null }));
 vi.mock('./follow-up-form', () => ({ FollowUpForm: () => null }));
-vi.mock('./photo-sheet.stub', () => ({ PhotoSheet: () => null }));
+vi.mock('./photo-sheet', () => ({ PhotoSheet: () => null }));
 
 beforeEach(() => vi.useRealTimers());
 afterEach(() => { cleanup(); vi.useRealTimers(); Object.values(api).forEach((m) => m.mockReset()); toastSuccess.mockReset(); toastError.mockReset(); });
