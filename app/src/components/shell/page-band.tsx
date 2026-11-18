@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 // s119 lane G, liquid-glass layer (docs/s118 DESIGN-liquid-glass.md section 0b, mockup-apple-glass-v3.html).
 // Content layer: the warm header band. Functional layer: GlassSheet, the only glass here (blur 12 px, no saturate).
 
-/** Fluid type: an inline-size container that swaps --t1..--t4 for the mockup's cqi clamps (root defaults live in v5-tokens.css). */
+/** Fluid type: an inline-size container that swaps --t1..--t4 for the mockup's cqi clamps (root defaults live in index.css). */
 export const FLUID = '[container-type:inline-size] [--t1:clamp(1.75rem,.296rem_+_7.27cqi,2.25rem)] [--t2:clamp(1rem,.636rem_+_1.82cqi,1.125rem)] [--t3:clamp(.875rem,.511rem_+_1.82cqi,1rem)] [--t4:clamp(.8125rem,.386rem_+_1.82cqi,.875rem)]';
 
 // s119 lane G: under 640 px lists become row cards and sheets become bottom sheets. jsdom has no matchMedia, so this is false there.

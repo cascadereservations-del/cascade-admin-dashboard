@@ -4,9 +4,12 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { GlassSheet, PageBand } from './page-band';
 
-const css = readFileSync(resolve(__dirname, '../../v5-tokens.css'), 'utf8').split('\r\n').join('\n');
-const light = css.slice(css.indexOf(':root {'), css.indexOf('\n}', css.indexOf(':root {')));
-const dark = css.slice(css.indexOf('.dark {'), css.indexOf('\n}', css.indexOf('.dark {')));
+const read = (f: string) => readFileSync(resolve(__dirname, f), 'utf8').split('\r\n').join('\n');
+const block = (css: string, sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf('\n}', css.indexOf(`${sel} {`)));
+// the v5 tokens come from the generated v5-tokens.css; the s119 band/tile/type tokens live in index.css
+const [v5, idx] = [read('../../v5-tokens.css'), read('../../index.css')];
+const light = `${block(v5, ':root')}\n${block(idx, ':root')}`;
+const dark = `${block(v5, '.dark')}\n${block(idx, '.dark')}`;
 const hex = (block: string, name: string) => {
   const m = new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(block);
   if (!m) throw new Error(`${name} missing`);
