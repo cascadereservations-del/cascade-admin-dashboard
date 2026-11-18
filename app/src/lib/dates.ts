@@ -105,6 +105,13 @@ export function formatDateTime(ts: string | null | undefined): string {
   return format(new TZDate(new Date(ts), BUSINESS_TIMEZONE), 'd MMM yyyy, HH:mm');
 }
 
+/** "3 Nov" in Manila time from a timestamp; null when there is none or it does not parse. */
+export function formatDay(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? null : format(new TZDate(d, BUSINESS_TIMEZONE), 'd MMM');
+}
+
 export function relativeDay(d: IsoDate, today: IsoDate = todayManila()): string {
   if (d === today) return 'Today';
   if (d === addIsoDays(today, 1)) return 'Tomorrow';

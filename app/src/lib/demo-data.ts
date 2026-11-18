@@ -96,10 +96,21 @@ export function buildDemoData(now: Date): DemoData {
   const shopping: Rows = [
     { id: U(521), property_id: DEMO_PROPERTY_ID, item_id: U(502), item_name: 'Coffee sachets', quantity: '2', purchase_unit: 'box', estimated_cost: '240.00', reason: 'Low stock', status: 'proposed', proposed_at: iso(-DAY), approved_at: null, approval_note: null },
   ];
+  const usageBase = { category: 'consumable', consumable: true, active: true, status: null, unitCost: '25.00', purchaseUnit: null, unitsPerPurchase: null, photo: null, movementControlled: false, baselineNote: null, usage30d: null, usageDays: 0, avgDaily: null, coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null };
+  const usageKpi = {
+    ok: true, asOf: iso(0), itemsTotal: 5, itemsMeasured: 1, itemsLearning: 2, medianForecastError: 0.18, forecastSamples: 4,
+    underFourteenDays: { count: 1, items: [{ id: U(503), name: 'Laundry detergent', daysLeft: 11.9 }] },
+    waitingForRefill: { count: 1, items: [{ id: U(506), name: 'Tea sachets', since: iso(-9 * DAY), qtyBefore: '17', qtyNow: '51' }] },
+  };
   const catalogue = {
     items: [
       { id: U(501), name: 'Bath towels', category: 'linen', unit: 'pcs', qty: '14', reorderBelow: '8', consumable: false, active: true, status: null, unitCost: '180.00', purchaseUnit: null, unitsPerPurchase: null, photo: null, movementControlled: true, baselineNote: null, usage30d: '0', usageDays: 30, avgDaily: '0', coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null },
       { id: U(502), name: 'Coffee sachets', category: 'consumable', unit: 'pcs', qty: '6', reorderBelow: '20', consumable: true, active: true, status: null, unitCost: '4.00', purchaseUnit: 'box', unitsPerPurchase: '30', photo: null, movementControlled: true, baselineNote: null, usage30d: '24', usageDays: 30, avgDaily: '0.8', coverageDays: '7.5', attention: true, estDailyUsage: null, estCoverageDays: null },
+      // s120 usage learning, invented values: one item per state, plus one waiting for a recorded refill (the Coffee row above carries no usage keys, the layout before the SQL).
+      { ...usageBase, id: U(503), name: 'Laundry detergent', unit: 'sachets', qty: '5', reorderBelow: '4', usageState: 'measured', usagePerTurnover: '2.1', usageBaseline: '2', lastRefillAt: iso(-16 * DAY), lastRefillQty: '10', lastCountAt: iso(-DAY), usageCounts: 3 },
+      { ...usageBase, id: U(504), name: 'Hand soap', unit: 'bottles', qty: '2', reorderBelow: '1', usageState: 'learning', usagePerTurnover: '0.17', usageBaseline: '0.2', lastRefillAt: null, lastRefillQty: null, lastCountAt: iso(-3 * DAY), usageCounts: 1 },
+      { ...usageBase, id: U(505), name: 'Room spray', unit: 'cans', qty: '1', reorderBelow: '1', usageState: 'baseline', usagePerTurnover: '0.02', usageBaseline: '0.02', lastRefillAt: null, lastRefillQty: null, lastCountAt: null, usageCounts: 0 },
+      { ...usageBase, id: U(506), name: 'Tea sachets', unit: 'pcs', qty: '51', reorderBelow: '20', usageState: 'learning', usagePerTurnover: '3.5', usageBaseline: '3', lastRefillAt: null, lastRefillQty: null, lastCountAt: iso(-DAY), usageCounts: 2 },
     ],
     sourceAsOf: iso(-HOUR), forecastNote: 'Demo figures. Coverage is an estimate from recent use.', turnoverRatePerDay: 0.2,
   };
@@ -194,6 +205,7 @@ export function buildDemoData(now: Date): DemoData {
       run_health_checks_v1: () => ({ ranAt: iso(0), checks: [] }),
       get_data_integrity_report: () => ({ ok: true, checks: [] }),
       get_inventory_catalogue_v1: () => catalogue,
+      get_inventory_usage_kpi_v1: () => usageKpi,
       get_shopping_list_v1: () => ({ ok: true, rows: shopping }),
       get_guest_timeline_v1: (a) => ({ guestId: String(a.p_guest_id ?? ''), financeVisible: true, events: [{ kind: 'stay', at: iso(-9 * DAY), source: 'airbnb', body: { code: 'HMDEMO0003', checkin: day(-12), checkout: day(-9), nights: 3, status: 'completed', accommodationTotal: '11900.00', stayKind: 'airbnb', id: U(103) } },
         { kind: 'stay', at: iso(-30 * DAY), source: 'airbnb', body: { code: 'HMDEMO0002', checkin: day(-40), checkout: day(-37), nights: 3, status: 'completed', stayKind: 'airbnb', id: U(102) } },

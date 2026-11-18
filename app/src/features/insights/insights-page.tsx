@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import type { MetricResult } from '@/types/contracts';
 import { fetchDrilldown, fetchFutureStays, fetchMetrics, fetchUtilityMonths, isConsumptionReading } from './api';
 import { fetchCard } from '@/features/pricing/api';
+import { UsageLearningCard } from '@/features/inventory/usage-ui';
 
 // INS01/INS03/INS05: server-calculated hospitality metrics with an
 // equivalent-elapsed comparison period and deterministic plain-language
@@ -637,6 +638,7 @@ export default function InsightsPage() {
             <ForwardProjection fallbackAdr={numOrNaN(now.data?.metrics.adr?.value)} />
             <UtilitiesChart period={chartPeriod} toggles={toggles} />
             <ConsumptionEfficiency period={chartPeriod} toggles={toggles} />
+            <UsageLearningCard />
             <Section title="Definitions">
               <p className="text-sm text-muted-foreground">Definitions version {Object.values(d.metrics)[0]?.definitionVersion}. Nights use [check-in, checkout). Calendar blocks are never sold nights. Forecasts are not mixed into actuals. Full formulas are in docs/METRICS.md.</p>
             </Section>

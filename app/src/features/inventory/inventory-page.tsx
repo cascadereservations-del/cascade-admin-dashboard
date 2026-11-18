@@ -1,5 +1,5 @@
 import { ScrollRegion } from '@/components/data/scroll-region';
-import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -25,6 +25,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
+import { panelUsage, turnoversText, usageStateOf, usesText } from './usage';
+import { RefillNote, RestockPrompts, UsagePill, useUsageKpi } from './usage-ui';
 
 // s119 lane G: stock counts animate with NumberFlow (own chunk, loaded when an item opens; it honours reduced motion). The plain text
 // is both the fallback while the chunk loads and what a number that cannot be parsed shows.
@@ -42,6 +44,14 @@ function ItemSheet({ open, onOpenChange, title, description, children }: { open:
   return narrow
     ? <GlassSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</GlassSheet>
     : <DetailSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</DetailSheet>;
+}
+
+// Coverage as before; consumables with a usage state add `~N turnovers` and the pill under it. Others render exactly as they did.
+function CoverageCell({ item: r }: { item: Item }) {
+  const cov = r.coverageDays ? <span className="tabular">{formatNumber(r.coverageDays, 0)} days</span> : r.estCoverageDays ? <span className="tabular text-muted-foreground">~{formatNumber(r.estCoverageDays, 0)} days (estimated)</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>;
+  const turnovers = turnoversText(r);
+  if (!usageStateOf(r)) return cov;
+  return <div>{cov}<div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">{turnovers && <span className="tabular">{turnovers}</span>}<UsagePill item={r} /></div></div>;
 }
 
 // Plain HTML table for the print-only view (#PRINT01): no sorting, filtering
@@ -87,6 +97,17 @@ export default function InventoryPage() {
   const [rKey, setRKey] = useState(() => newIdempotencyKey('receipt'));
   const [aKey, setAKey] = useState(() => newIdempotencyKey('adjust'));
   const density = state.density === 'compact' ? 'compact' : 'comfortable';
+  // s120: the item whose receipt form was opened from a restock prompt, and the item that just got a receipt that way.
+  const usageKpi = useUsageKpi();
+  const [promptItem, setPromptItem] = useState<string | null>(null);
+  const [refillNote, setRefillNote] = useState<string | null>(null);
+  const panel = selected ? panelUsage(selected) : null;
+  // Opened from a restock prompt: bring the receipt form into view once the panel has mounted.
+  useEffect(() => {
+    if (!selected || promptItem !== selected.id) return;
+    const t = window.setTimeout(() => { const f = document.getElementById('r-packs'); f?.scrollIntoView?.({ block: 'center' }); f?.focus(); }, 150);
+    return () => window.clearTimeout(t);
+  }, [selected?.id, promptItem]); // eslint-disable-line react-hooks/exhaustive-deps
   const [printOpen, setPrintOpen] = useState(false);
   const [printSel, setPrintSel] = useState({ consumables: true, appliances: true, stores: true });
 
@@ -98,6 +119,8 @@ export default function InventoryPage() {
       setRKey(newIdempotencyKey('receipt'));
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
       void qc.invalidateQueries({ queryKey: ['movements'] });
+      void qc.invalidateQueries({ queryKey: ['usage-kpi'] });
+      if (selected && promptItem === selected.id) { setRefillNote(selected.id); setPromptItem(null); }
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
@@ -124,7 +147,7 @@ export default function InventoryPage() {
     },
   });
 
-  const nameCol = useMemo<ColumnDef<Item, unknown>>(() => ({ id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div></div> }), [set]);
+  const nameCol = useMemo<ColumnDef<Item, unknown>>(() => ({ id: 'name', header: 'Item', accessorFn: (r) => r.name, cell: ({ row }) => <div><button type="button" className="text-left font-medium hover:underline" onClick={() => set({ item: row.original.id })}>{row.original.name}</button><div className="text-xs text-muted-foreground">{row.original.category}{row.original.consumable ? ' · consumable' : ' · durable'}</div>{usesText(row.original) && <div className="text-xs text-muted-foreground">{usesText(row.original)}</div>}</div> }), [set]);
   const qtyCol = (header: string): ColumnDef<Item, unknown> => ({ id: 'qty', header, accessorFn: (r) => Number(r.qty), cell: ({ row }) => <span className="tabular">{formatNumber(row.original.qty, 2)} {row.original.unit}</span> });
   const controlCol: ColumnDef<Item, unknown> = { id: 'control', header: 'Stock control', accessorFn: (r) => r.movementControlled, cell: ({ row }) => <StatusBadge tone={row.original.movementControlled ? 'good' : 'neutral'}>{row.original.movementControlled ? 'movement ledger' : 'legacy quantity'}</StatusBadge> };
   const stateCol: ColumnDef<Item, unknown> = { id: 'state', header: 'State', accessorFn: (r) => r.attention, cell: ({ row }) => (!row.original.active ? <StatusBadge tone="neutral">inactive</StatusBadge> : Number(row.original.qty) <= 0 ? <StatusBadge tone="bad">out of stock</StatusBadge> : row.original.attention ? <StatusBadge tone="warn">attention</StatusBadge> : <StatusBadge tone="good">ok</StatusBadge>) };
@@ -133,7 +156,7 @@ export default function InventoryPage() {
   const consumableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [
     nameCol, qtyCol('In storage'),
     { id: 'reorder', header: 'Reorder below', accessorFn: (r) => r.reorderBelow ?? '', cell: ({ row }) => <span className="tabular">{row.original.reorderBelow ?? '—'}</span> },
-    { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? r.estCoverageDays ?? '', cell: ({ row }) => (row.original.coverageDays ? <span className="tabular">{formatNumber(row.original.coverageDays, 0)} days</span> : row.original.estCoverageDays ? <span className="tabular text-muted-foreground">~{formatNumber(row.original.estCoverageDays, 0)} days (estimated)</span> : <span className="text-xs text-muted-foreground">Not enough usage history</span>) },
+    { id: 'coverage', header: 'Coverage', accessorFn: (r) => r.coverageDays ?? r.estCoverageDays ?? '', cell: ({ row }) => <CoverageCell item={row.original} /> },
     controlCol, stateCol,
   ], [nameCol]);
   const durableColumns = useMemo<ColumnDef<Item, unknown>[]>(() => [nameCol, qtyCol('On hand'), controlCol, stateCol], [nameCol]);
@@ -159,6 +182,7 @@ export default function InventoryPage() {
     <div>
       <div className="print:hidden">
         <PageHeader title="Inventory" description="Consumables and durable items. Advisory reorder estimates never place orders." actions={<><Button variant="outline" onClick={() => setPrintOpen(true)} disabled={!query.data}><Printer className="size-4" aria-hidden /> Print</Button><Button variant="outline" asChild><Link to="/inventory/purchases">Purchases</Link></Button>{canManage && <Button variant="outline" asChild><Link to="/inventory/counts">Counts</Link></Button>}</>} />
+        {canManage && <RestockPrompts items={usageKpi.data?.waitingForRefill.items ?? []} onRecord={(id) => { setPromptItem(id); set({ item: id }); }} />}
         <FilterBar search={state.q} onSearch={(q) => set({ q })} searchPlaceholder="Item name" activeCount={activeFilterCount} onClear={reset} density={density} onDensity={(d) => set({ density: d })}>
           <FilterSelect label="Attention" value={state.attention || undefined} onChange={(v) => set({ attention: v ?? '' })} options={[{ value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }, { value: 'inactive', label: 'Inactive' }, { value: 'attention', label: 'Attention required' }]} />
           <FilterSelect label="Category" value={state.category || undefined} onChange={(v) => set({ category: v ?? '' })} options={[...new Set((query.data?.items ?? []).map((i) => i.category))].sort().map((c) => ({ value: c, label: c }))} />
@@ -234,7 +258,7 @@ export default function InventoryPage() {
           </>
         );
       })()}
-      <ItemSheet open={!!selected} onOpenChange={(o) => !o && set({ item: '' })} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
+      <ItemSheet open={!!selected} onOpenChange={(o) => { if (!o) { set({ item: '' }); setPromptItem(null); setRefillNote(null); } }} title={selected?.name ?? ''} description={selected ? `${selected.category} · ${selected.unit}` : undefined}>
         {selected && (
           <div className="space-y-4">
             <dl className="space-y-1">
@@ -242,6 +266,14 @@ export default function InventoryPage() {
               <Field label="Reorder below">{selected.reorderBelow ?? 'not set'}</Field>
               <Field label="Purchase unit">{selected.purchaseUnit ? `${selected.purchaseUnit} = ${selected.unitsPerPurchase} ${selected.unit}` : 'same as base unit'}</Field>
               <Field label="Unit cost">{selected.unitCost !== null ? formatPHP(selected.unitCost) : s.caps.can('read_finance') ? 'not recorded' : 'restricted'}</Field>
+              {panel && (
+                <Field label="Usage">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">{panel.rate && <span>{panel.rate}</span>}<UsagePill item={selected} short /></div>
+                    {panel.details && <div className="text-xs text-muted-foreground">{panel.details}</div>}
+                  </div>
+                </Field>
+              )}
               <Field label="Usage (30d)">
                 <div>
                   <div>{selected.usageDays && selected.usageDays >= 14 ? `${formatNumber(selected.usage30d, 2)} over ${selected.usageDays} days · ${selected.avgDaily}/day` : `Not enough usage history (${selected.usageDays ?? 0} days recorded)`}</div>
@@ -253,9 +285,10 @@ export default function InventoryPage() {
               </Field>
               <Field label="Stock control">{selected.movementControlled ? `Movement ledger${selected.baselineNote ? ` · baseline: ${selected.baselineNote}` : ''}` : 'Legacy quantity. Reconcile a baseline count to switch this item to the movement ledger.'}</Field>
             </dl>
+            {canManage && refillNote === selected.id && <RefillNote />}
             {canManage && (
               <div className="grid gap-4 sm:grid-cols-2">
-                <form className="space-y-2 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); doReceipt.mutate(); }}>
+                <form id="receipt-form" className="space-y-2 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); doReceipt.mutate(); }}>
                   <p className="text-sm font-medium">Receive stock</p>
                   <div><Label htmlFor="r-packs">Packs ({selected.purchaseUnit ?? selected.unit})</Label><Input id="r-packs" inputMode="decimal" required value={receipt.packs} onChange={(e) => setReceipt({ ...receipt, packs: e.target.value })} className="text-base" /></div>
                   <div><Label htmlFor="r-cost">Cost per pack (PHP)</Label><Input id="r-cost" inputMode="decimal" value={receipt.unitCost} onChange={(e) => setReceipt({ ...receipt, unitCost: e.target.value })} className="text-base" /></div>

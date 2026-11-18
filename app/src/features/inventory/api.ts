@@ -14,11 +14,40 @@ export type Item = {
   // usage history yet: consumption_per_booking x the recent turnover rate.
   // Always label this as an estimate in the UI - never present it as measured.
   estDailyUsage: string | null; estCoverageDays: string | null;
+  // s120 usage learning. All optional: before the SQL release the catalogue carries none of these keys and the screens keep their old layout.
+  usageState?: 'baseline' | 'learning' | 'measured' | null; usagePerTurnover?: string | number | null; usageBaseline?: string | number | null;
+  lastRefillAt?: string | null; lastRefillQty?: string | number | null; lastCountAt?: string | null; usageCounts?: number | null;
 };
 export type Catalogue = { items: Item[]; sourceAsOf: string | null; forecastNote: string; turnoverRatePerDay: number };
 
 export function fetchCatalogue(propertyId: string) {
   return rpc<Catalogue>('get_inventory_catalogue_v1', { p_property_id: propertyId });
+}
+
+// Usage-learning KPI (s120). The admin may ship before the SQL: a missing function (or a refusal) reads as null and the card stays hidden.
+export type UsageKpi = {
+  itemsTotal: number; itemsMeasured: number; itemsLearning: number; medianForecastError: number | null; forecastSamples: number;
+  underFourteenDays: { count: number; items: Array<{ id: string; name: string; daysLeft: number | null }> };
+  waitingForRefill: { count: number; items: Array<{ id: string; name: string; since: string | null; qtyBefore: string | number | null; qtyNow: string | number | null }> };
+};
+const rpcMissing = (e: { code?: string; status?: number; message?: string }) => e.code === 'PGRST202' || e.code === '42883' || e.status === 404 || /could not find the function/i.test(e.message ?? '');
+const count = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+export async function fetchUsageKpi(propertyId: string): Promise<UsageKpi | null> {
+  const res = await supabase.rpc('get_inventory_usage_kpi_v1', { p_property_id: propertyId });
+  if (res.error) {
+    const e = res.error as { code?: string; status?: number; message?: string };
+    if (rpcMissing(e) || e.code === '42501') return null;
+    throw toAppError(res.error);
+  }
+  const b = res.data as (Partial<UsageKpi> & { ok?: boolean }) | null;
+  if (!b || b.ok === false) return null;
+  const err = b.medianForecastError;
+  return {
+    itemsTotal: count(b.itemsTotal), itemsMeasured: count(b.itemsMeasured), itemsLearning: count(b.itemsLearning), forecastSamples: count(b.forecastSamples),
+    medianForecastError: err === null || err === undefined || !Number.isFinite(Number(err)) ? null : Number(err),
+    underFourteenDays: { count: count(b.underFourteenDays?.count), items: b.underFourteenDays?.items ?? [] },
+    waitingForRefill: { count: count(b.waitingForRefill?.count), items: b.waitingForRefill?.items ?? [] },
+  };
 }
 
 export type Movement = { id: string; item_id: string; sequence_no: number; kind: string; quantity_before: string; quantity_after: string; reason: string; actor_user_id: string | null; created_at: string };
@@ -43,7 +72,6 @@ export function recordReceipt(itemId: string, packs: string, unitCost: string | 
 export type ShoppingItem = { id: string; item_id: string | null; item_name: string; quantity: string; purchase_unit: string | null; estimated_cost: string | null; reason: string | null; status: string; proposed_at: string; approved_at: string | null; approval_note: string | null; received_at: string | null; received_quantity: string | null; supplier: string | null; version: number };
 // S82: the cost columns (estimated_cost, supplier) are no longer granted for direct reads; get_shopping_list_v1 returns them to finance sessions only.
 // The dashboard may ship before the database: when the RPC is missing (PGRST202 / 404) fall back to the old select. Absent cost keys read as null (the page shows a dash).
-const rpcMissing = (e: { code?: string; status?: number; message?: string }) => e.code === 'PGRST202' || e.code === '42883' || e.status === 404 || /could not find the function/i.test(e.message ?? '');
 export async function fetchShoppingList(propertyId: string) {
   const res = await supabase.rpc('get_shopping_list_v1', { p_property_id: propertyId });
   if (res.error && !rpcMissing(res.error as { code?: string; status?: number; message?: string })) throw toAppError(res.error);
