@@ -56,4 +56,10 @@ describe('Staff page payment details', () => {
     expect(patch).not.toHaveProperty('payout_qrph');
     expect(patch.contact_number).toBe('0917');
   });
+
+  it('draws a laundry account with its own role pill', async () => {
+    api.listStaff.mockResolvedValue([{ user_id: USER, name: 'Demo Laundry', role: 'laundry', disabled: false, note: null, sign_in_name: 'demo-laundry', last_sign_in_at: null }]);
+    await openHoney('owner');
+    expect(await screen.findByText('laundry')).toBeInTheDocument();
+  });
 });

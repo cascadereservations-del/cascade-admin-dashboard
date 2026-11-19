@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowed, buildCapabilities, defaultRoute, needsMfa } from './capabilities';
+import { allowed, buildCapabilities, defaultRoute, isStaffRole, needsMfa } from './capabilities';
 
 describe('capabilities mirror staff_access_allowed', () => {
   it('finance works on a password session (D-094: no two-factor gate)', () => {
@@ -29,5 +29,13 @@ describe('capabilities mirror staff_access_allowed', () => {
     expect(defaultRoute('maintenance')).toBe('/operations/work-orders');
     expect(defaultRoute('finance')).toBe('/finance');
     expect(defaultRoute('owner')).toBe('/today');
+  });
+  it('laundry is read-only: no finance, staff, inventory or maintenance; lands on operations', () => {
+    expect(isStaffRole('laundry')).toBe(true);
+    expect(allowed('laundry', 'read_operations', false, 'aal1')).toBe(true);
+    for (const a of ['read_finance', 'approve_payment', 'manage_staff', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'] as const) {
+      expect(allowed('laundry', a, false, 'aal2')).toBe(false);
+    }
+    expect(defaultRoute('laundry')).toBe('/operations');
   });
 });

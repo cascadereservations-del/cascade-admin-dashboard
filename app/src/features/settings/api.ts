@@ -34,7 +34,7 @@ export function staffAction(action: 'disable' | 'enable' | 'update' | 'delete', 
 // the same fixed prefix at sign-in (D-059). Staff never see it.
 export const STAFF_PIN_PREFIX = '8888';
 export const STAFF_PIN_RE = /^\d{4}$/;
-export const STAFF_ROLES = ['cleaner', 'inspector', 'maintenance', 'finance', 'admin'] as const;
+export const STAFF_ROLES = ['cleaner', 'inspector', 'maintenance', 'laundry', 'finance', 'admin'] as const;
 export function createStaff(propertyId: string, name: string, role: string, pin: string) {
   return staffCall({ action: 'create', name, role, password: STAFF_PIN_PREFIX + pin, propertyId }) as Promise<{ ok?: boolean; sign_in_name?: string; user_id?: string }>;
 }

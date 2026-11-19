@@ -8,7 +8,7 @@ vi.mock('@/lib/supabase', () => {
   return { supabase: { from: (t: string) => { calls.log.push(`from(${t})`); return chain; } } };
 });
 
-import { fetchClientErrors } from './api';
+import { STAFF_ROLES, fetchClientErrors } from './api';
 
 describe('fetchClientErrors', () => {
   it('reads client_errors from the last 30 days by last_seen, newest first, at most 50 rows', async () => {
@@ -17,5 +17,11 @@ describe('fetchClientErrors', () => {
     expect(calls.log.some((x) => /^gte\(last_seen,\d{4}-\d\d-\d\dT/.test(x))).toBe(true);
     expect(calls.log).toContain('order(last_seen,obj)');
     expect(calls.log).toContain('limit(50)');
+  });
+});
+
+describe('STAFF_ROLES (the picker list)', () => {
+  it('offers laundry beside the other assignable roles, never owner', () => {
+    expect([...STAFF_ROLES]).toEqual(['cleaner', 'inspector', 'maintenance', 'laundry', 'finance', 'admin']);
   });
 });

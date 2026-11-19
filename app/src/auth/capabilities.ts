@@ -2,7 +2,7 @@
 // 20260828000500). This drives VISIBILITY only. Every request is re-checked by
 // RLS and SECURITY DEFINER functions on the server.
 
-export type StaffRole = 'owner' | 'admin' | 'finance' | 'inspector' | 'cleaner' | 'maintenance';
+export type StaffRole = 'owner' | 'admin' | 'finance' | 'inspector' | 'cleaner' | 'maintenance' | 'laundry';
 export type Aal = 'aal1' | 'aal2';
 
 export type Action =
@@ -29,6 +29,7 @@ const ROLE_ACTIONS: Record<StaffRole, Action[]> = {
   inspector: ['read_operations', 'inspect_cleaning', 'submit_cleaning'],
   cleaner: ['read_operations', 'submit_cleaning'],
   maintenance: ['read_operations', 'manage_maintenance'],
+  laundry: ['read_operations'], // server: read_operations + report_supply only; report_supply has no admin action
 };
 
 export function isStaffRole(v: unknown): v is StaffRole {
@@ -81,6 +82,7 @@ export function defaultRoute(role: StaffRole | null): string {
     case 'maintenance':
       return '/operations/work-orders';
     case 'cleaner':
+    case 'laundry':
       return '/operations';
     default:
       return '/today';
