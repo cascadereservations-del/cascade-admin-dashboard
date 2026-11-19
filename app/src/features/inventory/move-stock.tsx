@@ -175,7 +175,7 @@ export function MoveStockSheet({ open, onOpenChange, items }: { open: boolean; o
 /** Admin gate for the Counts header button: needs at least two movable items of one unit. */
 export const canMoveAny = (items: Item[]) => items.some(staysLearning) && movable(items).some((a) => targetsFor(items, a).length > 0);
 
-function UsageMove({ rowQty, usageId, item, items, onDone }: { rowQty: number; usageId: string; item: Item; items: Item[]; onDone: () => void }) {
+function UsageMove({ rowQty, usageId, item, items, onDone }: { rowQty: number; usageId: string; item: Item; items: Item[]; onDone: (moved: boolean) => void }) {
   const refresh = useRefresh();
   const undo = useUndo(refresh);
   const keys = useAttemptKey('moveuse');
@@ -194,7 +194,7 @@ function UsageMove({ rowQty, usageId, item, items, onDone }: { rowQty: number; u
         setRefusal(r.reason === 'not_enough' && onHand !== undefined && to ? `${to.name} has ${trimNumber(onHand)} ${to.unit} now, which is less than ${shown(rowQty)}.` : refusalText(r, { from: item, to }));
         return;
       }
-      keys.clear(); onDone();
+      keys.clear(); onDone(true);
       const moveId = r.moveId;
       const names = { from: item, to, undo: { giver: item.name, qty: shown(rowQty), unit: item.unit } };
       toast.success(`Moved ${shown(rowQty)} ${item.unit} to ${to!.name}`, { duration: 8000, action: moveId ? { label: 'Undo', onClick: () => void undo(moveId, names) } : undefined });
@@ -207,11 +207,11 @@ function UsageMove({ rowQty, usageId, item, items, onDone }: { rowQty: number; u
         <option value="">Choose an item</option>
         {targets.map((i) => <option key={i.id} value={i.id}>{i.name} · {formatQty(i)}</option>)}
       </Select>
-      {to && <Preview from={item} fromAfter={num(item.qty) + rowQty} to={to} toAfter={num(to.qty) - rowQty} />}
+      {to && enough && <Preview from={item} fromAfter={num(item.qty) + rowQty} to={to} toAfter={num(to.qty) - rowQty} />}
       {to && !enough && <p className="mt-1 text-xs text-warn">{to.name} has {trimNumber(to.qty)} {to.unit}, which is less than {shown(rowQty)}.</p>}
       <div className="mt-2.5 flex flex-wrap gap-2">
         <Button type="button" className="min-h-11" disabled={!enough || mut.isPending} onClick={() => mut.mutate()}>{to ? `Move ${shown(rowQty)} ${item.unit} to ${to.name}` : 'Move'}</Button>
-        <Button type="button" variant="outline" className="min-h-11" onClick={onDone}>Cancel</Button>
+        <Button type="button" variant="outline" className="min-h-11" onClick={() => onDone(false)}>Cancel</Button>
       </div>
       {refusal && <p role="alert" className="mt-2 text-xs text-destructive">{refusal}</p>}
       <p className="mt-2 text-xs text-muted-foreground">The usage row moves with its amount. Usage learning is not affected.</p>
@@ -230,11 +230,13 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
   // Focus returns to the row's Move button, or to the History heading once the row has moved away (after the list is reread).
   const moveBtns = useRef(new Map<string, HTMLButtonElement>());
   const heading = useRef<HTMLParagraphElement>(null);
-  const refocus = useRef<string | null>(null);
+  const refocus = useRef<{ id: string; waitForRefetch: boolean } | null>(null);
   useEffect(() => {
-    if (refocus.current && !q.isFetching) { (moveBtns.current.get(refocus.current) ?? heading.current)?.focus(); refocus.current = null; }
+    const f = refocus.current;
+    if (f && (!f.waitForRefetch || !q.isFetching)) { (moveBtns.current.get(f.id) ?? heading.current)?.focus(); refocus.current = null; }
   });
-  const closeMove = (id: string) => { refocus.current = id; setOpen(null); };
+  // Only a completed move waits for the reread (its row may be gone); Cancel focuses the Move button on the next render.
+  const closeMove = (id: string, moved: boolean) => { refocus.current = { id, waitForRefetch: moved }; setOpen(null); };
   const nameOf = (x: string | null) => (x ? items.find((i) => i.id === x)?.name ?? x : '');
   const unit = item.unit;
 
@@ -263,7 +265,7 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
         key: `u${u.id}`, at: u.at ?? u.date,
         node: <>
           <span className="min-w-0 flex-1">Used {trimNumber(u.qty)} {unit}{u.loggedBy ? ` · logged by ${u.loggedBy}` : ''}{u.movedFrom ? ` · moved here from ${nameOf(u.movedFrom)}` : ''}</span>
-          {canManage && Number.isFinite(rowQty) && <Button type="button" variant="outline" className="min-h-11" aria-expanded={open === u.id} ref={(el) => { if (el) moveBtns.current.set(u.id, el); else moveBtns.current.delete(u.id); }} onClick={() => setOpen(open === u.id ? null : u.id)}>Move</Button>}
+          {canManage && Number.isFinite(rowQty) && <Button type="button" variant="outline" className="min-h-11" aria-expanded={open === u.id} ref={(el) => { if (el) moveBtns.current.set(u.id, el); else moveBtns.current.delete(u.id); }} onClick={() => { refocus.current = null; setOpen(open === u.id ? null : u.id); }}>Move</Button>}
         </>,
       });
     }
@@ -282,7 +284,7 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
               return (
                 <li key={e.key}>
                   <div className="flex min-h-[52px] items-center gap-2.5 px-2.5 py-1.5"><span className="tabular w-24 shrink-0 text-muted-foreground">{formatDateTime(e.at)}</span>{e.node}</div>
-                  {u && open === u.id && <UsageMove usageId={u.id} rowQty={num(u.qty)} item={item} items={items} onDone={() => closeMove(u.id)} />}
+                  {u && open === u.id && <UsageMove usageId={u.id} rowQty={num(u.qty)} item={item} items={items} onDone={(moved) => closeMove(u.id, moved)} />}
                 </li>
               );
             })}

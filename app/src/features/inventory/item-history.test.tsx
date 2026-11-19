@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import type { Item } from './api';
 
-const h = vi.hoisted(() => ({ data: null as unknown, usageCalls: [] as unknown[][], undoCalls: [] as unknown[][], usageAnswer: null as unknown, usageAfter: null as unknown }));
+const h = vi.hoisted(() => ({ data: null as unknown, usageCalls: [] as unknown[][], undoCalls: [] as unknown[][], usageAnswer: null as unknown, usageAfter: null as unknown, gate: null as Promise<void> | null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('./api', () => ({
-  getItemMoves: () => Promise.resolve(h.data),
+  getItemMoves: () => (h.gate ? h.gate.then(() => h.data) : Promise.resolve(h.data)),
   moveUsage: (...a: unknown[]) => { h.usageCalls.push(a); const r = h.usageAnswer; if (r instanceof Error) return Promise.reject(r); if (h.usageAfter) h.data = h.usageAfter; return Promise.resolve(r ?? { ok: true, moveId: 'mu1' }); },
   undoMove: (...a: unknown[]) => { h.undoCalls.push(a); return Promise.resolve({ ok: true }); },
   moveStock: vi.fn(),
@@ -36,7 +36,7 @@ const data = () => ({
 });
 let client: QueryClient;
 const view = (canManage = true) => render(<QueryClientProvider client={client}><ItemHistory item={kt} items={[kt, bt]} canManage={canManage} /></QueryClientProvider>);
-beforeEach(() => { client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); h.usageAnswer = null; h.usageAfter = null; h.data = data(); h.usageCalls.length = 0; h.undoCalls.length = 0; vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
+beforeEach(() => { client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); h.usageAnswer = null; h.usageAfter = null; h.gate = null; h.data = data(); h.usageCalls.length = 0; h.undoCalls.length = 0; vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
 afterEach(cleanup);
 
 describe('item History', () => {
@@ -130,6 +130,33 @@ describe('item History', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move 2 pc to Bathroom tissue' }));
     await waitFor(() => expect(screen.queryByText('Used 2 pc · logged by Marifel')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByText('History')));
+  });
+  it('a refetch finishing after Cancel does not steal focus from another opened row', async () => {
+    view();
+    await screen.findByText('Used 2 pc · logged by Marifel');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move' })[1]!);
+    await screen.findByLabelText('Which item was it?');
+    let release!: () => void;
+    h.gate = new Promise<void>((r) => { release = r; });
+    void client.invalidateQueries({ queryKey: ['item-moves'] });
+    await waitFor(() => expect(client.isFetching()).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move' })[0]!);
+    const sel = await screen.findByLabelText('Which item was it?');
+    sel.focus();
+    release();
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.activeElement).toBe(sel);
+  });
+  it('a usage row larger than the target shelf shows the warning and no negative preview', async () => {
+    h.data = { ...data(), usage: [{ id: 'u1', date: '2026-11-25', at: '2026-11-25T02:20:00Z', qty: '20', loggedBy: 'Marifel', movedFrom: null }] };
+    view();
+    await screen.findByText('Used 20 pc · logged by Marifel');
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    fireEvent.change(await screen.findByLabelText('Which item was it?'), { target: { value: 'bt' } });
+    expect(screen.getByText('Bathroom tissue has 12 pc, which is less than 20.')).toBeInTheDocument();
+    expect(screen.queryByTestId('move-preview')).toBeNull();
   });
   it('a viewer who cannot manage inventory sees the list but no Move or Undo, and every History button is 44 px', async () => {
     const { unmount } = view(false);
