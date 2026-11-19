@@ -40,6 +40,7 @@ export default function CountsPage() {
       void qc.invalidateQueries({ queryKey: ['catalogue'] });
       void qc.invalidateQueries({ queryKey: ['movements'] });
       void qc.invalidateQueries({ queryKey: ['usage-kpi'] }); // a count can start or end a refill prompt
+      void qc.invalidateQueries({ queryKey: ['item-moves'] }); // the item History lists counts
     },
     onError: (e) => toast.error(toAppError(e).message),
   });

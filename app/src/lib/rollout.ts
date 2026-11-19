@@ -3,7 +3,7 @@ import { AppError } from './errors';
 // PRD section 11, rollout step 5: mutations are enabled module by module after
 // the read-only stage is verified. This is the single switch. Enabling a module
 // is a one-line change here, `npm run check`, then republish `next/`.
-// Reads are never gated; server-side capability checks still apply to every call.
+// Reads are never gated, except get_inventory_item_moves_v1 (spec 8.2); server-side capability checks still apply to every call.
 
 export type MutationModule = 'bookings' | 'operations' | 'readiness' | 'inventory' | 'follow_ups' | 'finance' | 'pricing';
 
@@ -19,7 +19,7 @@ const LABEL: Record<MutationModule, string> = {
   pricing: 'the rate card and promotions',
 };
 
-// Every mutating RPC the admin calls, by module. A read RPC is absent and passes.
+// Every mutating RPC the admin calls, by module. A read RPC is absent and passes, except get_inventory_item_moves_v1 (spec 8.2).
 export const RPC_MODULE: Record<string, MutationModule> = {
   staff_confirm_direct_booking_v1: 'finance', // SPEC-44: the one Confirm booking sheet (approve_payment)
   staff_decline_direct_booking_v1: 'bookings', // SPEC-44: Decline on Inquiries

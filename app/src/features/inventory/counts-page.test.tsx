@@ -76,6 +76,13 @@ describe('count sheet', () => {
     confirm('Demo soap', '9');
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['movements'] }));
   });
+  it('a count also refreshes the item moves History', async () => {
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    page();
+    await screen.findByText('Demo soap');
+    confirm('Demo soap', '9');
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['item-moves'] }));
+  });
   it('a saved count refreshes the usage KPI as well as the catalogue', async () => {
     const spy = vi.spyOn(client, 'invalidateQueries');
     page();

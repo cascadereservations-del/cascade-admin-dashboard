@@ -120,7 +120,7 @@ export function undoMove(moveId: string, key = newIdempotencyKey('undomove')) {
   return rpc<MoveResult>('undo_inventory_move_v1', { p_move_id: moveId, p_idempotency_key: key });
 }
 export type ItemMove = { id: string; kind: 'stock' | 'usage'; direction: 'in' | 'out'; otherItem: string; qty: Num; at: string; undone: boolean; undoOf: string | null; canUndo: boolean; actor: string | null };
-export type ItemUsageRow = { id: string; date: string; qty: Num; loggedBy: string | null; movedFrom: string | null };
+export type ItemUsageRow = { id: string; date: string; at: string | null; qty: Num; loggedBy: string | null; movedFrom: string | null };
 export type ItemMoves = { ok: boolean; moves: ItemMove[]; usage: ItemUsageRow[]; counts: Array<{ at: string; qty: Num }> };
 export function getItemMoves(itemId: string) {
   return rpc<ItemMoves>('get_inventory_item_moves_v1', { p_item_id: itemId });

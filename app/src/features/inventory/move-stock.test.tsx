@@ -27,12 +27,13 @@ const items = (): Item[] => [
   { ...base, id: 'mp', name: 'Demo mop', consumable: false },
 ] as Item[];
 
-const form = (from: Item | null = kt) => render(<QueryClientProvider client={new QueryClient()}><MoveStockForm items={items()} from={from} /></QueryClientProvider>);
+let client: QueryClient;
+const form = (from: Item | null = kt) => render(<QueryClientProvider client={client}><MoveStockForm items={items()} from={from} /></QueryClientProvider>);
 const pick = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const amount = (v: string) => fireEvent.change(screen.getByLabelText('Amount'), { target: { value: v } });
 const submit = () => fireEvent.click(screen.getByRole('button', { name: /^Move \d/ }));
 
-beforeEach(() => { h.calls.length = 0; h.undo.length = 0; h.answers.length = 0; h.undoAnswer = { ok: true }; vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
+beforeEach(() => { client = new QueryClient(); h.calls.length = 0; h.undo.length = 0; h.answers.length = 0; h.undoAnswer = { ok: true }; vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
 afterEach(cleanup);
 
 describe('move stock form', () => {
@@ -46,6 +47,22 @@ describe('move stock form', () => {
     pick('Move to', 'bt'); amount('7');
     expect(screen.getByTestId('move-preview').textContent).toBe('Kitchen towel 14 → 7 · Bathroom tissue 5 → 12');
     expect(screen.getByRole('button', { name: 'Move 7 pc' })).toBeEnabled();
+  });
+  it('no preview above what is on hand: a warn line says how much can move', () => {
+    form();
+    pick('Move to', 'bt'); amount('20');
+    expect(screen.queryByTestId('move-preview')).toBeNull();
+    expect(screen.getByText('Kitchen towel has 14 pc. Move 14 or fewer.')).toHaveClass('text-warn');
+    amount('14'); expect(screen.getByTestId('move-preview').textContent).toBe('Kitchen towel 14 → 0 · Bathroom tissue 5 → 19');
+    amount('0'); expect(screen.queryByTestId('move-preview')).toBeNull();
+  });
+  it('a transport error rereads the shelves, since the move may have committed', async () => {
+    h.answers.push(new Error('network'));
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    form();
+    pick('Move to', 'bt'); amount('7'); submit();
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['catalogue'] });
   });
   it('starts at 1, the + stops at what is on hand, and the button is off at 0, above on-hand and with no target', () => {
     form();

@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { toAppError } from '@/lib/errors';
@@ -121,7 +121,7 @@ export function MoveStockForm({ items, from: fixedFrom }: { items: Item[]; from:
       const names = { from, to, undo: { giver: to!.name, qty: shown(n), unit } };
       toast.success(`Moved ${shown(n)} ${unit} to ${to!.name}`, { duration: 8000, action: moveId ? { label: 'Undo', onClick: () => void undo(moveId, names) } : undefined });
     },
-    onError: (e) => setRefusal(toAppError(e).message),
+    onError: (e) => { refresh(); setRefusal(toAppError(e).message); }, // the move may have committed before the answer was lost
   });
 
   return (
@@ -145,7 +145,8 @@ export function MoveStockForm({ items, from: fixedFrom }: { items: Item[]; from:
         <Button type="button" variant="outline" aria-label="One more" className="min-h-11 min-w-11 text-xl" disabled={!from || !(n < stop)} onClick={() => setAmt(Math.min(stop, (Number.isFinite(n) ? n : 0) + 1))}>+</Button>
         <span className="text-muted-foreground">{unit}</span>
       </div>
-      {from && to && Number.isFinite(n) && <Preview from={from} fromAfter={onHand - n} to={to} toAfter={num(to.qty) + n} />}
+      {from && to && n > 0 && n <= onHand && <Preview from={from} fromAfter={onHand - n} to={to} toAfter={num(to.qty) + n} />}
+      {from && to && n > onHand && <p className="mt-3 text-xs text-warn">{from.name} has {shown(onHand)} {unit}. Move {shown(onHand)} or fewer.</p>}
       <div className="sticky bottom-0 mt-3 bg-card pt-2">
         <Button type="submit" className="min-h-11 w-full sm:w-auto" disabled={!valid || mut.isPending}>{valid ? `Move ${shown(n)} ${unit}` : 'Move'}</Button>
       </div>
@@ -187,13 +188,18 @@ function UsageMove({ rowQty, usageId, item, items, onDone }: { rowQty: number; u
     mutationFn: () => moveUsage(usageId, to!.id, keys.keyFor(`${usageId}|${to!.id}`)),
     onSuccess: (r) => {
       refresh();
-      if (!r.ok) { setRefusal(refusalText(r, { from: item, to })); return; }
+      if (!r.ok) {
+        // For a usage move the server's on_hand is the TARGET's shelf (it gives the stock), not the source's.
+        const onHand = r.on_hand ?? r.onHand;
+        setRefusal(r.reason === 'not_enough' && onHand !== undefined && to ? `${to.name} has ${trimNumber(onHand)} ${to.unit} now, which is less than ${shown(rowQty)}.` : refusalText(r, { from: item, to }));
+        return;
+      }
       keys.clear(); onDone();
       const moveId = r.moveId;
       const names = { from: item, to, undo: { giver: item.name, qty: shown(rowQty), unit: item.unit } };
       toast.success(`Moved ${shown(rowQty)} ${item.unit} to ${to!.name}`, { duration: 8000, action: moveId ? { label: 'Undo', onClick: () => void undo(moveId, names) } : undefined });
     },
-    onError: (e) => setRefusal(toAppError(e).message),
+    onError: (e) => { refresh(); setRefusal(toAppError(e).message); },
   });
   return (
     <div className="mx-2.5 mb-2.5 rounded-[10px] bg-muted p-2.5">
@@ -221,6 +227,14 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
   const undo = useUndo(refresh);
   const q = useQuery({ queryKey: ['item-moves', item.id], queryFn: () => getItemMoves(item.id) });
   const [open, setOpen] = useState<string | null>(null);
+  // Focus returns to the row's Move button, or to the History heading once the row has moved away (after the list is reread).
+  const moveBtns = useRef(new Map<string, HTMLButtonElement>());
+  const heading = useRef<HTMLParagraphElement>(null);
+  const refocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (refocus.current && !q.isFetching) { (moveBtns.current.get(refocus.current) ?? heading.current)?.focus(); refocus.current = null; }
+  });
+  const closeMove = (id: string) => { refocus.current = id; setOpen(null); };
   const nameOf = (x: string | null) => (x ? items.find((i) => i.id === x)?.name ?? x : '');
   const unit = item.unit;
 
@@ -246,10 +260,10 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
     for (const u of d.usage ?? []) {
       const rowQty = num(u.qty);
       entries.push({
-        key: `u${u.id}`, at: u.date,
+        key: `u${u.id}`, at: u.at ?? u.date,
         node: <>
           <span className="min-w-0 flex-1">Used {trimNumber(u.qty)} {unit}{u.loggedBy ? ` · logged by ${u.loggedBy}` : ''}{u.movedFrom ? ` · moved here from ${nameOf(u.movedFrom)}` : ''}</span>
-          {canManage && Number.isFinite(rowQty) && <Button type="button" variant="outline" className="min-h-11" aria-expanded={open === u.id} onClick={() => setOpen(open === u.id ? null : u.id)}>Move</Button>}
+          {canManage && Number.isFinite(rowQty) && <Button type="button" variant="outline" className="min-h-11" aria-expanded={open === u.id} ref={(el) => { if (el) moveBtns.current.set(u.id, el); else moveBtns.current.delete(u.id); }} onClick={() => setOpen(open === u.id ? null : u.id)}>Move</Button>}
         </>,
       });
     }
@@ -257,7 +271,7 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
   }
   return (
     <div>
-      <p className="mb-1 text-sm font-medium">History</p>
+      <p ref={heading} tabIndex={-1} className="mb-1 text-sm font-medium outline-none">History</p>
       {q.isPending ? <p className="text-xs text-muted-foreground">Loading…</p>
         : q.isError ? <p className="text-xs text-destructive">{toAppError(q.error).message}</p>
         : entries.length === 0 ? <p className="text-xs text-muted-foreground">Nothing recorded in the last 30 days.</p>
@@ -268,7 +282,7 @@ export function ItemHistory({ item, items, canManage }: { item: Item; items: Ite
               return (
                 <li key={e.key}>
                   <div className="flex min-h-[52px] items-center gap-2.5 px-2.5 py-1.5"><span className="tabular w-24 shrink-0 text-muted-foreground">{formatDateTime(e.at)}</span>{e.node}</div>
-                  {u && open === u.id && <UsageMove usageId={u.id} rowQty={num(u.qty)} item={item} items={items} onDone={() => setOpen(null)} />}
+                  {u && open === u.id && <UsageMove usageId={u.id} rowQty={num(u.qty)} item={item} items={items} onDone={() => closeMove(u.id)} />}
                 </li>
               );
             })}
