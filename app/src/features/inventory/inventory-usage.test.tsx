@@ -22,6 +22,7 @@ vi.mock('./api', () => ({
     return Promise.resolve(h.refillAnswer);
   },
   fetchMovements: () => Promise.resolve({ rows: [], total: 0 }),
+  getItemMoves: () => Promise.resolve({ ok: true, moves: [], usage: [], counts: [] }),
   fetchItemPurchases: () => Promise.resolve({ rows: [], total: 0 }),
   recordAdjustment: vi.fn(),
   recordReceipt: (...a: unknown[]) => { h.receipts.push(a); return Promise.resolve({ ok: true, purchaseId: 'x', movementId: null, unitsAdded: '10', controlled: false }); },
@@ -309,15 +310,15 @@ describe('movement-controlled items and the baseline pill', () => {
 });
 
 describe('wording for a consumable that stays in learning', () => {
-  it('shows Counted stock and the stock-count line, keeps the adjustment disabled, and never says baseline first', async () => {
+  it('shows Counted stock and the Move box in place of the dead adjustment, and never says baseline first', async () => {
     page();
     fireEvent.click(await screen.findByRole('button', { name: 'Demo soap' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Counted stock. Counts keep usage learning.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Use a stock count to correct this item.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Move to another item')).toBeInTheDocument();
     expect(within(dialog).queryByText('Needs a baseline count first.')).toBeNull();
     expect(within(dialog).queryByText(/switch this item to the movement ledger/)).toBeNull();
-    expect(within(dialog).getByRole('button', { name: 'Record adjustment' })).toBeDisabled();
+    expect(within(dialog).queryByRole('button', { name: 'Record adjustment' })).toBeNull();
   });
   it('the list control badge agrees: learning for the consumable, legacy quantity for a durable, movement ledger when controlled', async () => {
     page();

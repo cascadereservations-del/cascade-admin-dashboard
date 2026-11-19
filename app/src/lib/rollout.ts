@@ -37,6 +37,10 @@ export const RPC_MODULE: Record<string, MutationModule> = {
   review_property_readiness_v1: 'readiness',
   reconcile_inventory_baseline_v1: 'inventory',
   record_missed_refill_v1: 'inventory',
+  move_inventory_stock_v1: 'inventory', // s122 (D-383): move stock to another item
+  move_inventory_usage_v1: 'inventory',
+  undo_inventory_move_v1: 'inventory',
+  get_inventory_item_moves_v1: 'inventory', // a read, listed so the whole move feature sits behind one module
   record_inventory_receipt_v1: 'inventory',
   record_inventory_movement: 'inventory',
   save_shopping_item_v1: 'inventory',

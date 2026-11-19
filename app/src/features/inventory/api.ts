@@ -105,3 +105,23 @@ export async function fetchPurchases(propertyId: string) {
   const list = unwrapList<Purchase>(res);
   return { ...list, names };
 }
+
+// s122 move stock to another item (D-383). A refusal comes back as { ok:false, reason } and writes nothing; only a thrown error is a transport or permission failure.
+type Num = string | number;
+export type MoveSide = { id: string; name: string; before: Num; after: Num };
+export type MoveResult = { ok: boolean; reason?: string; item?: 'from' | 'to'; on_hand?: Num; onHand?: Num; moveId?: string; from?: MoveSide; to?: MoveSide; qty?: Num; replayed?: boolean };
+export function moveStock(fromId: string, toId: string, qty: string, note: string | null, key = newIdempotencyKey('move')) {
+  return rpc<MoveResult>('move_inventory_stock_v1', { p_from: fromId, p_to: toId, p_qty: qty, p_note: note, p_idempotency_key: key });
+}
+export function moveUsage(usageId: string, toId: string, key = newIdempotencyKey('moveuse')) {
+  return rpc<MoveResult>('move_inventory_usage_v1', { p_usage_id: usageId, p_to: toId, p_idempotency_key: key });
+}
+export function undoMove(moveId: string, key = newIdempotencyKey('undomove')) {
+  return rpc<MoveResult>('undo_inventory_move_v1', { p_move_id: moveId, p_idempotency_key: key });
+}
+export type ItemMove = { id: string; kind: 'stock' | 'usage'; direction: 'in' | 'out'; otherItem: string; qty: Num; at: string; undone: boolean; undoOf: string | null; canUndo: boolean; actor: string | null };
+export type ItemUsageRow = { id: string; date: string; qty: Num; loggedBy: string | null; movedFrom: string | null };
+export type ItemMoves = { ok: boolean; moves: ItemMove[]; usage: ItemUsageRow[]; counts: Array<{ at: string; qty: Num }> };
+export function getItemMoves(itemId: string) {
+  return rpc<ItemMoves>('get_inventory_item_moves_v1', { p_item_id: itemId });
+}

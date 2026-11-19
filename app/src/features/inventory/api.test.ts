@@ -15,7 +15,7 @@ vi.mock('@/lib/supabase', () => ({
     },
   },
 }));
-import { fetchShoppingList } from './api';
+import { fetchShoppingList, getItemMoves, moveStock, moveUsage, undoMove } from './api';
 
 const row = { id: 'a', item_name: 'Soap', quantity: '2', status: 'proposed', proposed_at: '2026-10-13T00:00:00Z', version: 1 };
 beforeEach(() => { rpcCalls.length = 0; state.tableReads = 0; state.table = []; });
@@ -47,5 +47,21 @@ describe('fetchShoppingList', () => {
     state.rpc = { error: { code: '42501', message: 'permission denied' } };
     await expect(fetchShoppingList('p1')).rejects.toMatchObject({ kind: 'forbidden' });
     expect(state.tableReads).toBe(0);
+  });
+});
+
+describe('s122 move RPCs send the contract argument names', () => {
+  it('stock, usage, undo and the read', async () => {
+    state.rpc = { data: { ok: true } };
+    await moveStock('a', 'b', '7', null, 'move-key-0001');
+    await moveUsage('u', 'b', 'moveuse-key-0001');
+    await undoMove('m', 'undomove-key-0001');
+    await getItemMoves('a');
+    expect(rpcCalls).toEqual([
+      ['move_inventory_stock_v1', { p_from: 'a', p_to: 'b', p_qty: '7', p_note: null, p_idempotency_key: 'move-key-0001' }],
+      ['move_inventory_usage_v1', { p_usage_id: 'u', p_to: 'b', p_idempotency_key: 'moveuse-key-0001' }],
+      ['undo_inventory_move_v1', { p_move_id: 'm', p_idempotency_key: 'undomove-key-0001' }],
+      ['get_inventory_item_moves_v1', { p_item_id: 'a' }],
+    ]);
   });
 });

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fetchCatalogue, reconcileBaseline } from './api';
 import { staysLearning } from './usage';
+import { canMoveAny, MoveStockSheet } from './move-stock';
 
 // INV03/INV06: count sheet with variance preview; each reviewed count becomes
 // the item's reconciled baseline. An active consumable that is not on the ledger
@@ -42,10 +43,14 @@ export default function CountsPage() {
     },
     onError: (e) => toast.error(toAppError(e).message),
   });
+  const [moveOpen, setMoveOpen] = useState(false);
+  const canMove = s.caps.can('manage_inventory') && canMoveAny(query.data?.items ?? []); // s122 (D-383): admin only; hidden until the server reports usage state
   const learns = query.data?.items.some(staysLearning) ?? false; // the sentence is true only once the server reports usage state
   return (
     <div>
-      <PageHeader title="Stock counts" description={`Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history.${learns ? ' Counts of active consumables keep usage learning.' : ''}`} />
+      <PageHeader title="Stock counts" description={`Count what is in storage (a consumable placed in the unit counts as used), enter the quantity per item, review the variance, then confirm. The count replaces the recorded quantity and is kept in the item's movement history.${learns ? ' Counts of active consumables keep usage learning.' : ''}${canMove ? ' If the total is right but split wrongly, move it instead of counting.' : ''}`}
+        actions={canMove ? <Button variant="outline" className="min-h-11" onClick={() => setMoveOpen(true)}>Move stock between items</Button> : undefined} />
+      {canMove && <MoveStockSheet open={moveOpen} onOpenChange={setMoveOpen} items={query.data?.items ?? []} />}
       <QueryState query={query}>
         {(d) => (
           <div className="overflow-x-auto rounded-lg border" role="region" aria-label="Count sheet" tabIndex={0}>

@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import type { Item } from './api';
 
-const h = vi.hoisted(() => ({ items: [] as unknown[], reject: false, hold: null as Promise<unknown> | null }));
-vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: () => true } }) }));
+const h = vi.hoisted(() => ({ items: [] as unknown[], reject: false, hold: null as Promise<unknown> | null, caps: ['manage_inventory'] as string[] }));
+vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', session: null, caps: { can: (c: string) => h.caps.includes(c) } }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('./api', () => ({
+  moveStock: vi.fn(), undoMove: vi.fn(),
   fetchCatalogue: () => Promise.resolve({ items: h.items, sourceAsOf: null, forecastNote: '', turnoverRatePerDay: 0.2 }),
   reconcileBaseline: (_id: string, counted: string) => (h.hold ? h.hold : h.reject ? Promise.reject(new Error('Count failed')) : Promise.resolve({ ok: true, before: '5', after: counted, variance: '4' })),
 }));
@@ -19,13 +20,14 @@ const base = {
 };
 const items = (): Item[] => [
   { ...base, id: 'a', name: 'Demo soap', usageState: 'learning' },
+  { ...base, id: 'e', name: 'Demo shampoo', usageState: 'learning' },
   { ...base, id: 'b', name: 'Demo ledger', movementControlled: true },
   { ...base, id: 'c', name: 'Demo mop', consumable: false },
   { ...base, id: 'd', name: 'Demo old' }, // no usage keys: the server before the release
 ] as Item[];
 
 let client: QueryClient;
-beforeEach(() => { h.items = items(); h.reject = false; h.hold = null; client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
+beforeEach(() => { h.caps = ['manage_inventory']; h.items = items(); h.reject = false; h.hold = null; client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); vi.mocked(toast.success).mockClear(); vi.mocked(toast.error).mockClear(); });
 afterEach(cleanup);
 const page = () => render(<QueryClientProvider client={client}><CountsPage /></QueryClientProvider>);
 const rowOf = (name: string) => screen.getByText(name).closest('tr')!;
@@ -119,5 +121,31 @@ describe('count sheet', () => {
     expect(screen.getByLabelText('Note Demo old')).toBeEnabled();
     release({ ok: true, before: '5', after: '9', variance: '4' });
     await waitFor(() => expect(screen.getByLabelText('Counted Demo soap')).toBeEnabled());
+  });
+});
+
+describe('move stock from the Counts page (s122)', () => {
+  it('the header button opens the form with From and To', async () => {
+    page();
+    await screen.findByText('Demo soap');
+    expect(screen.getByText(/If the total is right but split wrongly, move it instead of counting\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Move stock between items' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('From')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('To')).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button', { name: 'Close' }).some((b) => b.classList.contains('min-h-11'))).toBe(true);
+  });
+  it('no button without manage_inventory, or when the server has no usage state yet', async () => {
+    h.caps = [];
+    const { unmount } = page();
+    await screen.findByText('Demo soap');
+    expect(screen.queryByRole('button', { name: 'Move stock between items' })).toBeNull();
+    unmount();
+    h.caps = ['manage_inventory'];
+    h.items = [{ ...base, id: 'd', name: 'Demo old' }, { ...base, id: 'f', name: 'Demo older' }] as Item[];
+    client.clear();
+    page();
+    await screen.findByText('Demo old');
+    expect(screen.queryByRole('button', { name: 'Move stock between items' })).toBeNull();
   });
 });

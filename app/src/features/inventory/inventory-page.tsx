@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { fetchCatalogue, fetchItemPurchases, fetchMovements, recordAdjustment, recordReceipt, type Item } from './api';
 import { panelUsage, staysLearning, turnoversText, usageStateOf, usesText } from './usage';
 import { RestockPrompts, UsagePill, useUsageKpi } from './usage-ui';
+import { ItemHistory, MoveStockForm } from './move-stock';
 
 // s119 lane G: stock counts animate with NumberFlow (own chunk, loaded when an item opens; it honours reduced motion). The plain text
 // is both the fallback while the chunk loads and what a number that cannot be parsed shows.
@@ -42,7 +43,7 @@ export function StockCount({ value, unit }: { value: string | number | null | un
 function ItemSheet({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; description?: string; children: ReactNode }) {
   const narrow = useNarrow();
   return narrow
-    ? <GlassSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</GlassSheet>
+    ? <GlassSheet open={open} onOpenChange={onOpenChange} title={title} description={description}><div className="flex justify-end"><Button type="button" variant="outline" aria-label="Close" className="min-h-11 min-w-11" onClick={() => onOpenChange(false)}>✕</Button></div>{children}</GlassSheet>
     : <DetailSheet open={open} onOpenChange={onOpenChange} title={title} description={description}>{children}</DetailSheet>;
 }
 
@@ -90,7 +91,9 @@ export default function InventoryPage() {
   const canManage = s.caps.can('manage_inventory');
   const query = useQuery({ queryKey: ['catalogue', s.propertyId], queryFn: () => fetchCatalogue(s.propertyId) });
   const selected = query.data?.items.find((i) => i.id === state.item) ?? null;
-  const moves = useQuery({ queryKey: ['movements', state.item], queryFn: () => fetchMovements(state.item), enabled: !!state.item });
+  // s122: a counted (learning) item shows History (counts, moves, usage rows) instead of the movement list, which is empty for it.
+  const showHistory = !!selected && staysLearning(selected) && s.caps.can('read_operations');
+  const moves = useQuery({ queryKey: ['movements', state.item], queryFn: () => fetchMovements(state.item), enabled: !!state.item && !showHistory });
   const itemPurchases = useQuery({ queryKey: ['item-purchases', state.item], queryFn: () => fetchItemPurchases(state.item), enabled: !!state.item });
   const [receipt, setReceipt] = useState({ packs: '', unitCost: '', supplier: '', date: todayManila() });
   const [adjust, setAdjust] = useState({ delta: '', reason: '' });
@@ -288,15 +291,18 @@ export default function InventoryPage() {
                   <div><Label htmlFor="r-date">Date</Label><Input id="r-date" type="date" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} className="text-base" /></div>
                   <Button type="submit" size="sm" disabled={doReceipt.isPending || !receipt.packs}>Record receipt</Button>
                 </form>
+                {staysLearning(selected) ? <MoveStockForm items={query.data?.items ?? []} from={selected} /> : (
                 <form className="space-y-2 rounded-lg border p-3" onSubmit={(e) => { e.preventDefault(); doAdjust.mutate(); }}>
                   <p className="text-sm font-medium">Adjust (movement ledger only)</p>
                   <div><Label htmlFor="a-delta">Change (+/−) in {selected.unit}</Label><Input id="a-delta" inputMode="decimal" required value={adjust.delta} onChange={(e) => setAdjust({ ...adjust, delta: e.target.value })} className="text-base" /></div>
                   <div><Label htmlFor="a-reason">Reason</Label><Textarea id="a-reason" required minLength={3} value={adjust.reason} onChange={(e) => setAdjust({ ...adjust, reason: e.target.value })} className="text-base" /></div>
                   <Button type="submit" size="sm" variant="outline" disabled={doAdjust.isPending || !selected.movementControlled}>Record adjustment</Button>
-                  {!selected.movementControlled && <p className="text-xs text-muted-foreground">{staysLearning(selected) ? 'Use a stock count to correct this item.' : 'Needs a baseline count first.'}</p>}
+                  {!selected.movementControlled && <p className="text-xs text-muted-foreground">Needs a baseline count first.</p>}
                 </form>
+                )}
               </div>
             )}
+            {showHistory ? <ItemHistory item={selected} items={query.data?.items ?? []} canManage={canManage} /> : (
             <div>
               <p className="mb-1 text-sm font-medium">Movement history</p>
               {moves.isPending ? <p className="text-xs text-muted-foreground">Loading…</p> : moves.isError ? <p className="text-xs text-destructive">{toAppError(moves.error).message}</p> : moves.data.rows.length === 0 ? <p className="text-xs text-muted-foreground">No movements. An empty ledger is not zero stock; the quantity above comes from the item record.</p> : (
@@ -305,6 +311,7 @@ export default function InventoryPage() {
                 </ul>
               )}
             </div>
+            )}
             <div>
               <p className="mb-1 text-sm font-medium">Purchase history by supplier</p>
               {itemPurchases.isPending ? <p className="text-xs text-muted-foreground">Loading…</p> : itemPurchases.isError ? <p className="text-xs text-destructive">{toAppError(itemPurchases.error).message}</p> : itemPurchases.data.rows.length === 0 ? <p className="text-xs text-muted-foreground">No recorded purchases for this item.</p> : (

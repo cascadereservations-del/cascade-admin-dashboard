@@ -20,6 +20,12 @@ describe('rollout gate (PRD section 11 step 5)', () => {
       }
     }
   });
+  it('the four s122 move RPCs sit behind the inventory module', () => {
+    for (const fn of ['move_inventory_stock_v1', 'move_inventory_usage_v1', 'undo_inventory_move_v1', 'get_inventory_item_moves_v1']) {
+      expect(RPC_MODULE[fn]).toBe('inventory');
+      expect(() => assertRpcEnabled(fn)).not.toThrow(); // inventory is enabled
+    }
+  });
   it('an enabled module passes', () => {
     for (const m of ENABLED_MUTATION_MODULES) expect(() => assertMutationEnabled(m)).not.toThrow();
   });
