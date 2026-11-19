@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowed, buildCapabilities, defaultRoute, isStaffRole, needsMfa } from './capabilities';
+import { ROLE_ACTIONS, allowed, buildCapabilities, defaultRoute, isStaffRole, needsMfa } from './capabilities';
 
 describe('capabilities mirror staff_access_allowed', () => {
   it('finance works on a password session (D-094: no two-factor gate)', () => {
@@ -37,5 +37,23 @@ describe('capabilities mirror staff_access_allowed', () => {
       expect(allowed('laundry', a, false, 'aal2')).toBe(false);
     }
     expect(defaultRoute('laundry')).toBe('/operations');
+  });
+  it('laundry is allowed exactly read_operations across every action', () => {
+    const granted = Object.values(ROLE_ACTIONS).flat();
+    const all = [...new Set(granted)];
+    expect(all.length).toBe(10); // every Action is granted to someone (owner has all)
+    expect(all.filter((a) => allowed('laundry', a, false, 'aal2'))).toEqual(['read_operations']);
+  });
+  it('pins every role capability set (hand-written; any change must update this)', () => {
+    const owner = ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'];
+    expect(ROLE_ACTIONS).toEqual({
+      owner,
+      admin: owner,
+      finance: ['approve_payment', 'read_finance', 'read_operations'],
+      inspector: ['read_operations', 'inspect_cleaning', 'submit_cleaning'],
+      cleaner: ['read_operations', 'submit_cleaning'],
+      maintenance: ['read_operations', 'manage_maintenance'],
+      laundry: ['read_operations'],
+    });
   });
 });

@@ -22,7 +22,7 @@ export type Action =
 // reinstated by adding actions back, and so the tests document the decision.
 const MFA_ACTIONS: Action[] = [];
 
-const ROLE_ACTIONS: Record<StaffRole, Action[]> = {
+export const ROLE_ACTIONS: Record<StaffRole, Action[]> = {
   owner: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'],
   admin: ['manage_staff', 'approve_payment', 'read_finance', 'read_operations', 'manage_operations', 'inspect_cleaning', 'submit_cleaning', 'manage_inventory', 'manage_maintenance', 'publish_rate_policy'],
   finance: ['approve_payment', 'read_finance', 'read_operations'],

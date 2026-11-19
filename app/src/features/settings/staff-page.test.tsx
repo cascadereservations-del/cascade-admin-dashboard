@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,11 +7,14 @@ const api = vi.hoisted(() => ({
   listStaff: vi.fn(), listStaffDetails: vi.fn(), saveStaffDetails: vi.fn(), getStaffPayoutDetails: vi.fn(), createStaff: vi.fn(), staffAction: vi.fn(),
 }));
 const session = vi.hoisted(() => ({ role: 'owner' }));
-vi.mock('./api', () => ({ ...api, STAFF_ROLES: ['cleaner', 'finance', 'admin'], STAFF_PIN_PREFIX: '8888', STAFF_PIN_RE: /^\d{4}$/ }));
+// Real STAFF_ROLES (and PIN constants) so the picker is tested against the shipped list.
+vi.mock('./api', async () => ({ ...(await vi.importActual<typeof import('./api')>('./api')), ...api }));
 vi.mock('@/auth/session', () => ({ useSession: () => ({ propertyId: 'p1', caps: { role: session.role } }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import StaffPage from './staff-page';
+
+Object.assign(Element.prototype, { hasPointerCapture: () => false, releasePointerCapture: () => {}, setPointerCapture: () => {}, scrollIntoView: () => {} });
 
 const USER = 'f3700000-0000-4000-8000-0000000000a1';
 const details = { user_id: USER, contact_number: '0917', alternate_contact: null, address: null, id_type: null, id_number: null, id_drive_url: null, emergency_contact_name: null, emergency_contact_number: null, start_date: null, fee_turnover: null, fee_transport: null, fee_deep_clean: null, version: 5, payout_qrph: null, payout_bank_label: 'MariBank' };
@@ -60,6 +63,20 @@ describe('Staff page payment details', () => {
   it('draws a laundry account with its own role pill', async () => {
     api.listStaff.mockResolvedValue([{ user_id: USER, name: 'Demo Laundry', role: 'laundry', disabled: false, note: null, sign_in_name: 'demo-laundry', last_sign_in_at: null }]);
     await openHoney('owner');
-    expect(await screen.findByText('laundry')).toBeInTheDocument();
+    expect(await within(await screen.findByRole('listitem', { hidden: true })).findByText('laundry')).toBeInTheDocument(); // the edit sheet's role select also shows it
+  });
+
+  it.each([
+    ['admin', ['cleaner', 'inspector', 'maintenance', 'laundry', 'finance']],
+    ['owner', ['cleaner', 'inspector', 'maintenance', 'laundry', 'finance', 'admin']],
+  ])('Add staff role picker for %s offers exactly %j', async (role, expected) => {
+    session.role = role;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={qc}><StaffPage /></QueryClientProvider>);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Add staff' }));
+    await user.click(await screen.findByRole('combobox'));
+    const offered = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(offered).toEqual(expected);
   });
 });
