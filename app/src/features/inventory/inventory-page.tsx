@@ -165,7 +165,10 @@ export default function InventoryPage() {
   // reuses the existing category data with a single named exception rather
   // than inventing a new field.
   const APPLIANCE_EXCEPTIONS = new Set(['Washing Machine (Panasonic)']);
-  const isAppliance = (i: Item) => i.category === 'Kitchen & Dining' || APPLIANCE_EXCEPTIONS.has(i.name);
+  // s132 (D-397) split 'Kitchen & Dining' into 'Kitchen utensils' and 'Appliances'; all three
+  // labels group as appliances, matched trimmed and case-insensitive.
+  const APPLIANCE_CATEGORIES = new Set(['kitchen & dining', 'kitchen utensils', 'appliances']);
+  const isAppliance = (i: Item) => APPLIANCE_CATEGORIES.has((i.category ?? '').trim().toLowerCase()) || APPLIANCE_EXCEPTIONS.has(i.name);
   // Coverage isn't populated for any item yet (needs 14+ days of usage
   // history); until it is, prefer the estimated figure (consumption_per_booking
   // x turnover rate), falling back further to on-hand ÷ reorder-below so
