@@ -57,7 +57,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
   const versions = useQuery({ queryKey: ['rate-versions', propertyId], queryFn: () => fetchVersions(propertyId) });
   const [editing, setEditing] = useState(prefill !== null);
   const [base, setBase] = useState(String(prefill?.price ?? card.base));
-  const [fee, setFee] = useState(String(card.deposit_pct));
+  const [fee, setFee] = useState('100');
   const [tiers, setTiers] = useState<Array<{ min: string; pct: string }>>(card.tiers.map((t) => ({ min: String(t.min_nights), pct: String(t.pct) })));
   // A card may start later: since release rate_card_upcoming_20260926 get_rate_card_v1 lists it as `upcoming` and every
   // quote prices a stay by the card in force on its check-in date (review 2026-09-26, finding 1).
@@ -67,7 +67,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
   const parsed: Tier[] = tiers.map((t) => ({ min_nights: num(t.min), pct: num(t.pct) }));
   const b = num(base), f = num(fee);
   const problem = !(b > 0 && b < 100000) ? 'The standard rate must be a price above zero.'
-    : !(f > 0 && f <= 100) ? 'The reservation fee is between 1% and 100%.'
+    : !(f > 0 && f <= 100) ? 'The amount paid to confirm is between 1% and 100%.'
     : tierProblem(parsed) ?? (from < todayManila() ? 'A new card starts today or later.'
       : (card.upcoming ?? []).some((u) => u.effective_from > from) ? `A card is already scheduled from ${(card.upcoming ?? []).map((u) => u.effective_from).sort().pop()}: pick that date to correct it, or a later one.`
       : reasonProblem(reason));
@@ -80,9 +80,9 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
   return (
     <Section title="Standard rate and length-of-stay discounts" aside={!editing && <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Change</Button>}>
       <div className="rounded-lg border p-4 text-sm">
-        <p><span className="text-2xl font-semibold tabular">{formatPHP(card.base, { whole: true })}</span> per night · reservation fee {card.deposit_pct}% · in force since {card.effective_from}</p>
+        <p><span className="text-2xl font-semibold tabular">{formatPHP(card.base, { whole: true })}</span> per night · full stay paid to confirm · in force since {card.effective_from}</p>
         {(card.upcoming ?? []).map((u) => (
-          <p key={u.version_id} className="mt-1"><StatusBadge tone="info">scheduled</StatusBadge> {formatPHP(u.base, { whole: true })} per night · fee {u.deposit_pct}% · for stays checking in from {u.effective_from} · {u.tiers.map((t) => `${t.pct}% from ${t.min_nights} nights`).join(', ') || 'no length-of-stay discounts'}</p>
+          <p key={u.version_id} className="mt-1"><StatusBadge tone="info">scheduled</StatusBadge> {formatPHP(u.base, { whole: true })} per night · for stays checking in from {u.effective_from} · {u.tiers.map((t) => `${t.pct}% from ${t.min_nights} nights`).join(', ') || 'no length-of-stay discounts'}</p>
         ))}
         <ScrollRegion label="Rate tiers"><table className="mt-3 w-full max-w-md text-left">
           <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Stay length</th><th>% off</th><th>Per night</th></tr></thead>
@@ -99,7 +99,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
           {prefill && <p role="status" className="text-sm text-muted-foreground">{formatPHP(prefill.price, { whole: true })} came from the Price advisor. Nothing is published yet: check the number and the date, say why, then press Publish.</p>}
           <div className="flex flex-wrap gap-4">
             <div><Label htmlFor="rc-base">Standard rate per night (PHP)</Label><Input id="rc-base" inputMode="numeric" className="w-36 text-base sm:text-sm" value={base} onChange={(e) => setBase(e.target.value)} /></div>
-            <div><Label htmlFor="rc-fee">Reservation fee (%)</Label><Input id="rc-fee" inputMode="numeric" className="w-24 text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
+            <div><Label htmlFor="rc-fee">Paid to confirm (%)</Label><Input id="rc-fee" readOnly inputMode="numeric" className="w-24 text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
             <div><Label htmlFor="rc-from">Starts on</Label><Input id="rc-from" type="date" min={todayManila()} className="w-44 text-base sm:text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <p className="self-end pb-2 text-muted-foreground">Stays checking in on or after this date are quoted on the new card. Bookings already made keep their price.</p>
           </div>
@@ -129,7 +129,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
       <QueryState query={versions} isEmpty={(v) => v.length === 0}>
         {(v) => (
           <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Card history ({v.length})</summary>
-            <ul className="mt-2 space-y-1 tabular">{v.map((x) => <li key={x.id}>{x.effective_from} → {x.effective_to ?? 'open'} · {formatPHP(x.nightly_rate, { whole: true })} · fee {x.terms.deposit_pct ?? 50}% · published {x.approved_at.slice(0, 10)}</li>)}</ul>
+            <ul className="mt-2 space-y-1 tabular">{v.map((x) => <li key={x.id}>{x.effective_from} → {x.effective_to ?? 'open'} · {formatPHP(x.nightly_rate, { whole: true })} · paid to confirm {x.terms.deposit_pct ?? 50}% · published {x.approved_at.slice(0, 10)}</li>)}</ul>
           </details>
         )}
       </QueryState>
