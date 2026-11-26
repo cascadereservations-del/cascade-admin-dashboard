@@ -99,7 +99,7 @@ function StandardRate({ card, propertyId, onDone, prefill }: { card: RateCard; p
           {prefill && <p role="status" className="text-sm text-muted-foreground">{formatPHP(prefill.price, { whole: true })} came from the Price advisor. Nothing is published yet: check the number and the date, say why, then press Publish.</p>}
           <div className="flex flex-wrap gap-4">
             <div><Label htmlFor="rc-base">Standard rate per night (PHP)</Label><Input id="rc-base" inputMode="numeric" className="w-36 text-base sm:text-sm" value={base} onChange={(e) => setBase(e.target.value)} /></div>
-            <div><Label htmlFor="rc-fee">Paid to confirm (%)</Label><Input id="rc-fee" readOnly inputMode="numeric" className="w-24 text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
+            <div><Label htmlFor="rc-fee">Paid to confirm (%)</Label><Input id="rc-fee" readOnly inputMode="numeric" className="w-24 bg-muted text-base sm:text-sm" value={fee} onChange={(e) => setFee(e.target.value)} /></div>
             <div><Label htmlFor="rc-from">Starts on</Label><Input id="rc-from" type="date" min={todayManila()} className="w-44 text-base sm:text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <p className="self-end pb-2 text-muted-foreground">Stays checking in on or after this date are quoted on the new card. Bookings already made keep their price.</p>
           </div>
@@ -240,7 +240,7 @@ function Preview() {
       {q && (
         <div className="rounded-lg border p-4 text-sm">
           <ul className="tabular">{q.nights.map((n) => <li key={n.date}>{n.date} · {formatPHP(n.rate, { whole: true })}{n.source === 'promo' ? ` · ${n.promo}` : ''}</li>)}</ul>
-          <p className="mt-2 font-medium tabular">{q.n} night{q.n === 1 ? '' : 's'} · total {formatPHP(q.total, { whole: true })} (standard {formatPHP(q.standard_total, { whole: true })}) · reservation fee {formatPHP(q.deposit, { whole: true })}{q.last_minute ? ' · inside 5 days: paid in full' : ''}</p>
+          <p className="mt-2 font-medium tabular">{q.n} night{q.n === 1 ? '' : 's'} · total {formatPHP(q.total, { whole: true })} (standard {formatPHP(q.standard_total, { whole: true })}) · paid to confirm {formatPHP(q.deposit, { whole: true })}</p>
         </div>
       )}
     </Section>
