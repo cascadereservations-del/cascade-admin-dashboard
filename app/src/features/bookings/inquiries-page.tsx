@@ -54,7 +54,7 @@ export default function InquiriesPage() {
                       <dt className="text-muted-foreground">Dates</dt><dd className="tabular">{formatDate(st.checkin)} → {formatDate(st.checkout)} · {st.nights}n</dd>
                       <dt className="text-muted-foreground">Guests</dt><dd>{st.guestCount ?? '—'}</dd>
                       <dt className="text-muted-foreground">Quoted</dt><dd className="tabular">{formatPHP(st.totalAmount)}</dd>
-                      <dt className="text-muted-foreground">Deposit</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
+                      <dt className="text-muted-foreground">Due to confirm</dt><dd className="tabular">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</dd>
                       {!compact && <><dt className="text-muted-foreground">Requested</dt><dd>{formatDateTime(st.createdAt)}</dd></>}
                     </dl>
                     {canSeePayments && <p className="text-sm" data-testid="payment-line">{payments.isError ? 'Could not check for a receipt. Reload to try again.' : payments.isPending ? 'Checking for a receipt…' : paymentLine(payments.data?.find((p) => p.id === st.sourceId))}</p>}

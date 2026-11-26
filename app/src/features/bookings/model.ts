@@ -176,7 +176,7 @@ export function mergeStays(res: ReservationRow[], inq: InquiryRow[], cal: Calend
       checkout: i.checkout_date,
       nights: nightsBetween(i.checkin_date, i.checkout_date),
       bookingState,
-      // deposit_amount is the 50% reservation fee DUE, set on every request; only an uploaded receipt or a
+      // deposit_amount is the amount DUE to confirm (the full stay; the first 28 nights for a stay of 28 nights or more), set on every request; only an uploaded receipt or a
       // confirmation (which needs a Finance-approved payment review) means money arrived.
       paymentState: i.receipt_image_path || state === 'confirmed' || state === 'completed' ? 'deposit_recorded' : 'not_recorded',
       payoutState: 'not_applicable',

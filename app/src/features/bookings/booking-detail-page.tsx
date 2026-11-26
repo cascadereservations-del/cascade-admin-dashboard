@@ -131,7 +131,7 @@ export default function BookingDetailPage() {
                         ) : (
                           <>
                             <Field label="Quoted total">{formatPHP(st.totalAmount)}</Field>
-                            <Field label="Deposit">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</Field>
+                            <Field label="Due to confirm">{st.depositAmount ? formatPHP(st.depositAmount) : 'Not recorded'}</Field>
                           </>
                         )}
                         <p className="text-xs text-muted-foreground">Amounts are as reported by the source. Accommodation revenue is allocated per night in reports.</p>
